@@ -32,18 +32,56 @@ class CSVParseResult:
 
 # Default column mappings (can be customized by user)
 DEFAULT_COLUMN_MAPPINGS = {
-    "employee_id": ["employee_id", "emp_id", "id", "eid", "employee id", "emp id"],
-    "full_name": ["full_name", "name", "employee_name", "emp_name", "employee name"],
-    "job_title": ["job_title", "title", "position", "role", "job title", "job_title_name"],
-    "manager_id": ["manager_id", "manager", "reports_to", "supervisor_id", "reports to", "manager id"],
-    "manager_name": ["manager_name", "manager name", "supervisor_name", "reports_to_name"],
-    "level": ["level", "grade_level", "hierarchy_level", "org_level"],
-    "grade": ["grade", "job_grade", "pay_grade", "band", "job grade"],
-    "function": ["function", "department", "division", "org_unit", "business_unit"],
-    "location": ["location", "office", "city", "work_location", "site"],
-    "cost_center": ["cost_center", "cc", "cost center", "cost_center_code"],
-    "fte": ["fte", "full_time_equivalent", "headcount_fte"],
-    "salary": ["salary", "base_salary", "annual_salary", "base_pay", "compensation"],
+    "employee_id": [
+        "employee_id", "emp_id", "id", "eid", "employee id", "emp id",
+        "employeeid", "staff_id", "staff id", "personnel_id"
+    ],
+    "full_name": [
+        "full_name", "name", "employee_name", "emp_name", "employee name",
+        "fullname", "staff_name", "person_name", "display_name"
+    ],
+    "job_title": [
+        "job_title", "title", "position", "role", "job title", "job_title_name",
+        "jobtitle", "designation", "job_role", "position_title"
+    ],
+    "manager_id": [
+        "manager_id", "manager", "reports_to", "supervisor_id", "reports to", "manager id",
+        "managerid", "reporting_to", "supervisor", "boss_id", "direct_manager_id"
+    ],
+    "manager_name": [
+        "manager_name", "manager name", "supervisor_name", "reports_to_name",
+        "line_manager", "line manager", "line mar", "linemanager", "reporting_manager",
+        "direct_manager", "boss_name", "manager_full_name"
+    ],
+    "level": [
+        "level", "grade_level", "hierarchy_level", "org_level",
+        "hier_level", "reporting_level", "job_level", "position_level"
+    ],
+    "grade": [
+        "grade", "job_grade", "pay_grade", "band", "job grade",
+        "salary_grade", "compensation_grade", "level_grade"
+    ],
+    "function": [
+        "function", "department", "division", "org_unit", "business_unit",
+        "dept", "departm", "dept_name", "department_name", "team", "unit",
+        "business_function", "org_function"
+    ],
+    "location": [
+        "location", "office", "city", "work_location", "site",
+        "office_location", "work_city", "base_location", "country"
+    ],
+    "cost_center": [
+        "cost_center", "cc", "cost center", "cost_center_code",
+        "costcenter", "cost_centre", "cc_code"
+    ],
+    "fte": [
+        "fte", "full_time_equivalent", "headcount_fte",
+        "fulltime_equivalent", "fte_count", "headcount"
+    ],
+    "salary": [
+        "salary", "base_salary", "annual_salary", "base_pay", "compensation",
+        "pay", "wage", "annual_pay", "yearly_salary", "base_compensation"
+    ],
 }
 
 
@@ -216,12 +254,31 @@ class CSVParser:
                     column_map[field] = headers[idx]
                     continue
 
-            # Check default names
+            # Check default names (exact match)
+            found = False
             for name in possible_names:
                 if name.lower() in headers_lower:
                     idx = headers_lower.index(name.lower())
                     column_map[field] = headers[idx]
+                    found = True
                     break
+
+            # If not found, try partial/prefix matching for truncated headers
+            if not found:
+                for header_idx, header in enumerate(headers_lower):
+                    for name in possible_names:
+                        # Check if header is a prefix of name (e.g., "line mar" matches "line manager")
+                        if len(header) >= 3 and name.lower().startswith(header):
+                            column_map[field] = headers[header_idx]
+                            found = True
+                            break
+                        # Check if name is a prefix of header
+                        if len(name) >= 3 and header.startswith(name.lower()):
+                            column_map[field] = headers[header_idx]
+                            found = True
+                            break
+                    if found:
+                        break
 
         return column_map
 

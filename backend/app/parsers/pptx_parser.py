@@ -198,29 +198,50 @@ class OrgChartParser:
         """
         text_boxes: List[ParsedEmployee] = []
         connectors: List[Dict] = []
+        shape_counter = [0]  # Use list for mutable counter in nested function
 
-        for shape_idx, shape in enumerate(slide.shapes):
+        def process_shape(shape, parent_offset_x: float = 0, parent_offset_y: float = 0):
+            """Process a shape, recursively handling groups."""
+            shape_idx = shape_counter[0]
+            shape_counter[0] += 1
+
+            # Check if this is a group shape (including SmartArt)
+            if hasattr(shape, "shapes"):
+                # This is a grouped shape - process all child shapes
+                group_left = getattr(shape, "left", 0) or 0
+                group_top = getattr(shape, "top", 0) or 0
+
+                for child_shape in shape.shapes:
+                    # Pass the group's position as offset for child shapes
+                    process_shape(
+                        child_shape,
+                        parent_offset_x + group_left,
+                        parent_offset_y + group_top
+                    )
+                return
+
             # Collect connector lines for relationship inference
             if hasattr(shape, "begin_x") and hasattr(shape, "end_x"):
                 connectors.append({
-                    "begin_x": getattr(shape, "begin_x", 0),
-                    "begin_y": getattr(shape, "begin_y", 0),
-                    "end_x": getattr(shape, "end_x", 0),
-                    "end_y": getattr(shape, "end_y", 0),
+                    "begin_x": (getattr(shape, "begin_x", 0) or 0) + parent_offset_x,
+                    "begin_y": (getattr(shape, "begin_y", 0) or 0) + parent_offset_y,
+                    "end_x": (getattr(shape, "end_x", 0) or 0) + parent_offset_x,
+                    "end_y": (getattr(shape, "end_y", 0) or 0) + parent_offset_y,
                 })
-                continue
+                return
 
             # Only process shapes with text content
             if not hasattr(shape, "text") or not shape.text:
-                continue
+                return
 
             text = shape.text.strip()
             if len(text) < self.min_text_length:
-                continue
+                return
 
             # Extract position (INCLUDING negative coordinates)
-            left = getattr(shape, "left", 0) or 0
-            top = getattr(shape, "top", 0) or 0
+            # Add parent offset for grouped shapes
+            left = (getattr(shape, "left", 0) or 0) + parent_offset_x
+            top = (getattr(shape, "top", 0) or 0) + parent_offset_y
             width = getattr(shape, "width", 0) or 0
             height = getattr(shape, "height", 0) or 0
             right = left + width
@@ -278,6 +299,10 @@ class OrgChartParser:
             )
 
             text_boxes.append(employee)
+
+        # Process all shapes on the slide (recursively for groups)
+        for shape in slide.shapes:
+            process_shape(shape)
 
         # Infer hierarchy levels using K-Means clustering
         if text_boxes:
