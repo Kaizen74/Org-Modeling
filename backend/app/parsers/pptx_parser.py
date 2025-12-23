@@ -1,0 +1,621 @@
+"""
+PowerPoint Org Chart Parser with Outside-Canvas Support.
+
+CRITICAL: This parser processes ALL shapes regardless of position, including:
+- Shapes with negative X/Y coordinates (positioned left/above canvas)
+- Shapes extending beyond slide boundaries
+- Shapes partially or fully outside the visible canvas
+
+Analysis of real-world org charts (e.g., Pax_Org_Chart.pptx) revealed that 38% of shapes
+are positioned OUTSIDE the visible slide canvas. Standard parsers that filter by slide
+boundaries will miss critical org chart nodes.
+
+Features:
+- Processes ALL shapes regardless of position (no boundary filtering)
+- Uses relative spatial positioning, not absolute canvas boundaries
+- Fuzzy level inference via K-Means clustering on Y-coordinates
+- Connector line detection for manager-employee relationships
+- Handles disconnected forests (multiple root nodes)
+"""
+
+from pptx import Presentation
+from pptx.util import Inches, Emu
+from pptx.enum.shapes import MSO_SHAPE_TYPE
+from typing import List, Dict, Tuple, Optional, Any
+import networkx as nx
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+import logging
+from dataclasses import dataclass, field, asdict
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# EMU (English Metric Units) conversion: 914400 EMUs = 1 inch
+EMU_PER_INCH = 914400
+
+
+@dataclass
+class ParsedEmployee:
+    """Represents a parsed org chart node."""
+    id: str
+    name: str
+    title: str
+    grade: Optional[str] = None
+    full_text: str = ""
+    level: int = 0
+    position: Dict[str, float] = field(default_factory=dict)
+    font_size: float = 12.0
+    slide_index: int = 0
+    shape_type: str = "unknown"
+    fill_color: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ParseResult:
+    """Result of parsing a PowerPoint file."""
+    employees: List[Dict[str, Any]]
+    relationships: List[Tuple[str, str]]
+    forests: List[Dict[str, Any]]
+    unassigned: List[Dict[str, Any]]
+    metadata: Dict[str, Any]
+    graph: Optional[nx.DiGraph] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "employees": self.employees,
+            "relationships": [list(r) for r in self.relationships],
+            "forests": self.forests,
+            "unassigned": self.unassigned,
+            "metadata": self.metadata,
+        }
+
+
+class OrgChartParser:
+    """
+    Parses PowerPoint org charts, including shapes OUTSIDE visible canvas.
+
+    Key Features:
+    - Processes ALL shapes regardless of position (including negative coordinates)
+    - Uses relative spatial positioning, not absolute canvas boundaries
+    - Fuzzy level inference via K-Means clustering on Y-coordinates
+    - Connector line detection for manager-employee relationships
+    - Handles disconnected forests (multiple root nodes)
+    """
+
+    def __init__(
+        self,
+        pptx_path: str,
+        max_horizontal_distance_inches: float = 5.0,
+        min_text_length: int = 2,
+        max_levels: int = 12,
+    ):
+        """
+        Initialize the parser with a PowerPoint file.
+
+        Args:
+            pptx_path: Path to the .pptx file
+            max_horizontal_distance_inches: Max horizontal distance for manager assignment
+            min_text_length: Minimum text length to consider a shape valid
+            max_levels: Maximum hierarchy levels to detect
+        """
+        self.pptx_path = Path(pptx_path)
+        if not self.pptx_path.exists():
+            raise FileNotFoundError(f"PPTX file not found: {pptx_path}")
+
+        self.presentation = Presentation(pptx_path)
+        self.slide_width = self.presentation.slide_width
+        self.slide_height = self.presentation.slide_height
+        self.max_horizontal_distance = max_horizontal_distance_inches * EMU_PER_INCH
+        self.min_text_length = min_text_length
+        self.max_levels = max_levels
+
+    def parse(self) -> ParseResult:
+        """
+        Parse all slides and return structured org data.
+
+        Returns:
+            ParseResult containing:
+            - employees: List of all parsed employee nodes
+            - relationships: List of (manager_id, employee_id) edges
+            - forests: Separate org trees if multiple roots
+            - unassigned: Orphaned nodes
+            - metadata: Slide dimensions, parse stats
+        """
+        all_employees: List[ParsedEmployee] = []
+        all_relationships: List[Tuple[str, str]] = []
+        connectors: List[Dict] = []
+
+        for slide_idx, slide in enumerate(self.presentation.slides):
+            slide_data = self._parse_slide(slide, slide_idx)
+            all_employees.extend(slide_data["employees"])
+            connectors.extend(slide_data.get("connectors", []))
+
+        # Convert to dicts for processing
+        employee_dicts = [emp.to_dict() for emp in all_employees]
+
+        # Infer relationships from connectors first, then spatial proximity
+        if connectors:
+            connector_relationships = self._infer_relationships_from_connectors(
+                employee_dicts, connectors
+            )
+            all_relationships.extend(connector_relationships)
+
+        # Fill in remaining relationships using spatial proximity
+        spatial_relationships = self._infer_relationships_spatial(
+            employee_dicts, set(all_relationships)
+        )
+        all_relationships.extend(spatial_relationships)
+
+        # Build graph and identify forests
+        result = self._build_org_graph(employee_dicts, all_relationships)
+
+        # Calculate metadata
+        outside_canvas_count = len([
+            emp for emp in employee_dicts
+            if emp["position"]["left"] < 0 or
+               emp["position"]["top"] < 0 or
+               emp["position"]["right"] > self.slide_width or
+               emp["position"]["bottom"] > self.slide_height
+        ])
+
+        unique_levels = set(emp["level"] for emp in employee_dicts)
+
+        result.metadata = {
+            "total_slides": len(self.presentation.slides),
+            "total_employees": len(employee_dicts),
+            "total_relationships": len(all_relationships),
+            "levels_detected": len(unique_levels),
+            "slide_dimensions": {
+                "width_emu": self.slide_width,
+                "height_emu": self.slide_height,
+                "width_inches": self.slide_width / EMU_PER_INCH,
+                "height_inches": self.slide_height / EMU_PER_INCH,
+            },
+            "outside_canvas_count": outside_canvas_count,
+            "outside_canvas_percentage": (
+                outside_canvas_count / len(employee_dicts) * 100
+                if employee_dicts else 0
+            ),
+            "forest_count": len(result.forests),
+            "orphan_count": len(result.unassigned),
+            "source_file": str(self.pptx_path.name),
+        }
+
+        return result
+
+    def _parse_slide(self, slide, slide_idx: int) -> Dict:
+        """
+        Parse a single slide, extracting all text shapes regardless of position.
+
+        CRITICAL: Do NOT filter by canvas boundaries. Process shapes with negative
+        coordinates or those extending beyond slide edges.
+        """
+        text_boxes: List[ParsedEmployee] = []
+        connectors: List[Dict] = []
+
+        for shape_idx, shape in enumerate(slide.shapes):
+            # Collect connector lines for relationship inference
+            if hasattr(shape, "begin_x") and hasattr(shape, "end_x"):
+                connectors.append({
+                    "begin_x": getattr(shape, "begin_x", 0),
+                    "begin_y": getattr(shape, "begin_y", 0),
+                    "end_x": getattr(shape, "end_x", 0),
+                    "end_y": getattr(shape, "end_y", 0),
+                })
+                continue
+
+            # Only process shapes with text content
+            if not hasattr(shape, "text") or not shape.text:
+                continue
+
+            text = shape.text.strip()
+            if len(text) < self.min_text_length:
+                continue
+
+            # Extract position (INCLUDING negative coordinates)
+            left = getattr(shape, "left", 0) or 0
+            top = getattr(shape, "top", 0) or 0
+            width = getattr(shape, "width", 0) or 0
+            height = getattr(shape, "height", 0) or 0
+            right = left + width
+            bottom = top + height
+
+            # Extract text lines
+            text_lines = [
+                line.strip()
+                for line in text.split("\n")
+                if line.strip()
+            ]
+
+            # Heuristic: First line = Name, Second line = Title, Third line = Grade/Level
+            name = text_lines[0] if text_lines else f"Unknown_{slide_idx}_{shape_idx}"
+            title = text_lines[1] if len(text_lines) > 1 else "Unknown Title"
+            grade = text_lines[2] if len(text_lines) > 2 else None
+
+            # Extract font size (for level inference)
+            font_size = self._extract_font_size(shape)
+
+            # Extract fill color if available
+            fill_color = self._extract_fill_color(shape)
+
+            # Determine shape type
+            shape_type = self._get_shape_type(shape)
+
+            employee = ParsedEmployee(
+                id=f"slide{slide_idx}_shape{shape_idx}",
+                name=name,
+                title=title,
+                grade=grade,
+                full_text=text,
+                position={
+                    "left": left,
+                    "top": top,
+                    "width": width,
+                    "height": height,
+                    "right": right,
+                    "bottom": bottom,
+                    "center_x": left + width / 2,
+                    "center_y": top + height / 2,
+                    "left_inches": left / EMU_PER_INCH,
+                    "top_inches": top / EMU_PER_INCH,
+                    "width_inches": width / EMU_PER_INCH,
+                    "height_inches": height / EMU_PER_INCH,
+                },
+                font_size=font_size,
+                slide_index=slide_idx,
+                shape_type=shape_type,
+                fill_color=fill_color,
+                metadata={
+                    "text_line_count": len(text_lines),
+                    "all_text_lines": text_lines,
+                },
+            )
+
+            text_boxes.append(employee)
+
+        # Infer hierarchy levels using K-Means clustering
+        if text_boxes:
+            levels = self._infer_hierarchy_levels(text_boxes)
+            for emp in text_boxes:
+                emp.level = levels.get(emp.id, 1)
+
+        return {
+            "employees": text_boxes,
+            "connectors": connectors,
+        }
+
+    def _extract_font_size(self, shape) -> float:
+        """Extract the primary font size from a shape."""
+        font_size = 12.0  # Default
+
+        try:
+            if hasattr(shape, "text_frame"):
+                for paragraph in shape.text_frame.paragraphs:
+                    if paragraph.runs:
+                        run = paragraph.runs[0]
+                        if run.font.size:
+                            font_size = run.font.size.pt
+                            break
+        except Exception:
+            pass
+
+        return font_size
+
+    def _extract_fill_color(self, shape) -> Optional[str]:
+        """Extract the fill color from a shape."""
+        try:
+            if hasattr(shape, "fill") and shape.fill.type is not None:
+                fore_color = shape.fill.fore_color
+                if hasattr(fore_color, "rgb") and fore_color.rgb:
+                    return str(fore_color.rgb)
+        except Exception:
+            pass
+        return None
+
+    def _get_shape_type(self, shape) -> str:
+        """Determine the shape type."""
+        try:
+            if hasattr(shape, "shape_type"):
+                return str(shape.shape_type)
+        except Exception:
+            pass
+        return "unknown"
+
+    def _infer_hierarchy_levels(
+        self, employees: List[ParsedEmployee]
+    ) -> Dict[str, int]:
+        """
+        Use K-Means clustering on Y-coordinates and font sizes to determine levels.
+
+        This handles varied slide layouts where strict pixel thresholds fail.
+        """
+        if not employees:
+            return {}
+
+        # Extract features: Y-coordinate (primary), font size (secondary)
+        features = []
+        for emp in employees:
+            features.append([
+                emp.position["center_y"],
+                -emp.font_size,  # Negative because larger font = higher level
+            ])
+
+        features = np.array(features)
+
+        # Normalize features
+        scaler = StandardScaler()
+        try:
+            features_scaled = scaler.fit_transform(features)
+        except Exception:
+            # Fallback: use Y-coordinate only
+            features_scaled = features[:, 0:1]
+
+        # Estimate number of levels (heuristic: between 2 and max_levels)
+        n_samples = len(employees)
+        n_levels = min(self.max_levels, max(2, n_samples // 4))
+        n_levels = min(n_levels, n_samples)  # Can't have more clusters than samples
+
+        # K-Means clustering
+        try:
+            kmeans = KMeans(n_clusters=n_levels, random_state=42, n_init=10)
+            cluster_labels = kmeans.fit_predict(features_scaled)
+
+            # Sort clusters by average Y-coordinate (top to bottom = Level 1 to N)
+            cluster_y_means = {}
+            for i, emp in enumerate(employees):
+                cluster = cluster_labels[i]
+                if cluster not in cluster_y_means:
+                    cluster_y_means[cluster] = []
+                cluster_y_means[cluster].append(emp.position["center_y"])
+
+            cluster_order = sorted(
+                cluster_y_means.keys(),
+                key=lambda c: np.mean(cluster_y_means[c])
+            )
+
+            # Map cluster labels to level numbers
+            level_mapping = {
+                old_label: new_level + 1
+                for new_level, old_label in enumerate(cluster_order)
+            }
+
+            # Assign levels to employees
+            result = {}
+            for i, emp in enumerate(employees):
+                cluster = cluster_labels[i]
+                result[emp.id] = level_mapping[cluster]
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"K-Means clustering failed: {e}. Using fallback.")
+            # Fallback: assign levels based on Y-coordinate percentiles
+            y_coords = [emp.position["center_y"] for emp in employees]
+            sorted_indices = np.argsort(y_coords)
+            result = {}
+            for rank, idx in enumerate(sorted_indices):
+                level = min(self.max_levels, (rank * self.max_levels // len(employees)) + 1)
+                result[employees[idx].id] = level
+            return result
+
+    def _infer_relationships_from_connectors(
+        self,
+        employees: List[Dict],
+        connectors: List[Dict]
+    ) -> List[Tuple[str, str]]:
+        """Infer relationships from connector lines in the slide."""
+        relationships = []
+
+        for connector in connectors:
+            begin_x = connector.get("begin_x", 0)
+            begin_y = connector.get("begin_y", 0)
+            end_x = connector.get("end_x", 0)
+            end_y = connector.get("end_y", 0)
+
+            # Find shapes closest to connector endpoints
+            begin_emp = self._find_closest_employee(employees, begin_x, begin_y)
+            end_emp = self._find_closest_employee(employees, end_x, end_y)
+
+            if begin_emp and end_emp and begin_emp != end_emp:
+                # Determine direction: higher level is manager
+                if begin_emp["level"] < end_emp["level"]:
+                    relationships.append((begin_emp["id"], end_emp["id"]))
+                elif end_emp["level"] < begin_emp["level"]:
+                    relationships.append((end_emp["id"], begin_emp["id"]))
+
+        return relationships
+
+    def _find_closest_employee(
+        self,
+        employees: List[Dict],
+        x: float,
+        y: float,
+        max_distance: float = None
+    ) -> Optional[Dict]:
+        """Find the employee closest to the given coordinates."""
+        if max_distance is None:
+            max_distance = 2 * EMU_PER_INCH  # 2 inches
+
+        closest = None
+        min_dist = float("inf")
+
+        for emp in employees:
+            pos = emp["position"]
+            # Check if point is inside or near the shape
+            cx, cy = pos["center_x"], pos["center_y"]
+            dist = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+
+            if dist < min_dist and dist < max_distance:
+                min_dist = dist
+                closest = emp
+
+        return closest
+
+    def _infer_relationships_spatial(
+        self,
+        employees: List[Dict],
+        existing_relationships: set
+    ) -> List[Tuple[str, str]]:
+        """
+        Infer manager-employee relationships using spatial proximity.
+
+        Heuristic: An employee is managed by the closest box in the level above,
+        within a reasonable horizontal distance (same "branch" of the tree).
+        """
+        relationships = []
+
+        # Group employees by level
+        levels: Dict[int, List[Dict]] = {}
+        for emp in employees:
+            level = emp["level"]
+            if level not in levels:
+                levels[level] = []
+            levels[level].append(emp)
+
+        # For each level (except the top), find managers from level above
+        sorted_levels = sorted(levels.keys())
+
+        for level_idx in range(1, len(sorted_levels)):
+            current_level = sorted_levels[level_idx]
+            parent_level = sorted_levels[level_idx - 1]
+
+            employees_at_level = levels[current_level]
+            potential_managers = levels[parent_level]
+
+            for employee in employees_at_level:
+                # Skip if already has a relationship
+                if any(r[1] == employee["id"] for r in existing_relationships):
+                    continue
+
+                # Find closest manager horizontally within reasonable range
+                closest_manager = None
+                min_score = float("inf")
+
+                for manager in potential_managers:
+                    # Calculate horizontal distance between centers
+                    horizontal_dist = abs(
+                        employee["position"]["center_x"] -
+                        manager["position"]["center_x"]
+                    )
+
+                    # Only consider managers within max horizontal distance
+                    if horizontal_dist > self.max_horizontal_distance:
+                        continue
+
+                    # Score: prefer closer horizontally, slight preference for directly above
+                    vertical_dist = abs(
+                        employee["position"]["center_y"] -
+                        manager["position"]["center_y"]
+                    )
+                    score = horizontal_dist + (vertical_dist * 0.1)
+
+                    if score < min_score:
+                        closest_manager = manager
+                        min_score = score
+
+                if closest_manager:
+                    rel = (closest_manager["id"], employee["id"])
+                    if rel not in existing_relationships:
+                        relationships.append(rel)
+
+        return relationships
+
+    def _build_org_graph(
+        self,
+        employees: List[Dict],
+        relationships: List[Tuple[str, str]]
+    ) -> ParseResult:
+        """
+        Build NetworkX graph and identify forests (multiple root nodes) and orphans.
+        """
+        G = nx.DiGraph()
+
+        # Add nodes
+        for emp in employees:
+            G.add_node(emp["id"], **emp)
+
+        # Add edges (manager → employee)
+        for manager_id, employee_id in relationships:
+            if manager_id in G and employee_id in G:
+                G.add_edge(manager_id, employee_id)
+
+        # Find root nodes (no incoming edges)
+        roots = [node for node in G.nodes() if G.in_degree(node) == 0]
+
+        # Build separate trees for each root
+        forests = []
+        assigned_nodes = set()
+
+        for root in roots:
+            try:
+                descendants = nx.descendants(G, root)
+            except nx.NetworkXError:
+                descendants = set()
+
+            descendants.add(root)
+            subtree_nodes = list(descendants)
+
+            root_data = G.nodes[root]
+            forests.append({
+                "root_id": root,
+                "root_name": root_data.get("name", "Unknown"),
+                "root_title": root_data.get("title", "Unknown"),
+                "node_count": len(subtree_nodes),
+                "nodes": subtree_nodes,
+                "max_depth": self._calculate_max_depth(G, root),
+            })
+
+            assigned_nodes.update(subtree_nodes)
+
+        # Identify unassigned (orphaned) nodes
+        all_nodes = set(G.nodes())
+        unassigned_nodes = all_nodes - assigned_nodes
+
+        unassigned = []
+        for node_id in unassigned_nodes:
+            node_data = G.nodes[node_id]
+            unassigned.append({
+                "id": node_id,
+                "name": node_data.get("name", "Unknown"),
+                "title": node_data.get("title", "Unknown"),
+                "level": node_data.get("level", 0),
+                "reason": "No path to any root node",
+            })
+
+        return ParseResult(
+            employees=employees,
+            relationships=list(relationships),
+            forests=sorted(forests, key=lambda f: -f["node_count"]),
+            unassigned=unassigned,
+            metadata={},
+            graph=G,
+        )
+
+    def _calculate_max_depth(self, G: nx.DiGraph, root: str) -> int:
+        """Calculate maximum depth from root node."""
+        try:
+            lengths = nx.single_source_shortest_path_length(G, root)
+            return max(lengths.values()) if lengths else 0
+        except Exception:
+            return 0
+
+
+def parse_pptx_file(file_path: str) -> Dict[str, Any]:
+    """
+    Convenience function to parse a PPTX file and return results as dict.
+
+    Args:
+        file_path: Path to the .pptx file
+
+    Returns:
+        Dictionary with parsed org chart data
+    """
+    parser = OrgChartParser(file_path)
+    result = parser.parse()
+    return result.to_dict()
