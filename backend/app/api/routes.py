@@ -1191,6 +1191,142 @@ async def compare_scenarios(
     return comparison.to_dict()
 
 
+# === Rate Cards (Job Grades & Salaries) ===
+
+@router.get("/projects/{project_id}/rate-cards", response_model=List[RateCardResponse], tags=["Rate Cards"])
+async def list_rate_cards(
+    project_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """List all rate cards (job grades and salaries) for a project."""
+    result = await session.execute(
+        select(RateCard).where(RateCard.project_id == project_id).order_by(RateCard.grade)
+    )
+    rate_cards = result.scalars().all()
+
+    return [RateCardResponse.model_validate(rc) for rc in rate_cards]
+
+
+@router.post("/projects/{project_id}/rate-cards", response_model=RateCardResponse, tags=["Rate Cards"])
+async def create_rate_card(
+    project_id: str,
+    rate_card: RateCardCreate,
+    session: AsyncSession = Depends(get_session),
+):
+    """Create a new rate card (job grade with salary information)."""
+    # Verify project exists
+    result = await session.execute(
+        select(Project).where(Project.id == project_id)
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    db_rate_card = RateCard(
+        project_id=project_id,
+        **rate_card.model_dump(exclude_unset=True)
+    )
+
+    session.add(db_rate_card)
+    await session.commit()
+    await session.refresh(db_rate_card)
+
+    return RateCardResponse.model_validate(db_rate_card)
+
+
+@router.post("/projects/{project_id}/rate-cards/bulk", response_model=List[RateCardResponse], tags=["Rate Cards"])
+async def bulk_create_rate_cards(
+    project_id: str,
+    rate_cards: List[RateCardCreate],
+    session: AsyncSession = Depends(get_session),
+):
+    """Bulk create/update rate cards for efficient entry."""
+    # Verify project exists
+    result = await session.execute(
+        select(Project).where(Project.id == project_id)
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    created = []
+    for rc_data in rate_cards:
+        # Check if rate card with same grade/location exists
+        existing = await session.execute(
+            select(RateCard).where(
+                RateCard.project_id == project_id,
+                RateCard.grade == rc_data.grade,
+                RateCard.location == rc_data.location,
+            )
+        )
+        existing_rc = existing.scalar_one_or_none()
+
+        if existing_rc:
+            # Update existing
+            for key, value in rc_data.model_dump(exclude_unset=True).items():
+                setattr(existing_rc, key, value)
+            await session.flush()
+            await session.refresh(existing_rc)
+            created.append(existing_rc)
+        else:
+            # Create new
+            db_rate_card = RateCard(
+                project_id=project_id,
+                **rc_data.model_dump(exclude_unset=True)
+            )
+            session.add(db_rate_card)
+            await session.flush()
+            await session.refresh(db_rate_card)
+            created.append(db_rate_card)
+
+    await session.commit()
+
+    return [RateCardResponse.model_validate(rc) for rc in created]
+
+
+@router.patch("/rate-cards/{rate_card_id}", response_model=RateCardResponse, tags=["Rate Cards"])
+async def update_rate_card(
+    rate_card_id: str,
+    updates: RateCardUpdate,
+    session: AsyncSession = Depends(get_session),
+):
+    """Update a rate card."""
+    result = await session.execute(
+        select(RateCard).where(RateCard.id == rate_card_id)
+    )
+    rate_card = result.scalar_one_or_none()
+
+    if not rate_card:
+        raise HTTPException(status_code=404, detail="Rate card not found")
+
+    update_data = updates.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(rate_card, key, value)
+
+    await session.commit()
+    await session.refresh(rate_card)
+
+    return RateCardResponse.model_validate(rate_card)
+
+
+@router.delete("/rate-cards/{rate_card_id}", tags=["Rate Cards"])
+async def delete_rate_card(
+    rate_card_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """Delete a rate card."""
+    result = await session.execute(
+        select(RateCard).where(RateCard.id == rate_card_id)
+    )
+    rate_card = result.scalar_one_or_none()
+
+    if not rate_card:
+        raise HTTPException(status_code=404, detail="Rate card not found")
+
+    await session.delete(rate_card)
+    await session.commit()
+
+    return {"message": "Rate card deleted"}
+
+
 # === API Key Management ===
 
 @router.post("/api-key/test", response_model=APIKeyTestResult, tags=["Settings"])

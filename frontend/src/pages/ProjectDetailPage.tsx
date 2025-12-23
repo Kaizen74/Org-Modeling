@@ -19,7 +19,9 @@ import {
   AlertCircle,
   Clock,
   X,
+  Settings,
 } from 'lucide-react'
+import RateCardManager from '../components/RateCardManager'
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -32,6 +34,7 @@ export default function ProjectDetailPage() {
   const [showPublishModal, setShowPublishModal] = useState(false)
   const [scenarioName, setScenarioName] = useState('')
   const [isBaseline, setIsBaseline] = useState(false)
+  const [showRateCards, setShowRateCards] = useState(false)
 
   useEffect(() => {
     if (projectId) {
@@ -326,6 +329,23 @@ export default function ProjectDetailPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Rate Cards Section (Job Grades & Salaries) */}
+      <div className="mt-6">
+        <button
+          onClick={() => setShowRateCards(!showRateCards)}
+          className="flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-3"
+        >
+          <Settings className="h-5 w-5" />
+          <span className="font-medium">
+            {showRateCards ? 'Hide' : 'Configure'} Job Grades & Salaries
+          </span>
+        </button>
+
+        {showRateCards && projectId && (
+          <RateCardManager projectId={projectId} />
+        )}
       </div>
 
       {/* Publish Modal */}

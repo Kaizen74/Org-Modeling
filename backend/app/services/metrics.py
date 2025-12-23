@@ -135,6 +135,12 @@ class MetricsCalculator:
         metrics.extend(self._calc_location_distribution(employees))
         metrics.extend(self._calc_grade_distribution(employees))
 
+        # Grade differential metric
+        metrics.append(self._calc_grade_differential(G, employees))
+
+        # Cost by job grades metric
+        metrics.append(self._calc_cost_by_grade(employees))
+
         # Complexity metrics
         metrics.append(self._calc_reporting_complexity(G))
 
@@ -484,6 +490,173 @@ class MetricsCalculator:
                 breakdown={str(k): v for k, v in sorted(levels.items())},
             ),
         ]
+
+    def _calc_grade_differential(
+        self, G: nx.DiGraph, employees: List[Dict]
+    ) -> MetricResult:
+        """
+        Calculate average reporting grade differential.
+
+        This measures the average job grade difference between managers
+        and their direct reports.
+        """
+        # Create grade hierarchy mapping (numeric values for comparison)
+        # Common grade patterns: E1>E2>E3, L1>L2>L3, VP>Director>Manager, etc.
+        grade_order = {}
+
+        # Extract unique grades and try to establish order
+        all_grades = set()
+        for emp in employees:
+            grade = emp.get("grade")
+            if grade:
+                all_grades.add(grade)
+
+        # Try to infer numeric ordering from grades
+        # Strategy: Use level if available, otherwise try parsing grade string
+        emp_by_id = {emp.get("id"): emp for emp in employees}
+
+        differentials = []
+        differential_details = []
+
+        for manager_id in G.nodes():
+            if G.out_degree(manager_id) == 0:
+                continue  # Not a manager
+
+            manager = emp_by_id.get(manager_id, {})
+            manager_grade = manager.get("grade")
+            manager_level = manager.get("level")
+
+            if not manager_grade and not manager_level:
+                continue
+
+            # Get direct reports
+            for report_id in G.successors(manager_id):
+                report = emp_by_id.get(report_id, {})
+                report_grade = report.get("grade")
+                report_level = report.get("level")
+
+                # Calculate differential using grade or level
+                differential = None
+
+                # Try using explicit levels first
+                if manager_level is not None and report_level is not None:
+                    try:
+                        differential = int(report_level) - int(manager_level)
+                    except (ValueError, TypeError):
+                        pass
+
+                # Try parsing numeric grades (E1, L2, M3, etc.)
+                if differential is None and manager_grade and report_grade:
+                    try:
+                        # Extract numbers from grades
+                        import re
+                        mgr_num = re.search(r'\d+', str(manager_grade))
+                        rep_num = re.search(r'\d+', str(report_grade))
+                        if mgr_num and rep_num:
+                            # Higher number typically = lower grade in most systems
+                            differential = int(rep_num.group()) - int(mgr_num.group())
+                    except (ValueError, TypeError):
+                        pass
+
+                if differential is not None:
+                    differentials.append(differential)
+                    differential_details.append({
+                        "manager": manager.get("full_name", manager_id),
+                        "manager_grade": manager_grade,
+                        "report": report.get("full_name", report_id),
+                        "report_grade": report_grade,
+                        "differential": differential,
+                    })
+
+        if not differentials:
+            return MetricResult(
+                metric_type="grade_differential_avg",
+                metric_category="structure",
+                value=0,
+                value_formatted="N/A",
+                status="info",
+                description="Average job grade difference between managers and subordinates (insufficient data)",
+            )
+
+        avg_differential = mean(differentials)
+
+        # Ideal differential is 1-2 levels
+        if 0.5 <= avg_differential <= 2.5:
+            status = "healthy"
+        elif avg_differential < 0.5:
+            status = "warning"  # Managers too close in grade to reports
+        else:
+            status = "warning"  # Too large a gap
+
+        return MetricResult(
+            metric_type="grade_differential_avg",
+            metric_category="structure",
+            value=round(avg_differential, 2),
+            value_formatted=f"{avg_differential:.1f} levels",
+            status=status,
+            description="Average job grade difference between managers and their direct reports",
+            breakdown={
+                "total_relationships_analyzed": len(differentials),
+                "min_differential": min(differentials) if differentials else 0,
+                "max_differential": max(differentials) if differentials else 0,
+                "distribution": dict(Counter(differentials)),
+            },
+        )
+
+    def _calc_cost_by_grade(self, employees: List[Dict]) -> MetricResult:
+        """
+        Calculate total cost organized by job grades.
+
+        This provides a breakdown of employee costs by grade level.
+        """
+        cost_by_grade: Dict[str, Dict[str, Any]] = {}
+
+        for emp in employees:
+            grade = emp.get("grade", "Unknown") or "Unknown"
+            emp_cost = self._get_employee_cost(emp)
+
+            if grade not in cost_by_grade:
+                cost_by_grade[grade] = {
+                    "headcount": 0,
+                    "total_fte": 0,
+                    "total_cost": 0,
+                    "avg_cost": 0,
+                }
+
+            cost_by_grade[grade]["headcount"] += 1
+            cost_by_grade[grade]["total_fte"] += emp.get("fte", 1.0)
+            cost_by_grade[grade]["total_cost"] += emp_cost
+
+        # Calculate averages
+        for grade in cost_by_grade:
+            if cost_by_grade[grade]["headcount"] > 0:
+                cost_by_grade[grade]["avg_cost"] = round(
+                    cost_by_grade[grade]["total_cost"] / cost_by_grade[grade]["headcount"],
+                    2
+                )
+            cost_by_grade[grade]["total_cost"] = round(cost_by_grade[grade]["total_cost"], 2)
+            cost_by_grade[grade]["total_fte"] = round(cost_by_grade[grade]["total_fte"], 1)
+
+        # Sort by total cost descending
+        sorted_grades = sorted(
+            cost_by_grade.items(),
+            key=lambda x: x[1]["total_cost"],
+            reverse=True
+        )
+
+        total_cost = sum(g["total_cost"] for g in cost_by_grade.values())
+
+        return MetricResult(
+            metric_type="cost_by_grade",
+            metric_category="cost",
+            value=total_cost,
+            value_formatted=f"${total_cost:,.0f}",
+            description="Total employee cost organized by job grades",
+            breakdown={
+                grade: data
+                for grade, data in sorted_grades
+            },
+        )
 
     def _calc_reporting_complexity(self, G: nx.DiGraph) -> MetricResult:
         """Calculate reporting relationship complexity."""

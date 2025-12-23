@@ -23,6 +23,8 @@ import {
   AlertTriangle,
   CheckCircle,
   RefreshCw,
+  ArrowUpDown,
+  UserCheck,
 } from 'lucide-react'
 
 interface MetricsDashboardProps {
@@ -105,6 +107,51 @@ export default function MetricsDashboard({ metrics, onRefresh }: MetricsDashboar
       .sort((a, b) => parseInt(a.level.split(' ')[1]) - parseInt(b.level.split(' ')[1]))
   }, [metrics])
 
+  // Cost by grade data
+  const costByGradeData = useMemo(() => {
+    if (!metrics?.metrics) return []
+    const costMetric = metrics.metrics.find((m) => m.metric_type === 'cost_by_grade')
+    if (!costMetric?.breakdown) return []
+
+    return Object.entries(costMetric.breakdown)
+      .filter(([grade]) => grade !== 'Unknown')
+      .map(([grade, data]: [string, any]) => ({
+        grade,
+        headcount: data.headcount,
+        totalCost: data.total_cost,
+        avgCost: data.avg_cost,
+      }))
+      .slice(0, 10) // Top 10 grades
+  }, [metrics])
+
+  // Manager ratio metrics
+  const managerRatioData = useMemo(() => {
+    if (!metrics?.metrics) return null
+    const ratioMetric = metrics.metrics.find((m) => m.metric_type === 'manager_to_ic_ratio')
+    if (!ratioMetric?.breakdown) return null
+
+    return {
+      managerCount: ratioMetric.breakdown.manager_count || 0,
+      icCount: ratioMetric.breakdown.ic_count || 0,
+      ratio: ratioMetric.value,
+      status: ratioMetric.status,
+    }
+  }, [metrics])
+
+  // Grade differential
+  const gradeDifferentialData = useMemo(() => {
+    if (!metrics?.metrics) return null
+    const diffMetric = metrics.metrics.find((m) => m.metric_type === 'grade_differential_avg')
+    if (!diffMetric) return null
+
+    return {
+      value: diffMetric.value,
+      formatted: diffMetric.value_formatted,
+      status: diffMetric.status,
+      breakdown: diffMetric.breakdown,
+    }
+  }, [metrics])
+
   if (!metrics) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-slate-500">
@@ -154,22 +201,32 @@ export default function MetricsDashboard({ metrics, onRefresh }: MetricsDashboar
         />
       </div>
 
-      {/* Detailed Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      {/* Detailed Metrics - Key Organizational Structure Snapshot */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <MetricCard
           title="Avg Span of Control"
           value={`${metrics.avg_span_of_control.toFixed(1)}:1`}
+          subtitle="Direct reports per manager"
           icon={GitBranch}
           status={getMetricStatus('span_of_control_avg')}
         />
         <MetricCard
-          title="Functions"
-          value={metrics.functions.length}
-          icon={TrendingUp}
+          title="Managers vs ICs"
+          value={managerRatioData ? `${(managerRatioData.ratio * 100).toFixed(0)}%` : 'N/A'}
+          subtitle={managerRatioData ? `${managerRatioData.managerCount} mgrs, ${managerRatioData.icCount} ICs` : ''}
+          icon={UserCheck}
+          status={getMetricStatus('manager_to_ic_ratio')}
         />
         <MetricCard
-          title="Locations"
-          value={metrics.locations.length}
+          title="Grade Differential"
+          value={gradeDifferentialData?.formatted || 'N/A'}
+          subtitle="Avg manager-report gap"
+          icon={ArrowUpDown}
+          status={gradeDifferentialData?.status as 'healthy' | 'warning' | 'critical' | undefined}
+        />
+        <MetricCard
+          title="Functions"
+          value={metrics.functions.length}
           icon={TrendingUp}
         />
         <MetricCard
@@ -233,34 +290,65 @@ export default function MetricsDashboard({ metrics, onRefresh }: MetricsDashboar
           </ResponsiveContainer>
         </div>
 
-        {/* All Metrics List */}
+        {/* Cost by Job Grade */}
         <div className="bg-white rounded-lg border border-slate-200 p-4">
-          <h3 className="font-semibold mb-4">All Metrics</h3>
-          <div className="space-y-2 max-h-[250px] overflow-auto">
-            {metrics.metrics.map((metric) => (
-              <div
-                key={metric.id || metric.metric_type}
-                className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0"
-              >
-                <div className="flex items-center gap-2">
-                  {metric.status === 'healthy' && (
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                  )}
-                  {metric.status === 'warning' && (
-                    <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                  )}
-                  {metric.status === 'critical' && (
-                    <AlertTriangle className="h-4 w-4 text-red-500" />
-                  )}
-                  {!metric.status && <div className="w-4" />}
-                  <span className="text-sm text-slate-600">
-                    {metric.metric_type.replace(/_/g, ' ')}
-                  </span>
-                </div>
-                <span className="font-medium">{metric.value_formatted || metric.value}</span>
+          <h3 className="font-semibold mb-4">Cost by Job Grade</h3>
+          {costByGradeData.length > 0 ? (
+            <div className="space-y-2 max-h-[250px] overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="text-left py-1 font-medium text-slate-600">Grade</th>
+                    <th className="text-right py-1 font-medium text-slate-600">HC</th>
+                    <th className="text-right py-1 font-medium text-slate-600">Total Cost</th>
+                    <th className="text-right py-1 font-medium text-slate-600">Avg Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {costByGradeData.map((item) => (
+                    <tr key={item.grade} className="border-b border-slate-100">
+                      <td className="py-1.5 font-medium">{item.grade}</td>
+                      <td className="py-1.5 text-right text-slate-600">{item.headcount}</td>
+                      <td className="py-1.5 text-right">${(item.totalCost / 1000).toFixed(0)}K</td>
+                      <td className="py-1.5 text-right text-slate-600">${(item.avgCost / 1000).toFixed(0)}K</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No grade data available</p>
+          )}
+        </div>
+      </div>
+
+      {/* All Metrics List */}
+      <div className="mt-6 bg-white rounded-lg border border-slate-200 p-4">
+        <h3 className="font-semibold mb-4">All Metrics</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {metrics.metrics.map((metric) => (
+            <div
+              key={metric.id || metric.metric_type}
+              className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg"
+            >
+              <div className="flex items-center gap-2">
+                {metric.status === 'healthy' && (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                )}
+                {metric.status === 'warning' && (
+                  <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                )}
+                {metric.status === 'critical' && (
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                )}
+                {!metric.status && <div className="w-4" />}
+                <span className="text-sm text-slate-600">
+                  {metric.metric_type.replace(/_/g, ' ')}
+                </span>
               </div>
-            ))}
-          </div>
+              <span className="font-medium text-sm">{metric.value_formatted || metric.value}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

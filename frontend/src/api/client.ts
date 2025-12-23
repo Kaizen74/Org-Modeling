@@ -211,3 +211,61 @@ export const getApiKey = async (projectId?: string) => {
   const response = await apiClient.get(`/api-key${params}`)
   return response.data
 }
+
+// Rate Cards (Job Grades & Salaries)
+export const getRateCards = async (projectId: string) => {
+  const response = await apiClient.get(`/projects/${projectId}/rate-cards`)
+  return response.data
+}
+
+export const createRateCard = async (projectId: string, data: {
+  grade: string
+  location: string
+  base_salary_mid: number
+  base_salary_min?: number
+  base_salary_max?: number
+  variable_comp_target?: number
+  benefits_value?: number
+  overhead_multiplier?: number
+  currency?: string
+  source?: string
+  notes?: string
+}) => {
+  const response = await apiClient.post(`/projects/${projectId}/rate-cards`, data)
+  return response.data
+}
+
+export const bulkCreateRateCards = async (projectId: string, rateCards: Array<{
+  grade: string
+  location: string
+  base_salary_mid: number
+  base_salary_min?: number
+  base_salary_max?: number
+  variable_comp_target?: number
+  benefits_value?: number
+  overhead_multiplier?: number
+  currency?: string
+  source?: string
+}>) => {
+  const response = await apiClient.post(`/projects/${projectId}/rate-cards/bulk`, rateCards)
+  return response.data
+}
+
+export const updateRateCard = async (rateCardId: string, data: Partial<{
+  base_salary_min: number
+  base_salary_mid: number
+  base_salary_max: number
+  variable_comp_target: number
+  benefits_value: number
+  overhead_multiplier: number
+  source: string
+  notes: string
+}>) => {
+  const response = await apiClient.patch(`/rate-cards/${rateCardId}`, data)
+  return response.data
+}
+
+export const deleteRateCard = async (rateCardId: string) => {
+  const response = await apiClient.delete(`/rate-cards/${rateCardId}`)
+  return response.data
+}
