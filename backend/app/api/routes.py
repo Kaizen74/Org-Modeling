@@ -492,6 +492,7 @@ async def publish_dataset(
 
     # Create employees from parsed data
     id_mapping = {}  # Map old IDs to new UUIDs
+    employees_with_manager_id = []  # Track employees that have manager_id in parsed data
 
     for emp_data in dataset.parsed_employees or []:
         old_id = emp_data.get("id")
@@ -518,7 +519,11 @@ async def publish_dataset(
         await session.flush()
         id_mapping[old_id] = employee.id
 
-    # Set manager relationships
+        # Track if employee has manager_id in parsed data (from CSV)
+        if emp_data.get("manager_id"):
+            employees_with_manager_id.append((employee.id, emp_data.get("manager_id")))
+
+    # Set manager relationships from parsed_relationships (PPTX spatial inference)
     for rel in dataset.parsed_relationships or []:
         manager_old_id, employee_old_id = rel[0], rel[1]
         manager_new_id = id_mapping.get(manager_old_id)
@@ -531,6 +536,17 @@ async def publish_dataset(
             )
             employee = emp_result.scalar_one_or_none()
             if employee:
+                employee.manager_id = manager_new_id
+
+    # Also set manager relationships from employee's manager_id field (CSV direct reference)
+    for new_employee_id, old_manager_id in employees_with_manager_id:
+        manager_new_id = id_mapping.get(old_manager_id)
+        if manager_new_id:
+            emp_result = await session.execute(
+                select(Employee).where(Employee.id == new_employee_id)
+            )
+            employee = emp_result.scalar_one_or_none()
+            if employee and not employee.manager_id:  # Don't overwrite if already set
                 employee.manager_id = manager_new_id
 
     # Update dataset with scenario reference

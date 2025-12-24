@@ -167,19 +167,38 @@ class CSVParser:
                     return ""
                 return " ".join(name.lower().strip().split())
 
+            def get_name_variants(name: str) -> List[str]:
+                """Generate multiple variants of a name for fuzzy matching."""
+                if not name:
+                    return []
+                normalized = normalize_name(name)
+                parts = normalized.split()
+                variants = [normalized]
+
+                if len(parts) >= 2:
+                    # First name only
+                    variants.append(parts[0])
+                    # Last name only
+                    variants.append(parts[-1])
+                    # First + Last (skip middle)
+                    if len(parts) > 2:
+                        variants.append(f"{parts[0]} {parts[-1]}")
+                    # First initial + last name pattern
+                    variants.append(f"{parts[0][0]} {parts[-1]}" if parts[0] else "")
+                    # First name + last initial
+                    variants.append(f"{parts[0]} {parts[-1][0]}" if parts[-1] else "")
+
+                return [v for v in variants if v]  # Filter empty strings
+
             for row_idx, row in enumerate(reader):
                 try:
                     employee = self._parse_row(row, row_idx, column_map)
                     if employee:
                         employees.append(employee)
-                        # Store normalized name for lookup
-                        normalized = normalize_name(employee["full_name"])
-                        name_to_id[normalized] = employee["id"]
-                        # Also store without middle initials for fuzzy matching
-                        # e.g., "Vincent I" -> "vincent", "Daniel B" -> "daniel"
-                        first_name = normalized.split()[0] if normalized else ""
-                        if first_name and first_name not in name_to_id:
-                            name_to_id[first_name] = employee["id"]
+                        # Store normalized name and all variants for lookup
+                        for variant in get_name_variants(employee["full_name"]):
+                            if variant not in name_to_id:
+                                name_to_id[variant] = employee["id"]
 
                         # Track if we need to resolve manager by name
                         if employee.get("_manager_name"):
@@ -202,20 +221,25 @@ class CSVParser:
                 # Try to resolve manager_name to ID
                 if emp.get("_manager_name") and not manager_id:
                     manager_name_raw = emp["_manager_name"]
-                    manager_name = normalize_name(manager_name_raw)
 
-                    # Try exact match first
-                    manager_id = name_to_id.get(manager_name)
+                    # Try all variants of the manager name
+                    for manager_variant in get_name_variants(manager_name_raw):
+                        manager_id = name_to_id.get(manager_variant)
+                        if manager_id:
+                            break
 
-                    # Try first name only if exact match fails
+                    # Try partial match if no exact variant matched
                     if not manager_id:
-                        first_name = manager_name.split()[0] if manager_name else ""
-                        manager_id = name_to_id.get(first_name)
-
-                    # Try partial match - find name that starts with the lookup
-                    if not manager_id:
+                        manager_name = normalize_name(manager_name_raw)
                         for stored_name, stored_id in name_to_id.items():
+                            # Check if either is a prefix of the other
                             if stored_name.startswith(manager_name) or manager_name.startswith(stored_name):
+                                manager_id = stored_id
+                                break
+                            # Check if they share the same first name
+                            stored_first = stored_name.split()[0] if stored_name else ""
+                            mgr_first = manager_name.split()[0] if manager_name else ""
+                            if stored_first and mgr_first and stored_first == mgr_first:
                                 manager_id = stored_id
                                 break
 
