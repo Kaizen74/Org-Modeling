@@ -672,6 +672,10 @@ class OrgChartParser:
         # For each level (except the top), find managers from level above
         sorted_levels = sorted(levels.keys())
 
+        # Early return if no levels (empty presentation)
+        if not sorted_levels:
+            return relationships
+
         # Track which employees got assigned and manager report counts
         assigned_employees = set(r[1] for r in existing_relationships)
         manager_report_counts: Dict[str, int] = {}

@@ -37,11 +37,11 @@ DEFAULT_COLUMN_MAPPINGS = {
         "employeeid", "staff_id", "staff id", "personnel_id"
     ],
     "full_name": [
-        "full_name", "name", "employee_name", "emp_name", "employee name",
+        "full_name", "full name", "name", "employee_name", "emp_name", "employee name",
         "fullname", "staff_name", "person_name", "display_name"
     ],
     "job_title": [
-        "job_title", "title", "position", "role", "job title", "job_title_name",
+        "job_title", "job title", "title", "position", "role", "job_title_name",
         "jobtitle", "designation", "job_role", "position_title"
     ],
     "manager_id": [
