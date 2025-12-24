@@ -424,7 +424,23 @@ class ClaudeAnalysisService:
             if expect_json:
                 # Extract JSON from response
                 parsed = self._parse_json_response(content)
-                findings = parsed.get("findings", parsed.get("pathologies_detected", []))
+
+                # Get findings - normalize pathology format to standard finding format
+                findings = parsed.get("findings", [])
+                pathologies = parsed.get("pathologies_detected", [])
+
+                # Convert pathologies to findings format (they use "name" instead of "title")
+                for pathology in pathologies:
+                    findings.append({
+                        "title": pathology.get("name", "Unknown Issue"),
+                        "description": pathology.get("description", ""),
+                        "severity": self._map_pathology_severity(pathology.get("severity", "moderate")),
+                        "evidence": pathology.get("evidence", []),
+                        "category": "pathology",
+                        "impact": pathology.get("impact"),
+                        "remediation": pathology.get("remediation"),
+                    })
+
                 recommendations = parsed.get("recommendations", [])
                 narrative = parsed.get("overall_assessment", parsed.get("risk_assessment"))
             else:
@@ -466,6 +482,15 @@ class ClaudeAnalysisService:
                 recommendations=[],
                 error=f"Analysis failed: {str(e)}",
             )
+
+    def _map_pathology_severity(self, severity: str) -> str:
+        """Map pathology severity (mild/moderate/severe) to finding severity (low/medium/high)."""
+        mapping = {
+            "mild": "low",
+            "moderate": "medium",
+            "severe": "high",
+        }
+        return mapping.get(severity.lower(), "medium")
 
     def _parse_json_response(self, content: str) -> Dict[str, Any]:
         """Extract and parse JSON from Claude's response."""

@@ -213,6 +213,7 @@ class CSVParser:
                     })
 
             logger.info(f"Parsed {len(employees)} employees, name_to_id has {len(name_to_id)} entries")
+            logger.info(f"Column mappings detected: {column_map}")
 
             # Resolve manager relationships
             for emp in employees:

@@ -349,39 +349,43 @@ class MetricsCalculator:
     def _calc_leadership_overhead(
         self, G: nx.DiGraph, employees: List[Dict]
     ) -> MetricResult:
-        """Calculate leadership overhead (managers + their support as % of total)."""
-        managers = [node for node in G.nodes() if G.out_degree(node) > 0]
+        """Calculate leadership overhead (managers as % of total headcount)."""
+        # Convert employee IDs to strings for consistent comparison
+        manager_ids = {str(node) for node in G.nodes() if G.out_degree(node) > 0}
 
-        # Calculate manager cost
-        manager_cost = 0
-        total_cost = 0
+        # Count managers and ICs using headcount
+        manager_count = 0
+        ic_count = 0
+        total_count = len(employees)
 
         for emp in employees:
-            emp_cost = self._get_employee_cost(emp)
-            total_cost += emp_cost
-            if emp.get("id") in managers:
-                manager_cost += emp_cost
+            emp_id = str(emp.get("id", ""))
+            if emp_id in manager_ids:
+                manager_count += 1
+            else:
+                ic_count += 1
 
-        if total_cost == 0:
+        if total_count == 0:
             overhead = 0
         else:
-            overhead = manager_cost / total_cost
+            overhead = manager_count / total_count
 
         benchmark = self.benchmarks["leadership_overhead"]
         status = "healthy" if overhead <= benchmark["healthy_max"] else "warning"
 
         return MetricResult(
             metric_type="leadership_overhead",
-            metric_category="cost",
+            metric_category="structure",
             value=round(overhead, 3),
             value_formatted=f"{overhead:.1%}",
             benchmark_value=benchmark["healthy_max"],
             benchmark_source=benchmark["source"],
             status=status,
-            description="Percentage of total cost attributed to management roles",
+            description="Percentage of employees who are people managers",
             breakdown={
-                "manager_cost": round(manager_cost, 2),
-                "total_cost": round(total_cost, 2),
+                "manager_count": manager_count,
+                "ic_count": ic_count,
+                "total_count": total_count,
             },
         )
 

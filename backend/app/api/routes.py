@@ -248,6 +248,7 @@ async def upload_dataset(
             parser = CSVParser()
             parse_result = parser.parse(content.decode("utf-8"))
             raw_data = parse_result.to_dict()
+            logger.info(f"CSV parsed: {len(raw_data.get('employees', []))} employees, {len(raw_data.get('relationships', []))} relationships")
 
         elif source_type == SourceTypeEnum.EXCEL:
             parser = ExcelParser()
@@ -494,6 +495,9 @@ async def publish_dataset(
     id_mapping = {}  # Map old IDs to new UUIDs
     employees_with_manager_id = []  # Track employees that have manager_id in parsed data
 
+    logger.info(f"Publishing dataset with {len(dataset.parsed_employees or [])} employees")
+    logger.info(f"Dataset has {len(dataset.parsed_relationships or [])} parsed relationships")
+
     for emp_data in dataset.parsed_employees or []:
         old_id = emp_data.get("id")
         employee = Employee(
@@ -522,8 +526,13 @@ async def publish_dataset(
         # Track if employee has manager_id in parsed data (from CSV)
         if emp_data.get("manager_id"):
             employees_with_manager_id.append((employee.id, emp_data.get("manager_id")))
+            logger.debug(f"Employee {emp_data.get('full_name')} has manager_id: {emp_data.get('manager_id')}")
+
+    logger.info(f"Created id_mapping with {len(id_mapping)} entries")
+    logger.info(f"Found {len(employees_with_manager_id)} employees with manager_id in parsed data")
 
     # Set manager relationships from parsed_relationships (PPTX spatial inference)
+    relationships_set = 0
     for rel in dataset.parsed_relationships or []:
         manager_old_id, employee_old_id = rel[0], rel[1]
         manager_new_id = id_mapping.get(manager_old_id)
@@ -537,8 +546,12 @@ async def publish_dataset(
             employee = emp_result.scalar_one_or_none()
             if employee:
                 employee.manager_id = manager_new_id
+                relationships_set += 1
+
+    logger.info(f"Set {relationships_set} manager relationships from parsed_relationships")
 
     # Also set manager relationships from employee's manager_id field (CSV direct reference)
+    csv_relationships_set = 0
     for new_employee_id, old_manager_id in employees_with_manager_id:
         manager_new_id = id_mapping.get(old_manager_id)
         if manager_new_id:
@@ -548,6 +561,11 @@ async def publish_dataset(
             employee = emp_result.scalar_one_or_none()
             if employee and not employee.manager_id:  # Don't overwrite if already set
                 employee.manager_id = manager_new_id
+                csv_relationships_set += 1
+        else:
+            logger.warning(f"Could not find manager mapping for old_id: {old_manager_id}")
+
+    logger.info(f"Set {csv_relationships_set} additional manager relationships from CSV manager_id")
 
     # Update dataset with scenario reference
     dataset.published_to_scenario_id = scenario.id
@@ -701,8 +719,14 @@ async def get_scenario_tree(
     )
     employees = result.scalars().all()
 
+    logger.info(f"Building tree for scenario {scenario_id}: {len(employees)} employees")
+
+    # Count employees with manager_id set
+    employees_with_manager = sum(1 for emp in employees if emp.manager_id)
+    logger.info(f"Employees with manager_id set: {employees_with_manager}")
+
     # Build employee lookup and check if positions exist
-    emp_by_id = {emp.id: emp for emp in employees}
+    emp_by_id = {str(emp.id): emp for emp in employees}
     has_positions = any(emp.position_x is not None and emp.position_y is not None for emp in employees)
 
     # If no positions exist, calculate auto-layout based on hierarchy
@@ -715,6 +739,8 @@ async def get_scenario_tree(
     edges = []
 
     for emp in employees:
+        emp_id_str = str(emp.id)
+
         # Use calculated position or stored position
         if emp.id in positions:
             pos_x, pos_y = positions[emp.id]
@@ -723,7 +749,7 @@ async def get_scenario_tree(
             pos_y = emp.position_y or 0
 
         nodes.append({
-            "id": emp.id,
+            "id": emp_id_str,  # Convert UUID to string for JSON
             "data": {
                 "label": emp.full_name,
                 "title": emp.job_title,
@@ -742,10 +768,11 @@ async def get_scenario_tree(
         })
 
         if emp.manager_id:
+            manager_id_str = str(emp.manager_id)
             edges.append({
-                "id": f"e-{emp.manager_id}-{emp.id}",
-                "source": emp.manager_id,
-                "target": emp.id,
+                "id": f"e-{manager_id_str}-{emp_id_str}",
+                "source": manager_id_str,
+                "target": emp_id_str,
                 "type": "smoothstep",
             })
 
