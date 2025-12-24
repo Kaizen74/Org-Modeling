@@ -94,6 +94,7 @@ class OrgChartParser:
         max_horizontal_distance_inches: float = 5.0,
         min_text_length: int = 2,
         max_levels: int = 12,
+        filter_title_boxes: bool = True,
     ):
         """
         Initialize the parser with a PowerPoint file.
@@ -103,6 +104,7 @@ class OrgChartParser:
             max_horizontal_distance_inches: Max horizontal distance for manager assignment
             min_text_length: Minimum text length to consider a shape valid
             max_levels: Maximum hierarchy levels to detect
+            filter_title_boxes: Whether to filter out slide title boxes (default True)
         """
         self.pptx_path = Path(pptx_path)
         if not self.pptx_path.exists():
@@ -114,6 +116,7 @@ class OrgChartParser:
         self.max_horizontal_distance = max_horizontal_distance_inches * EMU_PER_INCH
         self.min_text_length = min_text_length
         self.max_levels = max_levels
+        self.filter_title_boxes = filter_title_boxes
 
     def parse(self) -> ParseResult:
         """
@@ -130,11 +133,13 @@ class OrgChartParser:
         all_employees: List[ParsedEmployee] = []
         all_relationships: List[Tuple[str, str]] = []
         connectors: List[Dict] = []
+        all_filtered_titles: List[str] = []
 
         for slide_idx, slide in enumerate(self.presentation.slides):
             slide_data = self._parse_slide(slide, slide_idx)
             all_employees.extend(slide_data["employees"])
             connectors.extend(slide_data.get("connectors", []))
+            all_filtered_titles.extend(slide_data.get("filtered_titles", []))
 
         # Convert to dicts for processing
         employee_dicts = [emp.to_dict() for emp in all_employees]
@@ -185,6 +190,8 @@ class OrgChartParser:
             "forest_count": len(result.forests),
             "orphan_count": len(result.unassigned),
             "source_file": str(self.pptx_path.name),
+            "filtered_title_boxes": all_filtered_titles,
+            "filtered_title_count": len(all_filtered_titles),
         }
 
         return result
@@ -304,15 +311,44 @@ class OrgChartParser:
         for shape in slide.shapes:
             process_shape(shape)
 
-        # Infer hierarchy levels using K-Means clustering
-        if text_boxes:
-            levels = self._infer_hierarchy_levels(text_boxes)
+        # Filter out title boxes if enabled
+        filtered_text_boxes = text_boxes
+        filtered_titles = []
+        if self.filter_title_boxes and text_boxes:
+            filtered_text_boxes = []
             for emp in text_boxes:
+                position = {
+                    "top": emp.position["top"],
+                    "width": emp.position["width"],
+                }
+                text_lines = emp.metadata.get("all_text_lines", [emp.name])
+                if self._is_title_box(
+                    emp.full_text,
+                    text_lines,
+                    position,
+                    emp.font_size,
+                    text_boxes,  # Pass all boxes for font comparison
+                ):
+                    filtered_titles.append(emp.full_text)
+                else:
+                    filtered_text_boxes.append(emp)
+
+            if filtered_titles:
+                logger.info(
+                    f"Filtered {len(filtered_titles)} title box(es) from slide {slide_idx}: "
+                    f"{filtered_titles}"
+                )
+
+        # Infer hierarchy levels using K-Means clustering
+        if filtered_text_boxes:
+            levels = self._infer_hierarchy_levels(filtered_text_boxes)
+            for emp in filtered_text_boxes:
                 emp.level = levels.get(emp.id, 1)
 
         return {
-            "employees": text_boxes,
+            "employees": filtered_text_boxes,
             "connectors": connectors,
+            "filtered_titles": filtered_titles,
         }
 
     def _extract_font_size(self, shape) -> float:
@@ -352,6 +388,72 @@ class OrgChartParser:
             pass
         return "unknown"
 
+    def _is_title_box(
+        self,
+        text: str,
+        text_lines: List[str],
+        position: Dict,
+        font_size: float,
+        all_text_boxes: List["ParsedEmployee"],
+    ) -> bool:
+        """
+        Determine if a shape is a slide title box rather than an employee box.
+
+        Title boxes typically have these characteristics:
+        - Single line of text (no name/title/grade structure)
+        - Located at the top of the slide
+        - Wide width spanning significant portion of slide
+        - Larger font size than typical employee boxes
+        - Common title keywords like "Department", "Organization", "Team", etc.
+        """
+        # Common title keywords that indicate a slide title, not an employee
+        title_keywords = [
+            "department", "organization", "org chart", "orgchart", "structure",
+            "team", "division", "services", "unit", "branch", "section",
+            "hierarchy", "reporting", "chart", "overview", "company"
+        ]
+
+        text_lower = text.lower()
+
+        # Check 1: Single line of text is a strong indicator of title box
+        # Employee boxes typically have 2-3 lines (name, title, grade)
+        is_single_line = len(text_lines) == 1
+
+        # Check 2: Contains title keywords
+        has_title_keyword = any(kw in text_lower for kw in title_keywords)
+
+        # Check 3: Position is at the very top of the slide (top 10% of slide height)
+        top_threshold = self.slide_height * 0.10
+        is_at_top = position["top"] < top_threshold
+
+        # Check 4: Width spans more than 50% of slide width (typical for titles)
+        width_ratio = position["width"] / self.slide_width if self.slide_width > 0 else 0
+        is_wide = width_ratio > 0.5
+
+        # Check 5: Font size comparison - title boxes usually have larger fonts
+        # Compare with average font size of other boxes if available
+        has_large_font = False
+        if all_text_boxes:
+            avg_font_size = sum(e.font_size for e in all_text_boxes) / len(all_text_boxes)
+            has_large_font = font_size > avg_font_size * 1.3  # 30% larger than average
+
+        # Decision logic:
+        # - Single line + title keyword = very likely title
+        # - Single line + at top + wide = likely title
+        # - Single line + large font + at top = likely title
+        if is_single_line:
+            if has_title_keyword:
+                logger.debug(f"Filtering title box (keyword match): '{text}'")
+                return True
+            if is_at_top and is_wide:
+                logger.debug(f"Filtering title box (top + wide): '{text}'")
+                return True
+            if has_large_font and is_at_top:
+                logger.debug(f"Filtering title box (large font + top): '{text}'")
+                return True
+
+        return False
+
     def _infer_hierarchy_levels(
         self, employees: List[ParsedEmployee]
     ) -> Dict[str, int]:
@@ -381,9 +483,14 @@ class OrgChartParser:
             # Fallback: use Y-coordinate only
             features_scaled = features[:, 0:1]
 
-        # Estimate number of levels (heuristic: between 2 and max_levels)
+        # Estimate number of levels using a more conservative heuristic
+        # Real org charts typically have 5-10 levels even with many employees
+        # Use square root-based estimation with reasonable bounds
         n_samples = len(employees)
-        n_levels = min(self.max_levels, max(2, n_samples // 4))
+        # For 64 employees: sqrt(64) = 8, for 100 employees: sqrt(100) = 10
+        # This gives more reasonable estimates than n_samples // 4
+        estimated_levels = max(2, min(10, int(np.sqrt(n_samples))))
+        n_levels = min(self.max_levels, estimated_levels)
         n_levels = min(n_levels, n_samples)  # Can't have more clusters than samples
 
         # K-Means clustering
