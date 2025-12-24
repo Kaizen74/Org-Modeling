@@ -53,7 +53,11 @@ class ParsedEmployee:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        result = asdict(self)
+        # Add full_name for consistency with API expectations
+        result["full_name"] = result["name"]
+        result["job_title"] = result["title"]
+        return result
 
 
 @dataclass
@@ -91,7 +95,7 @@ class OrgChartParser:
     def __init__(
         self,
         pptx_path: str,
-        max_horizontal_distance_inches: float = 5.0,
+        max_horizontal_distance_inches: float = 8.0,  # Increased for wide org charts
         min_text_length: int = 2,
         max_levels: int = 12,
         filter_title_boxes: bool = True,
@@ -411,15 +415,25 @@ class OrgChartParser:
         - Wide width spanning significant portion of slide
         - Larger font size than typical employee boxes
         - Common title keywords like "Department", "Organization", "Team", etc.
+        - Company/brand names followed by organizational terms
         """
         # Common title keywords that indicate a slide title, not an employee
         title_keywords = [
             "department", "organization", "org chart", "orgchart", "structure",
             "team", "division", "services", "unit", "branch", "section",
-            "hierarchy", "reporting", "chart", "overview", "company"
+            "hierarchy", "reporting", "chart", "overview", "company",
+            "corporate", "group", "operations", "management", "function",
+            "directorate", "office", "centre", "center", "passenger",
+            "cargo", "logistics", "aviation", "airport", "airline",
         ]
 
-        text_lower = text.lower()
+        # Common company/brand names that may appear in titles
+        company_indicators = [
+            "sats", "ltd", "pte", "inc", "corp", "limited", "holdings",
+            "international", "global", "asia", "pacific",
+        ]
+
+        text_lower = text.lower().strip()
 
         # Check 1: Single line of text is a strong indicator of title box
         # Employee boxes typically have 2-3 lines (name, title, grade)
@@ -428,34 +442,71 @@ class OrgChartParser:
         # Check 2: Contains title keywords
         has_title_keyword = any(kw in text_lower for kw in title_keywords)
 
-        # Check 3: Position is at the very top of the slide (top 10% of slide height)
-        top_threshold = self.slide_height * 0.10
+        # Check 2b: Contains company indicators combined with org terms
+        has_company_with_org = (
+            any(ci in text_lower for ci in company_indicators) and
+            any(kw in text_lower for kw in title_keywords)
+        )
+
+        # Check 3: Position is at the very top of the slide (top 15% of slide height)
+        # Increased from 10% to 15% to catch more title boxes
+        top_threshold = self.slide_height * 0.15
         is_at_top = position["top"] < top_threshold
 
-        # Check 4: Width spans more than 50% of slide width (typical for titles)
+        # Check 4: Width spans more than 40% of slide width (typical for titles)
+        # Reduced from 50% to 40% to catch more title boxes
         width_ratio = position["width"] / self.slide_width if self.slide_width > 0 else 0
-        is_wide = width_ratio > 0.5
+        is_wide = width_ratio > 0.40
 
         # Check 5: Font size comparison - title boxes usually have larger fonts
         # Compare with average font size of other boxes if available
         has_large_font = False
         if all_text_boxes:
-            avg_font_size = sum(e.font_size for e in all_text_boxes) / len(all_text_boxes)
-            has_large_font = font_size > avg_font_size * 1.3  # 30% larger than average
+            # Use median instead of mean for better outlier handling
+            sorted_fonts = sorted(e.font_size for e in all_text_boxes)
+            median_font_size = sorted_fonts[len(sorted_fonts) // 2]
+            has_large_font = font_size > median_font_size * 1.2  # 20% larger than median
+
+        # Check 6: Text pattern analysis
+        # Employee names are typically 2-3 words, not long phrases
+        word_count = len(text.split())
+        has_many_words = word_count > 4
+
+        # Check 7: Looks like a header phrase (contains "passenger services department" pattern)
+        looks_like_header = bool(
+            text_lower.endswith("department") or
+            text_lower.endswith("services") or
+            text_lower.endswith("division") or
+            text_lower.endswith("team") or
+            text_lower.endswith("unit") or
+            text_lower.endswith("group") or
+            text_lower.endswith("office")
+        )
 
         # Decision logic:
         # - Single line + title keyword = very likely title
         # - Single line + at top + wide = likely title
         # - Single line + large font + at top = likely title
+        # - Single line + company indicator + org term = likely title
+        # - Single line + looks like header phrase = likely title
         if is_single_line:
             if has_title_keyword:
-                logger.debug(f"Filtering title box (keyword match): '{text}'")
+                logger.info(f"Filtering title box (keyword match): '{text}'")
+                return True
+            if has_company_with_org:
+                logger.info(f"Filtering title box (company + org term): '{text}'")
+                return True
+            if looks_like_header:
+                logger.info(f"Filtering title box (header phrase): '{text}'")
                 return True
             if is_at_top and is_wide:
-                logger.debug(f"Filtering title box (top + wide): '{text}'")
+                logger.info(f"Filtering title box (top + wide): '{text}'")
                 return True
             if has_large_font and is_at_top:
-                logger.debug(f"Filtering title box (large font + top): '{text}'")
+                logger.info(f"Filtering title box (large font + top): '{text}'")
+                return True
+            if is_at_top and has_many_words:
+                logger.info(f"Filtering title box (top + many words): '{text}'")
                 return True
 
         return False
