@@ -160,6 +160,13 @@ class OrgChartParser:
         # Build graph and identify forests
         result = self._build_org_graph(employee_dicts, all_relationships)
 
+        # Calculate ACTUAL hierarchy depth from graph structure
+        # This is the true organizational layers count, not K-Means clustering estimate
+        actual_hierarchy_depth = self._calculate_hierarchy_depth(result.graph)
+
+        # Reassign levels to employees based on actual graph depth from root
+        self._assign_graph_based_levels(result.graph, employee_dicts)
+
         # Calculate metadata
         outside_canvas_count = len([
             emp for emp in employee_dicts
@@ -169,13 +176,12 @@ class OrgChartParser:
                emp["position"]["bottom"] > self.slide_height
         ])
 
-        unique_levels = set(emp["level"] for emp in employee_dicts)
-
+        # Use actual graph-based hierarchy depth, not K-Means clustering
         result.metadata = {
             "total_slides": len(self.presentation.slides),
             "total_employees": len(employee_dicts),
             "total_relationships": len(all_relationships),
-            "levels_detected": len(unique_levels),
+            "levels_detected": actual_hierarchy_depth,  # Actual org layers from graph
             "slide_dimensions": {
                 "width_emu": self.slide_width,
                 "height_emu": self.slide_height,
@@ -736,6 +742,90 @@ class OrgChartParser:
             return max(lengths.values()) if lengths else 0
         except Exception:
             return 0
+
+    def _calculate_hierarchy_depth(self, G: nx.DiGraph) -> int:
+        """
+        Calculate the ACTUAL hierarchy depth from the graph structure.
+
+        This returns the true number of organizational layers based on
+        the longest path from any root to any leaf node.
+
+        Returns:
+            Number of organizational layers (depth + 1)
+        """
+        if G is None or G.number_of_nodes() == 0:
+            return 0
+
+        # Find root nodes (nodes with no incoming edges)
+        roots = [node for node in G.nodes() if G.in_degree(node) == 0]
+
+        if not roots:
+            # No clear root - might be a cycle or disconnected
+            return len(set(G.nodes()))
+
+        max_depth = 0
+        for root in roots:
+            try:
+                # Get all path lengths from this root
+                lengths = nx.single_source_shortest_path_length(G, root)
+                if lengths:
+                    root_max_depth = max(lengths.values())
+                    max_depth = max(max_depth, root_max_depth)
+            except nx.NetworkXError:
+                continue
+
+        # Return layers count (depth + 1, since depth 0 = 1 layer)
+        return max_depth + 1
+
+    def _assign_graph_based_levels(
+        self,
+        G: nx.DiGraph,
+        employee_dicts: List[Dict]
+    ) -> None:
+        """
+        Assign correct hierarchy levels to employees based on graph structure.
+
+        This replaces the K-Means clustering levels with actual graph-based
+        levels calculated from the distance to root nodes.
+
+        Args:
+            G: The organization graph
+            employee_dicts: List of employee dictionaries to update in-place
+        """
+        if G is None or G.number_of_nodes() == 0:
+            return
+
+        # Find root nodes
+        roots = [node for node in G.nodes() if G.in_degree(node) == 0]
+
+        # Calculate level for each node (distance from nearest root + 1)
+        node_levels = {}
+
+        for root in roots:
+            try:
+                lengths = nx.single_source_shortest_path_length(G, root)
+                for node_id, depth in lengths.items():
+                    # Level is depth + 1 (root is level 1, not level 0)
+                    level = depth + 1
+                    # Use minimum level if node is reachable from multiple roots
+                    if node_id not in node_levels or level < node_levels[node_id]:
+                        node_levels[node_id] = level
+            except nx.NetworkXError:
+                continue
+
+        # Update employee dictionaries with graph-based levels
+        for emp in employee_dicts:
+            emp_id = emp.get("id")
+            if emp_id in node_levels:
+                emp["level"] = node_levels[emp_id]
+            # Also update the node in the graph
+            if emp_id in G.nodes:
+                G.nodes[emp_id]["level"] = emp.get("level", 1)
+
+        logger.info(
+            f"Assigned graph-based levels to {len(node_levels)} employees. "
+            f"Levels: {sorted(set(node_levels.values()))}"
+        )
 
 
 def parse_pptx_file(file_path: str) -> Dict[str, Any]:
