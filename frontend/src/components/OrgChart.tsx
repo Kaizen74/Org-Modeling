@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useEffect } from 'react'
 import {
   ReactFlow,
   MiniMap,
@@ -123,8 +123,18 @@ export default function OrgChart({
     }))
   }, [initialEdges])
 
-  const [nodes, _setNodes, onNodesChange] = useNodesState(flowNodes)
+  const [nodes, setNodes, onNodesChange] = useNodesState(flowNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(flowEdges)
+
+  // Sync nodes when initialNodes changes (e.g., after API call)
+  useEffect(() => {
+    setNodes(flowNodes)
+  }, [flowNodes, setNodes])
+
+  // Sync edges when initialEdges changes (e.g., after API call)
+  useEffect(() => {
+    setEdges(flowEdges)
+  }, [flowEdges, setEdges])
 
   const onConnect = useCallback(
     (params: Connection) => {
