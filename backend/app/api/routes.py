@@ -33,7 +33,7 @@ from ..models.schemas import (
     ScenarioCreate, ScenarioUpdate, ScenarioResponse, ScenarioCloneRequest,
     EmployeeCreate, EmployeeUpdate, EmployeeResponse,
     RateCardCreate, RateCardUpdate, RateCardResponse,
-    MetricResponse, MetricsSummary,
+    MetricData, MetricResponse, MetricsSummary,
     AnalysisRequest, AnalysisResult, ScenarioComparisonRequest, ScenarioComparisonResult,
     APIKeyCreate, APIKeyResponse, APIKeyTestResult,
     PaginationParams, PaginatedResponse, HealthResponse,
@@ -994,7 +994,7 @@ async def calculate_scenario_metrics(
         functions=list(set(e.function or "Unknown" for e in employees)),
         locations=list(set(e.location or "Unknown" for e in employees)),
         grade_distribution={},
-        metrics=[MetricResponse.model_validate(m) for m in report.metrics],
+        metrics=[MetricData.model_validate(m) for m in report.metrics],
     )
 
 

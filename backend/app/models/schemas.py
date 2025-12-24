@@ -284,6 +284,22 @@ class RateCardResponse(BaseSchema):
 
 # === Metric Schemas ===
 
+class MetricData(BaseModel):
+    """Metric data without database fields - used for calculated results."""
+    metric_type: str
+    metric_category: Optional[str] = None
+    value: float
+    value_formatted: Optional[str] = None
+    breakdown: Optional[Dict[str, Any]] = None
+    benchmark_value: Optional[float] = None
+    benchmark_source: Optional[str] = None
+    status: Optional[str] = None
+    description: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class MetricResponse(BaseSchema):
     id: str
     scenario_id: str
@@ -307,7 +323,7 @@ class MetricsSummary(BaseModel):
     functions: List[str]
     locations: List[str]
     grade_distribution: Dict[str, int]
-    metrics: List[MetricResponse]
+    metrics: List[MetricData]  # Use MetricData instead of MetricResponse
 
 
 # === Analysis Schemas ===
