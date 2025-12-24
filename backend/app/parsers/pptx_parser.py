@@ -95,7 +95,7 @@ class OrgChartParser:
     def __init__(
         self,
         pptx_path: str,
-        max_horizontal_distance_inches: float = 8.0,  # Increased for wide org charts
+        max_horizontal_distance_inches: float = 15.0,  # Large value for wide org charts
         min_text_length: int = 2,
         max_levels: int = 12,
         filter_title_boxes: bool = True,
@@ -652,10 +652,12 @@ class OrgChartParser:
         existing_relationships: set
     ) -> List[Tuple[str, str]]:
         """
-        Infer manager-employee relationships using spatial proximity.
+        Infer manager-employee relationships using spatial proximity with load balancing.
 
         Heuristic: An employee is managed by the closest box in the level above,
         within a reasonable horizontal distance (same "branch" of the tree).
+        Uses load-balancing to prevent too many reports under one manager.
+        Falls back to closest manager in any higher level if no nearby manager found.
         """
         relationships = []
 
@@ -670,6 +672,18 @@ class OrgChartParser:
         # For each level (except the top), find managers from level above
         sorted_levels = sorted(levels.keys())
 
+        # Track which employees got assigned and manager report counts
+        assigned_employees = set(r[1] for r in existing_relationships)
+        manager_report_counts: Dict[str, int] = {}
+        for rel in existing_relationships:
+            manager_id = rel[0]
+            manager_report_counts[manager_id] = manager_report_counts.get(manager_id, 0) + 1
+
+        # Calculate expected reports per manager to guide load balancing
+        total_non_root = len(employees) - len(levels.get(sorted_levels[0], []))
+        total_managers = sum(len(levels.get(l, [])) for l in sorted_levels[:-1]) if len(sorted_levels) > 1 else 1
+        expected_reports_per_manager = max(3, total_non_root // max(1, total_managers))
+
         for level_idx in range(1, len(sorted_levels)):
             current_level = sorted_levels[level_idx]
             parent_level = sorted_levels[level_idx - 1]
@@ -677,14 +691,20 @@ class OrgChartParser:
             employees_at_level = levels[current_level]
             potential_managers = levels[parent_level]
 
-            for employee in employees_at_level:
+            # Sort employees by X position for more consistent assignment
+            employees_sorted = sorted(
+                employees_at_level,
+                key=lambda e: e["position"]["center_x"]
+            )
+
+            for employee in employees_sorted:
                 # Skip if already has a relationship
-                if any(r[1] == employee["id"] for r in existing_relationships):
+                if employee["id"] in assigned_employees:
                     continue
 
-                # Find closest manager horizontally within reasonable range
-                closest_manager = None
-                min_score = float("inf")
+                # Find best manager considering distance AND current load
+                best_manager = None
+                best_score = float("inf")
 
                 for manager in potential_managers:
                     # Calculate horizontal distance between centers
@@ -697,21 +717,96 @@ class OrgChartParser:
                     if horizontal_dist > self.max_horizontal_distance:
                         continue
 
-                    # Score: prefer closer horizontally, slight preference for directly above
+                    # Base score: prefer closer horizontally
                     vertical_dist = abs(
                         employee["position"]["center_y"] -
                         manager["position"]["center_y"]
                     )
-                    score = horizontal_dist + (vertical_dist * 0.1)
+                    distance_score = horizontal_dist + (vertical_dist * 0.1)
 
-                    if score < min_score:
-                        closest_manager = manager
-                        min_score = score
+                    # Load penalty: penalize managers who already have many reports
+                    current_reports = manager_report_counts.get(manager["id"], 0)
+                    # Penalty increases exponentially as reports exceed expected
+                    if current_reports >= expected_reports_per_manager * 2:
+                        load_penalty = (current_reports - expected_reports_per_manager) * self.max_horizontal_distance * 0.5
+                    elif current_reports >= expected_reports_per_manager:
+                        load_penalty = (current_reports - expected_reports_per_manager) * self.max_horizontal_distance * 0.2
+                    else:
+                        load_penalty = 0
 
-                if closest_manager:
-                    rel = (closest_manager["id"], employee["id"])
+                    score = distance_score + load_penalty
+
+                    if score < best_score:
+                        best_manager = manager
+                        best_score = score
+
+                if best_manager:
+                    rel = (best_manager["id"], employee["id"])
                     if rel not in existing_relationships:
                         relationships.append(rel)
+                        assigned_employees.add(employee["id"])
+                        manager_report_counts[best_manager["id"]] = manager_report_counts.get(best_manager["id"], 0) + 1
+
+        # FALLBACK: Assign orphan employees using cascading level search with load balancing
+        # Start from immediate parent level, then go up if needed
+        for level_idx in range(1, len(sorted_levels)):
+            current_level = sorted_levels[level_idx]
+            employees_at_level = levels[current_level]
+
+            for employee in employees_at_level:
+                if employee["id"] in assigned_employees:
+                    continue
+
+                # Try each higher level starting from immediate parent
+                for parent_offset in range(1, level_idx + 1):
+                    parent_level_idx = level_idx - parent_offset
+                    if parent_level_idx < 0:
+                        break
+
+                    parent_level = sorted_levels[parent_level_idx]
+                    parent_managers = levels[parent_level]
+
+                    # Find best manager at THIS level considering distance AND load
+                    best_manager = None
+                    best_score = float("inf")
+
+                    for manager in parent_managers:
+                        horizontal_dist = abs(
+                            employee["position"]["center_x"] -
+                            manager["position"]["center_x"]
+                        )
+                        vertical_dist = abs(
+                            employee["position"]["center_y"] -
+                            manager["position"]["center_y"]
+                        )
+                        dist = np.sqrt(horizontal_dist**2 + vertical_dist**2)
+
+                        # Add load penalty for managers with many reports
+                        current_reports = manager_report_counts.get(manager["id"], 0)
+                        if current_reports >= expected_reports_per_manager * 2:
+                            load_penalty = current_reports * EMU_PER_INCH * 2
+                        elif current_reports >= expected_reports_per_manager:
+                            load_penalty = current_reports * EMU_PER_INCH * 0.5
+                        else:
+                            load_penalty = 0
+
+                        score = dist + load_penalty
+
+                        if score < best_score:
+                            best_manager = manager
+                            best_score = score
+
+                    # If found a manager at this level, assign and stop searching
+                    if best_manager:
+                        rel = (best_manager["id"], employee["id"])
+                        relationships.append(rel)
+                        assigned_employees.add(employee["id"])
+                        manager_report_counts[best_manager["id"]] = manager_report_counts.get(best_manager["id"], 0) + 1
+                        logger.info(
+                            f"Fallback assignment: '{employee.get('name')}' -> "
+                            f"'{best_manager.get('name')}' (reports: {manager_report_counts.get(best_manager['id'], 0)})"
+                        )
+                        break  # Stop searching higher levels
 
         return relationships
 
