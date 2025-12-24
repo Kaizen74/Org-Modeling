@@ -685,11 +685,27 @@ async def get_scenario_tree(
     )
     employees = result.scalars().all()
 
+    # Build employee lookup and check if positions exist
+    emp_by_id = {emp.id: emp for emp in employees}
+    has_positions = any(emp.position_x is not None and emp.position_y is not None for emp in employees)
+
+    # If no positions exist, calculate auto-layout based on hierarchy
+    positions = {}
+    if not has_positions and employees:
+        positions = _calculate_org_layout(employees)
+
     # Build tree structure
     nodes = []
     edges = []
 
     for emp in employees:
+        # Use calculated position or stored position
+        if emp.id in positions:
+            pos_x, pos_y = positions[emp.id]
+        else:
+            pos_x = emp.position_x or 0
+            pos_y = emp.position_y or 0
+
         nodes.append({
             "id": emp.id,
             "data": {
@@ -704,8 +720,8 @@ async def get_scenario_tree(
                 "is_modified": emp.is_modified,
             },
             "position": {
-                "x": emp.position_x or 0,
-                "y": emp.position_y or 0,
+                "x": pos_x,
+                "y": pos_y,
             },
         })
 
@@ -718,6 +734,95 @@ async def get_scenario_tree(
             })
 
     return {"nodes": nodes, "edges": edges}
+
+
+def _calculate_org_layout(employees: list) -> dict:
+    """
+    Calculate auto-layout positions for org chart nodes.
+
+    Uses a top-down tree layout algorithm:
+    - Root nodes at top
+    - Children positioned below their manager
+    - Siblings spread horizontally
+    """
+    import networkx as nx
+
+    # Build graph
+    G = nx.DiGraph()
+    for emp in employees:
+        G.add_node(emp.id, employee=emp)
+
+    for emp in employees:
+        if emp.manager_id and emp.manager_id in G:
+            G.add_edge(emp.manager_id, emp.id)
+
+    # Find roots (nodes with no incoming edges)
+    roots = [n for n in G.nodes() if G.in_degree(n) == 0]
+
+    if not roots:
+        # If no clear root, use employee with level 1 or lowest level
+        min_level = min((emp.level or 99 for emp in employees), default=1)
+        roots = [emp.id for emp in employees if (emp.level or 99) == min_level]
+
+    # Layout parameters
+    NODE_WIDTH = 220
+    NODE_HEIGHT = 120
+    HORIZONTAL_SPACING = 40
+    VERTICAL_SPACING = 80
+
+    positions = {}
+    level_widths = {}  # Track width needed at each level
+
+    def get_subtree_width(node_id: str, level: int) -> int:
+        """Calculate total width needed for a subtree."""
+        children = list(G.successors(node_id))
+        if not children:
+            return NODE_WIDTH
+
+        total_width = sum(get_subtree_width(c, level + 1) for c in children)
+        total_width += HORIZONTAL_SPACING * (len(children) - 1)
+        return max(NODE_WIDTH, total_width)
+
+    def layout_subtree(node_id: str, x: float, y: float, level: int):
+        """Recursively layout a subtree."""
+        positions[node_id] = (x, y)
+
+        children = list(G.successors(node_id))
+        if not children:
+            return
+
+        # Calculate total width needed for children
+        child_widths = [get_subtree_width(c, level + 1) for c in children]
+        total_children_width = sum(child_widths) + HORIZONTAL_SPACING * (len(children) - 1)
+
+        # Start position for first child (centered under parent)
+        start_x = x - total_children_width / 2 + child_widths[0] / 2
+        child_y = y + NODE_HEIGHT + VERTICAL_SPACING
+
+        current_x = start_x
+        for i, child_id in enumerate(children):
+            layout_subtree(child_id, current_x, child_y, level + 1)
+            if i < len(children) - 1:
+                current_x += child_widths[i] / 2 + HORIZONTAL_SPACING + child_widths[i + 1] / 2
+
+    # Layout each root tree
+    total_width = sum(get_subtree_width(r, 0) for r in roots)
+    total_width += HORIZONTAL_SPACING * (len(roots) - 1) if len(roots) > 1 else 0
+
+    start_x = -total_width / 2
+    for i, root in enumerate(roots):
+        root_width = get_subtree_width(root, 0)
+        layout_subtree(root, start_x + root_width / 2, 0, 0)
+        start_x += root_width + HORIZONTAL_SPACING
+
+    # Handle orphan nodes (not connected to any root)
+    orphans = [emp.id for emp in employees if emp.id not in positions]
+    if orphans:
+        orphan_y = max(pos[1] for pos in positions.values()) + NODE_HEIGHT + VERTICAL_SPACING * 2 if positions else 0
+        for i, orphan_id in enumerate(orphans):
+            positions[orphan_id] = (i * (NODE_WIDTH + HORIZONTAL_SPACING), orphan_y)
+
+    return positions
 
 
 @router.post("/scenarios/{scenario_id}/clone", response_model=ScenarioResponse, tags=["Scenarios"])
