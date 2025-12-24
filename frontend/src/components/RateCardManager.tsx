@@ -36,7 +36,7 @@ const DEFAULT_CURRENCY = 'USD'
 
 export default function RateCardManager({ projectId, onUpdate }: RateCardManagerProps) {
   const [rateCards, setRateCards] = useState<RateCard[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [_isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)

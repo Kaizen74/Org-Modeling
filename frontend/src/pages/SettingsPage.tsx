@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { testApiKey, saveApiKey, getApiKey, checkHealth } from '../api/client'
-import type { ApiKeyConfig, HealthStatus } from '../api/types'
+import type { HealthStatus } from '../api/types'
 import {
   Key,
   CheckCircle,
@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 
 export default function SettingsPage() {
-  const { apiKey, setApiKey, setApiKeyConfig, apiKeyConfig, setError } = useAppStore()
+  const { setApiKey, setApiKeyConfig, apiKeyConfig, setError } = useAppStore()
 
   const [inputKey, setInputKey] = useState('')
   const [showKey, setShowKey] = useState(false)
@@ -265,7 +265,7 @@ export default function SettingsPage() {
             </button>
             <button
               onClick={handleSave}
-              disabled={!inputKey || isSaving || (testResult && !testResult.valid)}
+              disabled={!inputKey || isSaving || (testResult !== null && !testResult.valid)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
               {isSaving ? (

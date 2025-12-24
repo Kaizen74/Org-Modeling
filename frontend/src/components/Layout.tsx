@@ -1,7 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import {
-  LayoutDashboard,
   FolderKanban,
   GitCompare,
   Settings,

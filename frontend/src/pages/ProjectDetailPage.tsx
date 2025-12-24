@@ -8,7 +8,7 @@ import {
   getDatasetPreview,
   publishDataset,
 } from '../api/client'
-import type { Project, Scenario, DatasetPreview } from '../api/types'
+import type { Project, DatasetPreview } from '../api/types'
 import {
   ArrowLeft,
   Upload,

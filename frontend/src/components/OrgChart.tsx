@@ -8,14 +8,13 @@ import {
   useEdgesState,
   addEdge,
   Connection,
-  Edge,
   Node,
   BackgroundVariant,
   NodeTypes,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { OrgNode, OrgEdge } from '../api/types'
-import { User, Users, MapPin, Briefcase } from 'lucide-react'
+import { User, MapPin, Briefcase } from 'lucide-react'
 
 interface OrgChartProps {
   nodes: OrgNode[]
@@ -124,7 +123,7 @@ export default function OrgChart({
     }))
   }, [initialEdges])
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(flowNodes)
+  const [nodes, _setNodes, onNodesChange] = useNodesState(flowNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(flowEdges)
 
   const onConnect = useCallback(

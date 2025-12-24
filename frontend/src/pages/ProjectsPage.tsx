@@ -2,13 +2,11 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { getProjects, createProject } from '../api/client'
-import type { Project } from '../api/types'
 import {
   Plus,
   Search,
   FolderOpen,
   Calendar,
-  Archive,
   Building2,
 } from 'lucide-react'
 

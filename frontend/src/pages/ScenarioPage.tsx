@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import {
@@ -17,8 +17,6 @@ import {
   Network,
   Brain,
   RefreshCw,
-  Copy,
-  Download,
 } from 'lucide-react'
 
 type TabType = 'chart' | 'metrics' | 'analysis'

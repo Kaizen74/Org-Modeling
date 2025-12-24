@@ -12,12 +12,10 @@ import {
   DollarSign,
   Plus,
   Trash2,
-  Edit,
-  Move,
 } from 'lucide-react'
 
 export default function ComparisonPage() {
-  const { apiKey, setLoading, setError } = useAppStore()
+  const { apiKey, setError } = useAppStore()
 
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProject, setSelectedProject] = useState<string>('')

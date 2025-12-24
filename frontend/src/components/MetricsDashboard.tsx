@@ -10,10 +10,8 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
 } from 'recharts'
-import type { MetricsSummary, Metric } from '../api/types'
+import type { MetricsSummary } from '../api/types'
 import {
   Users,
   DollarSign,
