@@ -512,7 +512,7 @@ async def publish_dataset(
             position_x=emp_data.get("position", {}).get("center_x"),
             position_y=emp_data.get("position", {}).get("center_y"),
             source_shape_id=old_id,
-            metadata=emp_data.get("metadata", {}),
+            extra_data=emp_data.get("metadata", {}),
         )
         session.add(employee)
         await session.flush()
@@ -601,7 +601,7 @@ async def create_scenario(
         description=scenario.description,
         parent_scenario_id=scenario.parent_scenario_id,
         is_baseline=scenario.is_baseline,
-        metadata=scenario.metadata or {},
+        extra_data=scenario.metadata or {},
     )
 
     session.add(db_scenario)
@@ -742,7 +742,7 @@ async def clone_scenario(
         description=clone_request.description or f"Cloned from {source.name}",
         parent_scenario_id=source.id,
         status=StatusEnum.DRAFT,
-        metadata=source.metadata,
+        extra_data=source.extra_data,
     )
     session.add(new_scenario)
     await session.flush()
@@ -775,7 +775,7 @@ async def clone_scenario(
             position_x=emp.position_x,
             position_y=emp.position_y,
             skills=emp.skills,
-            metadata=emp.metadata,
+            extra_data=emp.extra_data,
             source_shape_id=emp.source_shape_id,
             is_vacant=emp.is_vacant,
         )
@@ -818,10 +818,15 @@ async def create_employee(
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Scenario not found")
 
+    employee_data = employee.model_dump(exclude_unset=True)
+    # Map metadata -> extra_data for SQLAlchemy model
+    if "metadata" in employee_data:
+        employee_data["extra_data"] = employee_data.pop("metadata")
+
     db_employee = Employee(
         scenario_id=scenario_id,
         is_new=True,
-        **employee.model_dump(exclude_unset=True)
+        **employee_data
     )
 
     session.add(db_employee)
@@ -854,6 +859,10 @@ async def update_employee(
         raise HTTPException(status_code=404, detail="Employee not found")
 
     update_data = updates.model_dump(exclude_unset=True)
+    # Map metadata -> extra_data for SQLAlchemy model
+    if "metadata" in update_data:
+        update_data["extra_data"] = update_data.pop("metadata")
+
     for key, value in update_data.items():
         setattr(employee, key, value)
 

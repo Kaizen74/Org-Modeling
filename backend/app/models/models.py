@@ -147,7 +147,7 @@ class Scenario(Base):
     status = Column(Enum(StatusEnum), default=StatusEnum.DRAFT, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     last_modified_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    metadata = Column(JSON, default=dict)  # Tags, notes, assumptions
+    extra_data = Column(JSON, default=dict)  # Tags, notes, assumptions
     is_baseline = Column(Boolean, default=False)  # Flag for "As-Is" scenarios
 
     # Relationships
@@ -224,7 +224,7 @@ class Employee(Base):
     position_y = Column(Float)  # Canvas Y coordinate
 
     # Metadata
-    metadata = Column(JSON, default=dict)  # Custom attributes
+    extra_data = Column(JSON, default=dict)  # Custom attributes
     source_shape_id = Column(String(100))  # Original PPTX shape reference
 
     # Flags

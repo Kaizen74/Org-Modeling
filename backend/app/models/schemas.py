@@ -141,7 +141,7 @@ class ScenarioResponse(BaseSchema):
     created_at: datetime
     last_modified_at: datetime
     is_baseline: bool
-    metadata: Optional[Dict[str, Any]]
+    metadata: Optional[Dict[str, Any]] = Field(None, validation_alias="extra_data")
     employee_count: Optional[int] = 0
 
 
