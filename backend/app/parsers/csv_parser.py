@@ -161,12 +161,25 @@ class CSVParser:
             name_to_id = {}  # For manager_name resolution
             rows_with_manager_name = []
 
+            def normalize_name(name: str) -> str:
+                """Normalize name for matching - lowercase, strip, collapse whitespace."""
+                if not name:
+                    return ""
+                return " ".join(name.lower().strip().split())
+
             for row_idx, row in enumerate(reader):
                 try:
                     employee = self._parse_row(row, row_idx, column_map)
                     if employee:
                         employees.append(employee)
-                        name_to_id[employee["full_name"].lower()] = employee["id"]
+                        # Store normalized name for lookup
+                        normalized = normalize_name(employee["full_name"])
+                        name_to_id[normalized] = employee["id"]
+                        # Also store without middle initials for fuzzy matching
+                        # e.g., "Vincent I" -> "vincent", "Daniel B" -> "daniel"
+                        first_name = normalized.split()[0] if normalized else ""
+                        if first_name and first_name not in name_to_id:
+                            name_to_id[first_name] = employee["id"]
 
                         # Track if we need to resolve manager by name
                         if employee.get("_manager_name"):
@@ -180,16 +193,37 @@ class CSVParser:
                         "affected_nodes": [f"row_{row_idx}"],
                     })
 
+            logger.info(f"Parsed {len(employees)} employees, name_to_id has {len(name_to_id)} entries")
+
             # Resolve manager relationships
             for emp in employees:
                 manager_id = emp.get("manager_id")
 
                 # Try to resolve manager_name to ID
                 if emp.get("_manager_name") and not manager_id:
-                    manager_name = emp["_manager_name"].lower()
+                    manager_name_raw = emp["_manager_name"]
+                    manager_name = normalize_name(manager_name_raw)
+
+                    # Try exact match first
                     manager_id = name_to_id.get(manager_name)
+
+                    # Try first name only if exact match fails
+                    if not manager_id:
+                        first_name = manager_name.split()[0] if manager_name else ""
+                        manager_id = name_to_id.get(first_name)
+
+                    # Try partial match - find name that starts with the lookup
+                    if not manager_id:
+                        for stored_name, stored_id in name_to_id.items():
+                            if stored_name.startswith(manager_name) or manager_name.startswith(stored_name):
+                                manager_id = stored_id
+                                break
+
                     if manager_id:
                         emp["manager_id"] = manager_id
+                        logger.debug(f"Resolved manager '{manager_name_raw}' -> {manager_id}")
+                    else:
+                        logger.warning(f"Could not resolve manager '{manager_name_raw}' for employee '{emp.get('full_name')}'")
 
                 # Remove temporary field
                 emp.pop("_manager_name", None)
@@ -197,6 +231,8 @@ class CSVParser:
                 # Add relationship
                 if manager_id and manager_id != emp["id"]:
                     relationships.append((manager_id, emp["id"]))
+
+            logger.info(f"Created {len(relationships)} relationships from CSV")
 
             # Validate relationships
             employee_ids = {e["id"] for e in employees}
