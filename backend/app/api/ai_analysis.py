@@ -12,6 +12,7 @@ from ..models.database import get_session
 from ..models.models import OrgAnalysis, GradeSalary
 from ..services.ai_analysis_service import AIAnalysisService
 from ..services.metrics_service import MetricsCalculator
+from ..services.claude_service import claude_service
 
 router = APIRouter(prefix="/api/v1/ai-analysis", tags=["ai-analysis"])
 
@@ -73,16 +74,15 @@ async def analyze_org(
     else:
         metrics = analysis.metrics
 
-    # Get API key
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key or api_key == "your_key_here":
+    # Get API key from claude_service (handles .env file loading)
+    if not claude_service.is_configured():
         raise HTTPException(
             status_code=400,
             detail="Claude API key not configured. Please set it in Settings."
         )
 
     # Run AI analysis
-    service = AIAnalysisService(api_key=api_key)
+    service = AIAnalysisService(api_key=claude_service.api_key)
 
     strategy_docs = None
     if request.strategy_text:
@@ -184,16 +184,15 @@ async def analyze_with_documents(
                 if content and not content.startswith("["):  # Skip error messages
                     doc_contents.append(f"--- {doc.filename} ---\n{content}")
 
-    # Get API key
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key or api_key == "your_key_here":
+    # Get API key from claude_service (handles .env file loading)
+    if not claude_service.is_configured():
         raise HTTPException(
             status_code=400,
             detail="Claude API key not configured. Please set it in Settings."
         )
 
     # Run analysis
-    service = AIAnalysisService(api_key=api_key)
+    service = AIAnalysisService(api_key=claude_service.api_key)
 
     ai_result = await service.analyze_organization(
         metrics=metrics,
