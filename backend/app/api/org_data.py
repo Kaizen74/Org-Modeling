@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import io
 
 from ..models.database import get_session
-from ..models.models import OrgAnalysis
+from ..models.models import OrgAnalysis, GradeSalary
 from ..parsers.csv_parser import OrgCSVParser
 
 router = APIRouter(prefix="/api/v1/org-data", tags=["org-data"])
@@ -70,6 +70,9 @@ async def upload_csv(
                     "errors": result["validation_errors"]
                 }
             )
+
+        # Auto-import grades from CSV data based on Level
+        await _auto_import_grades(result["employees"], db)
 
         # Store parsed data in database
         analysis = OrgAnalysis(
@@ -187,3 +190,69 @@ async def delete_analysis(analysis_id: str, db: AsyncSession = Depends(get_sessi
     await db.delete(analysis)
     await db.commit()
     return {"message": f"Analysis '{analysis.name}' deleted"}
+
+
+async def _auto_import_grades(employees: list, db: AsyncSession):
+    """
+    Auto-import grades from CSV data based on Level column.
+
+    This ensures grade gap calculations work automatically after CSV upload.
+    Grades are ordered by their Level (lower level = higher rank).
+    """
+    if not employees:
+        return
+
+    # Group employees by grade and collect their levels and salaries
+    grade_data = {}
+    for emp in employees:
+        grade = emp.get("grade", "").strip()
+        level = emp.get("level", 0)
+        salary = emp.get("salary", 0)
+
+        if not grade:
+            continue
+
+        if grade not in grade_data:
+            grade_data[grade] = {"levels": [], "salaries": []}
+
+        grade_data[grade]["levels"].append(level)
+        grade_data[grade]["salaries"].append(salary)
+
+    # Calculate average level and median salary for each grade
+    grade_info = []
+    for grade, data in grade_data.items():
+        avg_level = sum(data["levels"]) / len(data["levels"]) if data["levels"] else 99
+        salaries = sorted(data["salaries"])
+        median_salary = salaries[len(salaries) // 2] if salaries else 0
+        grade_info.append({
+            "grade": grade,
+            "avg_level": avg_level,
+            "median_salary": median_salary
+        })
+
+    # Sort by average level (lower level = higher in org = lower display_order)
+    grade_info.sort(key=lambda x: x["avg_level"])
+
+    # Import grades into database
+    for order, info in enumerate(grade_info, 1):
+        # Check if grade already exists
+        result = await db.execute(
+            select(GradeSalary).where(GradeSalary.grade == info["grade"])
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            # Update existing grade
+            existing.median_salary = info["median_salary"]
+            existing.display_order = order
+        else:
+            # Create new grade
+            new_grade = GradeSalary(
+                grade=info["grade"],
+                median_salary=info["median_salary"],
+                currency="SGD",
+                display_order=order
+            )
+            db.add(new_grade)
+
+    await db.commit()

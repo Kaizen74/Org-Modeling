@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -22,6 +22,7 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 export default function Metrics() {
   const [metrics, setMetrics] = useState<OrgMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recalculating, setRecalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,6 +37,18 @@ export default function Metrics() {
       setError('No metrics available. Please upload org data first.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRecalculate = async () => {
+    setRecalculating(true);
+    try {
+      const result = await metricsApi.recalculate();
+      setMetrics(result.metrics);
+    } catch (err) {
+      console.error('Failed to recalculate:', err);
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -78,9 +91,23 @@ export default function Metrics() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Organizational Metrics</h1>
-        <Link to="/analysis" className="btn btn-primary flex items-center gap-2">
-          Run AI Analysis <ArrowRight className="w-4 h-4" />
-        </Link>
+        <div className="flex gap-3">
+          <button
+            onClick={handleRecalculate}
+            disabled={recalculating}
+            className="btn btn-secondary flex items-center gap-2 disabled:opacity-50"
+          >
+            {recalculating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+            Recalculate
+          </button>
+          <Link to="/analysis" className="btn btn-primary flex items-center gap-2">
+            Run AI Analysis <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
       </div>
 
       {/* Summary Cards */}

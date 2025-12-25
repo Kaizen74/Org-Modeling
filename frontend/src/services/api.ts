@@ -63,6 +63,24 @@ export const gradesApi = {
     const response = await api.get('/grades/order-map');
     return response.data;
   },
+
+  getStandardHierarchy: async (): Promise<{
+    hierarchy: Array<{ seniority: string; grade: string; salary: number; order: number }>;
+    seniority_levels: Array<{ name: string; grades: string[]; salary: number }>;
+  }> => {
+    const response = await api.get('/grades/standard-hierarchy');
+    return response.data;
+  },
+
+  importStandard: async (): Promise<{ message: string; grades: string[] }> => {
+    const response = await api.post('/grades/import-standard');
+    return response.data;
+  },
+
+  clearAll: async (): Promise<{ message: string }> => {
+    const response = await api.delete('/grades/');
+    return response.data;
+  },
 };
 
 // Org Data API
@@ -108,13 +126,26 @@ export const metricsApi = {
     return response.data;
   },
 
-  getLatest: async (): Promise<{
+  getLatest: async (forceRecalculate = false): Promise<{
     analysis_id: string;
     analysis_name: string;
     metrics: OrgMetrics;
     cached: boolean;
   }> => {
-    const response = await api.get('/metrics/latest');
+    const response = await api.get('/metrics/latest', {
+      params: { force_recalculate: forceRecalculate }
+    });
+    return response.data;
+  },
+
+  recalculate: async (): Promise<{
+    analysis_id: string;
+    analysis_name: string;
+    metrics: OrgMetrics;
+    grade_order_used: Record<string, number>;
+    message: string;
+  }> => {
+    const response = await api.post('/metrics/recalculate');
     return response.data;
   },
 
@@ -123,6 +154,7 @@ export const metricsApi = {
     total_managers: number;
     manager_ratio: number;
     average_span: number;
+    average_grade_gap: number;
     total_cost: number;
     layers: number;
     health_score: number;

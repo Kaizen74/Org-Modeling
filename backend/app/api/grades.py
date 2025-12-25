@@ -164,3 +164,62 @@ async def get_grade_order_map(db: AsyncSession = Depends(get_session)):
     )
     grades = result.scalars().all()
     return {g.grade: g.display_order for g in grades}
+
+
+# Standard grade hierarchy based on corporate structure
+STANDARD_GRADE_HIERARCHY = [
+    # Seniority, Grade, Salary
+    {"seniority": "SVP", "grade": "SVP", "salary": 698000, "order": 1},
+    {"seniority": "VP", "grade": "H9", "salary": 432000, "order": 2},
+    {"seniority": "VP", "grade": "H8", "salary": 432000, "order": 3},
+    {"seniority": "VP", "grade": "H7", "salary": 432000, "order": 4},
+    {"seniority": "AVP", "grade": "H6", "salary": 296000, "order": 5},
+    {"seniority": "AVP", "grade": "H5", "salary": 296000, "order": 6},
+    {"seniority": "Senior Manager", "grade": "H4", "salary": 213000, "order": 7},
+    {"seniority": "Senior Manager", "grade": "H3", "salary": 213000, "order": 8},
+    {"seniority": "Manager", "grade": "H2", "salary": 173000, "order": 9},
+    {"seniority": "Manager", "grade": "H1", "salary": 173000, "order": 10},
+    {"seniority": "AO", "grade": "E3", "salary": 107000, "order": 11},
+    {"seniority": "AO", "grade": "E2", "salary": 107000, "order": 12},
+    {"seniority": "AO", "grade": "E1", "salary": 107000, "order": 13},
+]
+
+
+@router.get("/standard-hierarchy")
+async def get_standard_hierarchy():
+    """Get the standard grade hierarchy template."""
+    return {
+        "hierarchy": STANDARD_GRADE_HIERARCHY,
+        "seniority_levels": [
+            {"name": "SVP", "grades": ["SVP"], "salary": 698000},
+            {"name": "VP", "grades": ["H7", "H8", "H9"], "salary": 432000},
+            {"name": "AVP", "grades": ["H5", "H6"], "salary": 296000},
+            {"name": "Senior Manager", "grades": ["H3", "H4"], "salary": 213000},
+            {"name": "Manager", "grades": ["H1", "H2"], "salary": 173000},
+            {"name": "AO", "grades": ["E1", "E2", "E3"], "salary": 107000},
+        ]
+    }
+
+
+@router.post("/import-standard")
+async def import_standard_grades(db: AsyncSession = Depends(get_session)):
+    """Import the standard grade hierarchy, replacing all existing grades."""
+    # Clear existing grades
+    await db.execute(delete(GradeSalary))
+
+    # Import standard hierarchy
+    for item in STANDARD_GRADE_HIERARCHY:
+        new_grade = GradeSalary(
+            grade=item["grade"],
+            median_salary=item["salary"],
+            currency="SGD",
+            display_order=item["order"]
+        )
+        db.add(new_grade)
+
+    await db.commit()
+
+    return {
+        "message": f"Imported {len(STANDARD_GRADE_HIERARCHY)} standard grades",
+        "grades": [g["grade"] for g in STANDARD_GRADE_HIERARCHY]
+    }
