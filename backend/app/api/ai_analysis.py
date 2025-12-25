@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import Optional, List
+from typing import Optional, List, Union
 from pydantic import BaseModel
 import json
 import os
@@ -112,12 +112,22 @@ async def analyze_org(
 async def analyze_with_documents(
     analysis_id: Optional[str] = Form(default=None),
     design_criteria: Optional[str] = Form(default=None),
-    strategy_docs: List[UploadFile] = File(default=[]),
+    strategy_docs: Union[List[UploadFile], UploadFile, None] = File(default=None),
     db: AsyncSession = Depends(get_session)
 ):
     """
     Run AI analysis with uploaded strategy documents (PDF/DOCX/PPTX).
+
+    Accepts single or multiple file uploads.
     """
+    # Normalize strategy_docs to always be a list
+    if strategy_docs is None:
+        docs_list: List[UploadFile] = []
+    elif isinstance(strategy_docs, list):
+        docs_list = strategy_docs
+    else:
+        docs_list = [strategy_docs]
+
     # Get org analysis
     if analysis_id:
         result = await db.execute(
@@ -167,8 +177,8 @@ async def analyze_with_documents(
 
     # Extract document text
     doc_contents = []
-    if strategy_docs:
-        for doc in strategy_docs:
+    if docs_list:
+        for doc in docs_list:
             if doc.filename:  # Skip empty uploads
                 content = await _extract_text(doc)
                 if content and not content.startswith("["):  # Skip error messages
