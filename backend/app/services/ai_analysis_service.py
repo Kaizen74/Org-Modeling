@@ -100,10 +100,12 @@ class AIAnalysisService:
 **Distribution Percentages:**
 {json.dumps(span_stats.get('distribution_pct', {}), indent=2)}
 
-{"**STRATEGIC CONTEXT:**" if strategy_docs else ""}
+{"**STRATEGIC CONTEXT (FROM UPLOADED DOCUMENTS):**" if strategy_docs else ""}
+{"IMPORTANT: Use the specific content below to assess how well the organization structure aligns with the stated strategy." if strategy_docs else ""}
 {chr(10).join(strategy_docs) if strategy_docs else "No strategic documents provided."}
 
-{"**DESIGN CRITERIA:**" if design_criteria else ""}
+{"**ORGANIZATION DESIGN CRITERIA (USER-SPECIFIED):**" if design_criteria else ""}
+{"IMPORTANT: The organization should be evaluated against these specific design criteria provided by the user:" if design_criteria else ""}
 {design_criteria if design_criteria else "No specific design criteria provided."}
 
 **YOUR ANALYSIS MUST BE STRUCTURED IN 4 CATEGORIES:**
@@ -130,14 +132,21 @@ Identify:
 - Critical risks
 
 ## 3. STRATEGY ALIGNMENT SCORE
-Based on provided strategy documents and design criteria, score alignment on:
-- Strategic clarity (0-100): How well structure supports strategy
-- Execution readiness (0-100): Capability to deliver on strategy
-- Efficiency score (0-100): Cost-effectiveness of structure
-- Agility score (0-100): Ability to adapt and change
+**CRITICAL: This section MUST directly reference and analyze the specific content from:**
+1. The uploaded strategy documents (if provided) - quote specific strategic objectives, priorities, or initiatives
+2. The user's design criteria (if provided) - evaluate against each stated requirement
+
+Score alignment on these dimensions:
+- Strategic clarity (0-100): How well does the current structure support the SPECIFIC strategic objectives mentioned in the documents?
+- Execution readiness (0-100): Does the structure have the capability to deliver on the SPECIFIC initiatives and priorities stated?
+- Efficiency score (0-100): Is the cost structure aligned with efficiency goals mentioned in the strategy/criteria?
+- Agility score (0-100): Can the structure adapt to changes implied by the strategic direction?
 - OVERALL ALIGNMENT SCORE (0-100): Weighted average
 
-Explain scoring rationale for each dimension.
+**For each score, you MUST:**
+1. Reference specific text/objectives from the strategy documents or design criteria
+2. Explain how the current org metrics (span, layers, costs) support or hinder those specific objectives
+3. Identify specific structural gaps between current state and strategic requirements
 
 ## 4. RECOMMENDED ORGANIZATIONAL ARCHETYPES
 
@@ -204,15 +213,20 @@ Evaluate the organization against these 5 proven industry archetypes and recomme
   }},
 
   "category_3_strategy_alignment": {{
+    "strategy_context_analyzed": "Brief summary of key strategic objectives/themes from uploaded documents",
+    "design_criteria_analyzed": "Brief summary of user's design criteria requirements",
     "scores": {{
-      "strategic_clarity": {{"score": 0, "rationale": "explanation"}},
-      "execution_readiness": {{"score": 0, "rationale": "explanation"}},
-      "efficiency": {{"score": 0, "rationale": "explanation"}},
-      "agility": {{"score": 0, "rationale": "explanation"}}
+      "strategic_clarity": {{"score": 0, "rationale": "explanation referencing specific strategy content", "supporting_evidence": "quote or reference from strategy docs"}},
+      "execution_readiness": {{"score": 0, "rationale": "explanation referencing specific initiatives", "supporting_evidence": "quote or reference from strategy docs"}},
+      "efficiency": {{"score": 0, "rationale": "explanation referencing cost/efficiency goals", "supporting_evidence": "quote or reference from strategy docs"}},
+      "agility": {{"score": 0, "rationale": "explanation referencing adaptability needs", "supporting_evidence": "quote or reference from strategy docs"}}
     }},
     "overall_alignment_score": 0,
     "alignment_grade": "A-F",
-    "key_gaps": ["gap 1", "gap 2"]
+    "key_gaps": [
+      {{"gap": "gap description", "strategy_reference": "what strategy/criteria this relates to", "structural_impact": "how org structure causes this gap"}}
+    ],
+    "alignment_strengths": ["areas where structure supports strategy well"]
   }},
 
   "category_4_recommended_archetypes": [
