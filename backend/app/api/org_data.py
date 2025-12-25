@@ -43,9 +43,9 @@ async def upload_csv(
     - Grade (required)
     - Level (required)
     - Line Manager (required)
-    - Salary (required)
     - Department (optional)
     - Employee ID (optional)
+    - Salary (optional - will use grade configuration if not provided)
     """
     if not file.filename.endswith(".csv"):
         raise HTTPException(

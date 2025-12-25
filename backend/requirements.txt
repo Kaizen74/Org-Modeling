@@ -10,6 +10,7 @@ python-multipart==0.0.6
 python-dotenv==1.0.1
 PyPDF2==3.0.1
 python-docx==1.1.0
+python-pptx==0.6.23
 pytest==7.4.4
 pytest-asyncio==0.23.3
 pytest-cov==4.1.0

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Brain, Loader2, AlertTriangle, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { Brain, Loader2, AlertTriangle, ArrowRight, ChevronDown, ChevronUp, FileText, Upload, X } from 'lucide-react';
 import { aiAnalysisApi, settingsApi } from '../services/api';
 import type { AIAnalysisResult } from '../types';
 
@@ -11,6 +11,9 @@ export default function AIAnalysis() {
   const [apiConfigured, setApiConfigured] = useState(false);
   const [designCriteria, setDesignCriteria] = useState('');
   const [strategyText, setStrategyText] = useState('');
+  const [strategyMode, setStrategyMode] = useState<'text' | 'document'>('text');
+  const [strategyFiles, setStrategyFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     trends: true,
     health: true,
@@ -42,15 +45,41 @@ export default function AIAnalysis() {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter(f =>
+      f.name.endsWith('.pdf') ||
+      f.name.endsWith('.pptx') ||
+      f.name.endsWith('.docx') ||
+      f.name.endsWith('.txt')
+    );
+    setStrategyFiles(prev => [...prev, ...validFiles]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setStrategyFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleRunAnalysis = async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await aiAnalysisApi.analyze(
-        undefined,
-        designCriteria || undefined,
-        strategyText || undefined
-      );
+      let result;
+      if (strategyMode === 'document' && strategyFiles.length > 0) {
+        result = await aiAnalysisApi.analyzeWithDocuments(
+          strategyFiles,
+          designCriteria || undefined
+        );
+      } else {
+        result = await aiAnalysisApi.analyze(
+          undefined,
+          designCriteria || undefined,
+          strategyText || undefined
+        );
+      }
       setAnalysis(result.ai_analysis);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } } };
@@ -103,12 +132,92 @@ export default function AIAnalysis() {
 
           <div>
             <label className="label">Strategy Context (Optional)</label>
-            <textarea
-              value={strategyText}
-              onChange={(e) => setStrategyText(e.target.value)}
-              className="input h-24"
-              placeholder="Paste key strategy points or business context..."
-            />
+
+            {/* Mode Toggle */}
+            <div className="flex gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setStrategyMode('text')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  strategyMode === 'text'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Text Input
+              </button>
+              <button
+                type="button"
+                onClick={() => setStrategyMode('document')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  strategyMode === 'document'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Upload Documents
+              </button>
+            </div>
+
+            {strategyMode === 'text' ? (
+              <textarea
+                value={strategyText}
+                onChange={(e) => setStrategyText(e.target.value)}
+                className="input h-24"
+                placeholder="Paste key strategy points or business context..."
+              />
+            ) : (
+              <div className="space-y-3">
+                {/* File Upload Area */}
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-primary-500 transition-colors"
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.pptx,.docx,.txt"
+                    multiple
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600">
+                    Click to upload or drag and drop
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    PDF, PowerPoint (.pptx), Word (.docx), or Text files
+                  </p>
+                </div>
+
+                {/* Uploaded Files List */}
+                {strategyFiles.length > 0 && (
+                  <div className="space-y-2">
+                    {strategyFiles.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm text-gray-700">{file.name}</span>
+                          <span className="text-xs text-gray-400">
+                            ({(file.size / 1024).toFixed(1)} KB)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(index)}
+                          className="p-1 hover:bg-gray-200 rounded"
+                        >
+                          <X className="w-4 h-4 text-gray-500" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <button

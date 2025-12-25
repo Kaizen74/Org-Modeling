@@ -20,8 +20,8 @@ class OrgCSVParser:
     EXPECTED: 64 employees, 16 managers, avg span 3.94
     """
 
-    REQUIRED_COLUMNS = ["Name", "Job Title", "Grade", "Level", "Line Manager", "Salary"]
-    OPTIONAL_COLUMNS = ["Department", "Employee ID"]
+    REQUIRED_COLUMNS = ["Name", "Job Title", "Grade", "Level", "Line Manager"]
+    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Salary"]
 
     def __init__(self, csv_source):
         """
@@ -112,15 +112,18 @@ class OrgCSVParser:
         for col in df.select_dtypes(include=["object"]).columns:
             df[col] = df[col].astype(str).str.strip()
 
-        # Convert salary (remove commas, handle various formats)
-        df["Salary"] = (
-            df["Salary"]
-            .astype(str)
-            .str.replace(",", "")
-            .str.replace("$", "")
-            .str.strip()
-        )
-        df["Salary"] = pd.to_numeric(df["Salary"], errors="coerce").fillna(0)
+        # Convert salary (remove commas, handle various formats) - optional column
+        if "Salary" in df.columns:
+            df["Salary"] = (
+                df["Salary"]
+                .astype(str)
+                .str.replace(",", "")
+                .str.replace("$", "")
+                .str.strip()
+            )
+            df["Salary"] = pd.to_numeric(df["Salary"], errors="coerce").fillna(0)
+        else:
+            df["Salary"] = 0  # Will be populated from grade configuration
 
         # Convert level to int
         df["Level"] = pd.to_numeric(df["Level"], errors="coerce").fillna(0).astype(int)

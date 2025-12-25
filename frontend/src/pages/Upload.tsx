@@ -75,10 +75,13 @@ export default function Upload() {
             <li>&#8226; Grade (e.g., SVP, H8, TL)</li>
             <li>&#8226; Level (1, 2, 3...)</li>
             <li>&#8226; Line Manager</li>
-            <li>&#8226; Salary</li>
             <li className="text-blue-500">&#8226; Department (optional)</li>
             <li className="text-blue-500">&#8226; Employee ID (optional)</li>
+            <li className="text-blue-500">&#8226; Salary (optional)</li>
           </ul>
+          <p className="text-xs text-blue-600 mt-2">
+            Note: Salary data can be configured via <Link to="/grades" className="underline font-medium">Grade & Salary Configuration</Link> instead of CSV.
+          </p>
         </div>
 
         {/* Drop Zone */}

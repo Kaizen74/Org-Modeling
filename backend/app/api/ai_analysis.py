@@ -239,7 +239,7 @@ async def get_latest_ai_analysis(db: AsyncSession = Depends(get_session)):
 
 
 async def _extract_text(file: UploadFile) -> str:
-    """Extract text from PDF or DOCX files."""
+    """Extract text from PDF, DOCX, PPTX, or TXT files."""
     content = await file.read()
     filename = file.filename.lower() if file.filename else ""
 
@@ -263,6 +263,20 @@ async def _extract_text(file: UploadFile) -> str:
                 return text
             except ImportError:
                 return "[DOCX extraction requires python-docx]"
+
+        elif filename.endswith(".pptx"):
+            import io
+            try:
+                from pptx import Presentation
+                prs = Presentation(io.BytesIO(content))
+                text_parts = []
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text"):
+                            text_parts.append(shape.text)
+                return "\n".join(text_parts)
+            except ImportError:
+                return "[PowerPoint extraction requires python-pptx]"
 
         elif filename.endswith(".txt"):
             return content.decode("utf-8")

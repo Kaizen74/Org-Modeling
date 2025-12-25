@@ -180,6 +180,30 @@ export const aiAnalysisApi = {
     return response.data;
   },
 
+  analyzeWithDocuments: async (
+    files: File[],
+    designCriteria?: string,
+    analysisId?: string
+  ): Promise<{
+    analysis_id: string;
+    ai_analysis: AIAnalysisResult;
+  }> => {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('strategy_docs', file);
+    });
+    if (designCriteria) {
+      formData.append('design_criteria', designCriteria);
+    }
+    if (analysisId) {
+      formData.append('analysis_id', analysisId);
+    }
+    const response = await api.post('/ai-analysis/analyze-with-documents', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
   getQuickAnalysis: async (): Promise<{
     analysis_id: string;
     quick_insights: Array<{
