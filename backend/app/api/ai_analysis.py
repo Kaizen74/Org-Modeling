@@ -110,13 +110,13 @@ async def analyze_org(
 
 @router.post("/analyze-with-documents")
 async def analyze_with_documents(
-    analysis_id: Optional[str] = Form(None),
-    design_criteria: Optional[str] = Form(None),
-    strategy_docs: Optional[List[UploadFile]] = File(None),
+    analysis_id: Optional[str] = Form(default=None),
+    design_criteria: Optional[str] = Form(default=None),
+    strategy_docs: List[UploadFile] = File(default=[]),
     db: AsyncSession = Depends(get_session)
 ):
     """
-    Run AI analysis with uploaded strategy documents (PDF/DOCX).
+    Run AI analysis with uploaded strategy documents (PDF/DOCX/PPTX).
     """
     # Get org analysis
     if analysis_id:
@@ -140,25 +140,46 @@ async def analyze_with_documents(
     metrics = analysis.metrics
 
     if not metrics:
-        raise HTTPException(
-            status_code=400,
-            detail="Metrics not calculated. Please calculate metrics first."
+        # Try to calculate metrics if not available
+        from ..models.models import GradeSalary
+        grade_result = await db.execute(
+            select(GradeSalary).order_by(GradeSalary.display_order)
         )
+        grades = grade_result.scalars().all()
+        grade_order = {g.grade: g.display_order for g in grades} if grades else {}
+
+        # Enrich employees with salary from grade config
+        grade_salary_map = {g.grade: g.median_salary for g in grades}
+        enriched_employees = []
+        for emp in employees:
+            emp_copy = emp.copy()
+            if not emp_copy.get("salary", 0):
+                grade = emp_copy.get("grade", "")
+                if grade in grade_salary_map:
+                    emp_copy["salary"] = grade_salary_map[grade]
+            enriched_employees.append(emp_copy)
+
+        from ..services.metrics_service import MetricsCalculator
+        calculator = MetricsCalculator(employees=enriched_employees, grade_order=grade_order)
+        metrics = calculator.calculate_all_metrics()
+        analysis.metrics = metrics
+        await db.commit()
 
     # Extract document text
     doc_contents = []
     if strategy_docs:
         for doc in strategy_docs:
-            content = await _extract_text(doc)
-            if content:
-                doc_contents.append(f"--- {doc.filename} ---\n{content}")
+            if doc.filename:  # Skip empty uploads
+                content = await _extract_text(doc)
+                if content and not content.startswith("["):  # Skip error messages
+                    doc_contents.append(f"--- {doc.filename} ---\n{content}")
 
     # Get API key
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key or api_key == "your_key_here":
         raise HTTPException(
             status_code=400,
-            detail="Claude API key not configured"
+            detail="Claude API key not configured. Please set it in Settings."
         )
 
     # Run analysis
