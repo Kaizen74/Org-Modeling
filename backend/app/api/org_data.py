@@ -242,8 +242,11 @@ async def _auto_import_grades(employees: list, db: AsyncSession):
         existing = result.scalar_one_or_none()
 
         if existing:
-            # Update existing grade
-            existing.median_salary = info["median_salary"]
+            # Only update salary if CSV provides a non-zero value
+            # This preserves standard hierarchy salaries when CSV has no salary column
+            if info["median_salary"] > 0:
+                existing.median_salary = info["median_salary"]
+            # Always update display order based on CSV structure
             existing.display_order = order
         else:
             # Create new grade
