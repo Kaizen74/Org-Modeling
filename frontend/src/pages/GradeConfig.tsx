@@ -140,15 +140,17 @@ export default function GradeConfig() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Grade & Salary Configuration</h1>
-        {grades.length > 0 && (
-          <button
-            onClick={handleClearAll}
-            disabled={saving}
-            className="btn btn-danger text-sm"
-          >
-            Clear All Grades
-          </button>
-        )}
+        <div className="flex gap-3">
+          {grades.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              disabled={saving}
+              className="btn btn-danger text-sm"
+            >
+              Clear All Grades
+            </button>
+          )}
+        </div>
       </div>
 
       {successMessage && (
@@ -158,53 +160,59 @@ export default function GradeConfig() {
         </div>
       )}
 
-      {/* Mode Selection - Only show if no grades or explicitly choosing */}
-      {(mode === null || grades.length === 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Auto-Populate Option */}
-          <div
-            onClick={handleImportStandard}
-            className={`card cursor-pointer border-2 transition-all hover:border-primary-500 hover:shadow-lg ${
-              saving ? 'opacity-50 pointer-events-none' : ''
-            }`}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <Wand2 className="w-6 h-6 text-primary-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Auto-Populate Standard Hierarchy</h2>
-                <p className="text-sm text-gray-500">Use pre-defined grade structure</p>
-              </div>
+      {/* Mode Selection - Always show to allow switching */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Auto-Populate Option */}
+        <div
+          onClick={handleImportStandard}
+          className={`card cursor-pointer border-2 transition-all hover:border-primary-500 hover:shadow-lg ${
+            mode === 'auto' ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
+          } ${saving ? 'opacity-50 pointer-events-none' : ''}`}
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div className={`p-2 rounded-lg ${mode === 'auto' ? 'bg-primary-200' : 'bg-primary-100'}`}>
+              <Wand2 className="w-6 h-6 text-primary-600" />
             </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Automatically populate with the standard corporate grade hierarchy including SVP, VP, AVP, Senior Manager, Manager, and AO levels with associated salaries.
-            </p>
-            {saving && <Loader2 className="w-5 h-5 animate-spin text-primary-600" />}
-          </div>
-
-          {/* Manual Option */}
-          <div
-            onClick={handleSwitchToManual}
-            className="card cursor-pointer border-2 transition-all hover:border-primary-500 hover:shadow-lg"
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-gray-100 rounded-lg">
-                <Edit3 className="w-6 h-6 text-gray-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Manual Configuration</h2>
-                <p className="text-sm text-gray-500">Define your own grade structure</p>
-              </div>
+            <div>
+              <h2 className="text-lg font-semibold">Auto-Populate Standard Hierarchy</h2>
+              <p className="text-sm text-gray-500">Use pre-defined grade structure with salaries</p>
             </div>
-            <p className="text-sm text-gray-600">
-              Manually add and configure grades with custom names and salaries. Useful for organizations with non-standard grade structures.
-            </p>
+            {mode === 'auto' && (
+              <CheckCircle className="w-5 h-5 text-primary-600 ml-auto" />
+            )}
           </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Automatically populate with the standard corporate grade hierarchy including SVP ($698k), VP ($432k), AVP ($296k), Senior Manager ($213k), Manager ($173k), and AO ($107k) levels.
+          </p>
+          {saving && <Loader2 className="w-5 h-5 animate-spin text-primary-600" />}
         </div>
-      )}
 
-      {/* Standard Hierarchy Preview */}
+        {/* Manual Option */}
+        <div
+          onClick={handleSwitchToManual}
+          className={`card cursor-pointer border-2 transition-all hover:border-primary-500 hover:shadow-lg ${
+            mode === 'manual' ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div className={`p-2 rounded-lg ${mode === 'manual' ? 'bg-primary-200' : 'bg-gray-100'}`}>
+              <Edit3 className="w-6 h-6 text-gray-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">Manual Configuration</h2>
+              <p className="text-sm text-gray-500">Define your own grade structure</p>
+            </div>
+            {mode === 'manual' && (
+              <CheckCircle className="w-5 h-5 text-primary-600 ml-auto" />
+            )}
+          </div>
+          <p className="text-sm text-gray-600">
+            Manually add and configure grades with custom names and salaries. Useful for organizations with non-standard grade structures.
+          </p>
+        </div>
+      </div>
+
+      {/* Standard Hierarchy Preview - Show when no mode selected yet */}
       {mode === null && standardHierarchy && (
         <div className="card mb-8">
           <h3 className="font-semibold mb-4">Standard Grade Hierarchy Preview</h3>
