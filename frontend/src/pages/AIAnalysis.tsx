@@ -269,14 +269,14 @@ export default function AIAnalysis() {
           )}
 
           {/* Recommended Archetypes */}
-          {analysis.category_4_recommended_archetypes?.length > 0 && (
+          {(analysis.category_4_recommended_archetypes?.length ?? 0) > 0 && (
             <CollapsibleSection
               title="Recommended Organizational Archetypes"
               isOpen={expandedSections.archetypes}
               onToggle={() => toggleSection('archetypes')}
             >
               <div className="space-y-6">
-                {analysis.category_4_recommended_archetypes.map((arch, i) => (
+                {analysis.category_4_recommended_archetypes!.map((arch, i) => (
                   <div key={i} className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-lg font-semibold">{arch.archetype}</h4>

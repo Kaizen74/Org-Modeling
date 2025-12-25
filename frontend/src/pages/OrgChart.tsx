@@ -48,7 +48,7 @@ export default function OrgChart() {
       const data = await orgDataApi.getLatest();
       if (data.hierarchy && Object.keys(data.hierarchy).length > 0) {
         const { nodes: flowNodes, edges: flowEdges } = convertHierarchyToFlow(
-          data.hierarchy as HierarchyNode
+          data.hierarchy as unknown as HierarchyNode
         );
         setNodes(flowNodes);
         setEdges(flowEdges);
