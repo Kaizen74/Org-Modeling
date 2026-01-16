@@ -35,12 +35,14 @@ A lightweight organizational design analyzer that:
 
 ### Backend Setup
 
+#### Linux/Mac
+
 ```bash
 cd backend
 
 # Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -51,6 +53,27 @@ alembic upgrade head
 # Start server
 uvicorn app.main:app --reload
 ```
+
+#### Windows (PowerShell)
+
+```powershell
+cd backend
+
+# Create virtual environment
+python -m venv venv
+.\venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run migrations
+python -m alembic upgrade head
+
+# Start server
+python -m uvicorn app.main:app --reload
+```
+
+> **Note:** On Windows, use `python -m` prefix for alembic and uvicorn commands if they are not recognized directly.
 
 ### Frontend Setup
 
@@ -78,9 +101,9 @@ Required columns:
 - `Grade` - Grade level (e.g., SVP, H8, H6, TL, AO)
 - `Level` - Hierarchical level (1, 2, 3...)
 - `Line Manager` - Manager's name (use "Top of Org" for CEO)
-- `Salary` - Annual salary
 
 Optional columns:
+- `Salary` - Annual salary (if not provided, uses salary from Grade Configuration)
 - `Department` - Department name
 - `Employee ID` - Unique identifier
 
@@ -90,6 +113,8 @@ Name,Job Title,Grade,Department,Level,Line Manager,Salary,Employee ID
 John Smith,CEO,SVP,Executive,1,Top of Org,350000,E001
 Jane Doe,VP Sales,H8,Sales,2,John Smith,250000,E002
 ```
+
+> **Note:** If Salary is not provided in the CSV, the system will use the salary from the Grade & Salary Configuration. You can auto-populate standard grade salaries or manually configure them.
 
 ## Project Structure
 
@@ -133,9 +158,14 @@ Jane Doe,VP Sales,H8,Sales,2,John Smith,250000,E002
 - `GET /api/v1/metrics/summary` - Get summary
 
 ### AI Analysis
-- `POST /api/v1/ai-analysis/analyze` - Run AI analysis
+- `POST /api/v1/ai-analysis/analyze` - Run AI analysis with text input
+- `POST /api/v1/ai-analysis/analyze-with-documents` - Run AI analysis with uploaded documents (PDF, PPTX, DOCX)
 - `GET /api/v1/ai-analysis/latest` - Get latest analysis
 - `GET /api/v1/ai-analysis/quick-analysis` - Get quick insights
+
+#### AI Analysis Inputs
+- **Strategy Documents** (PDF, PowerPoint, Word): Used to calculate **Strategy Alignment Score** - assesses how well the current org structure supports strategic objectives
+- **Design Criteria** (text): Used to recommend **Organizational Archetypes** - suggests structures that best achieve your design goals
 
 ## Running Tests
 
@@ -147,12 +177,13 @@ pytest tests/ -v
 ## Tech Stack
 
 ### Backend
-- FastAPI 0.109.0
-- SQLAlchemy (async) 2.0.25
+- FastAPI 0.109+
+- SQLAlchemy (async) 2.0+
 - SQLite with aiosqlite
-- Pandas 2.1.4
-- NetworkX 3.2.1
-- Anthropic SDK 0.17.0
+- Pandas 2.2+
+- NetworkX 3.2+
+- Anthropic SDK 0.17+
+- PyPDF2, python-docx, python-pptx (document parsing)
 
 ### Frontend
 - React 18
