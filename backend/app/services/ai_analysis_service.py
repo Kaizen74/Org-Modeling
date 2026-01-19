@@ -190,6 +190,10 @@ Evaluate the organization against these 5 proven industry archetypes and recomme
 5. Transformation Timeline (Quick: 3-6 months, Medium: 6-12 months, Long: 12-18 months)
 6. Confidence Level: High/Medium/Low
 7. Critical Success Factors: Top 3 things for success
+8. **Practical Examples**: Provide 1-2 real-world examples to illustrate what this archetype looks like in practice:
+   - Include well-known companies that successfully use this structure (e.g., "Toyota's production system for Process-Based", "P&G's brand management for Divisional")
+   - Describe how they implemented it and what makes it work for them
+   - If no well-known example exists for the specific context, provide an illustrative scenario showing how the archetype would work in practice for the organization
 
 **OUTPUT FORMAT (JSON):**
 
@@ -250,7 +254,15 @@ Evaluate the organization against these 5 proven industry archetypes and recomme
         "implementation_challenges": ["challenge 1", "challenge 2"],
         "transformation_timeline": "X-Y months",
         "confidence_level": "High/Medium/Low",
-        "critical_success_factors": ["factor 1", "factor 2", "factor 3"]
+        "critical_success_factors": ["factor 1", "factor 2", "factor 3"],
+        "practical_examples": [
+          {{
+            "company_or_scenario": "Company name or 'Illustrative Scenario'",
+            "description": "How they implement this archetype",
+            "key_success_factors": "What makes it work for them",
+            "relevance_to_your_org": "How this example applies to your situation"
+          }}
+        ]
       }}
     ]
   }},

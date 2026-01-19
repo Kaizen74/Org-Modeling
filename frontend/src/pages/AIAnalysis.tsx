@@ -457,6 +457,31 @@ export default function AIAnalysis() {
                       </div>
                     </div>
 
+                    {/* Practical Examples */}
+                    {arch.practical_examples && arch.practical_examples.length > 0 && (
+                      <div className="mt-4 p-4 bg-indigo-50 rounded-lg">
+                        <p className="font-medium text-indigo-800 mb-3">Real-World Examples</p>
+                        <div className="space-y-3">
+                          {arch.practical_examples.map((example, j) => (
+                            <div key={j} className="p-3 bg-white rounded border border-indigo-100">
+                              <p className="font-medium text-indigo-700">{example.company_or_scenario}</p>
+                              <p className="text-sm text-gray-600 mt-1">{example.description}</p>
+                              {example.key_success_factors && (
+                                <p className="text-xs text-indigo-600 mt-2">
+                                  <span className="font-medium">Key Success Factors:</span> {example.key_success_factors}
+                                </p>
+                              )}
+                              {example.relevance_to_your_org && (
+                                <p className="text-xs text-gray-500 mt-1 italic">
+                                  <span className="font-medium">Relevance:</span> {example.relevance_to_your_org}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="mt-4 flex flex-wrap gap-2">
                       <span className="px-2 py-1 bg-gray-100 rounded text-xs">
                         Timeline: {arch.transformation_timeline}

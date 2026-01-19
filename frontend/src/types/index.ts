@@ -79,6 +79,14 @@ export type KeyGap = string | {
   structural_impact?: string;
 };
 
+// Practical example for archetype
+export interface PracticalExample {
+  company_or_scenario: string;
+  description: string;
+  key_success_factors: string;
+  relevance_to_your_org: string;
+}
+
 // Archetype recommendation
 export interface ArchetypeRecommendation {
   archetype: string;
@@ -90,6 +98,7 @@ export interface ArchetypeRecommendation {
   confidence_level: string;
   critical_success_factors: string[];
   design_criteria_addressed?: string[];
+  practical_examples?: PracticalExample[];
 }
 
 // Category 4 can be an array (old format) or object with recommendations (new format)
