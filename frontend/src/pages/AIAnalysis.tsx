@@ -367,9 +367,23 @@ export default function AIAnalysis() {
               {analysis.category_3_strategy_alignment.key_gaps?.length > 0 && (
                 <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
                   <h4 className="font-medium text-yellow-800 mb-2">Key Gaps</h4>
-                  <ul className="space-y-1">
+                  <ul className="space-y-2">
                     {analysis.category_3_strategy_alignment.key_gaps.map((gap, i) => (
-                      <li key={i} className="text-sm text-yellow-700">&#8226; {gap}</li>
+                      <li key={i} className="text-sm text-yellow-700">
+                        {typeof gap === 'string' ? (
+                          <>&#8226; {gap}</>
+                        ) : (
+                          <div className="p-2 bg-yellow-100 rounded">
+                            <p className="font-medium">&#8226; {gap.gap}</p>
+                            {gap.strategy_reference && (
+                              <p className="text-xs mt-1">Strategy Reference: {gap.strategy_reference}</p>
+                            )}
+                            {gap.structural_impact && (
+                              <p className="text-xs mt-1">Structural Impact: {gap.structural_impact}</p>
+                            )}
+                          </div>
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -378,14 +392,27 @@ export default function AIAnalysis() {
           )}
 
           {/* Recommended Archetypes */}
-          {(analysis.category_4_recommended_archetypes?.length ?? 0) > 0 && (
+          {analysis.category_4_recommended_archetypes && (
             <CollapsibleSection
               title="Recommended Organizational Archetypes"
               isOpen={expandedSections.archetypes}
               onToggle={() => toggleSection('archetypes')}
             >
+              {/* Show design criteria analyzed if available */}
+              {!Array.isArray(analysis.category_4_recommended_archetypes) &&
+                analysis.category_4_recommended_archetypes.design_criteria_analyzed && (
+                <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    <span className="font-medium">Design Criteria Analyzed:</span>{' '}
+                    {analysis.category_4_recommended_archetypes.design_criteria_analyzed}
+                  </p>
+                </div>
+              )}
               <div className="space-y-6">
-                {analysis.category_4_recommended_archetypes!.map((arch, i) => (
+                {(Array.isArray(analysis.category_4_recommended_archetypes)
+                  ? analysis.category_4_recommended_archetypes
+                  : analysis.category_4_recommended_archetypes.recommendations || []
+                ).map((arch, i) => (
                   <div key={i} className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-lg font-semibold">{arch.archetype}</h4>
@@ -398,6 +425,18 @@ export default function AIAnalysis() {
                     </div>
 
                     <p className="text-sm text-gray-600 mb-4">{arch.why_it_fits}</p>
+
+                    {/* Design Criteria Addressed */}
+                    {arch.design_criteria_addressed && arch.design_criteria_addressed.length > 0 && (
+                      <div className="mb-4 p-3 bg-primary-50 rounded-lg">
+                        <p className="font-medium text-primary-700 mb-1 text-sm">How This Addresses Your Design Criteria:</p>
+                        <ul className="space-y-1 text-sm text-primary-600">
+                          {arch.design_criteria_addressed.map((item, j) => (
+                            <li key={j}>&#10003; {item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>

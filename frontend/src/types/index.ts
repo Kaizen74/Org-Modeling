@@ -72,6 +72,32 @@ export interface OrgMetrics {
   health_indicators: HealthIndicators;
 }
 
+// Key gap can be a string or an object with detailed info
+export type KeyGap = string | {
+  gap: string;
+  strategy_reference?: string;
+  structural_impact?: string;
+};
+
+// Archetype recommendation
+export interface ArchetypeRecommendation {
+  archetype: string;
+  business_model_match_score: number;
+  why_it_fits: string;
+  expected_benefits: string[];
+  implementation_challenges: string[];
+  transformation_timeline: string;
+  confidence_level: string;
+  critical_success_factors: string[];
+  design_criteria_addressed?: string[];
+}
+
+// Category 4 can be an array (old format) or object with recommendations (new format)
+export type Category4Archetypes = ArchetypeRecommendation[] | {
+  design_criteria_analyzed?: string;
+  recommendations: ArchetypeRecommendation[];
+};
+
 export interface AIAnalysisResult {
   executive_summary?: string;
   category_1_industry_trends?: {
@@ -94,26 +120,19 @@ export interface AIAnalysisResult {
     critical_risks: string[];
   };
   category_3_strategy_alignment?: {
+    strategy_documents_analyzed?: string;
     scores: {
-      strategic_clarity: { score: number; rationale: string };
-      execution_readiness: { score: number; rationale: string };
-      efficiency: { score: number; rationale: string };
-      agility: { score: number; rationale: string };
+      strategic_clarity: { score: number; rationale: string; supporting_evidence?: string };
+      execution_readiness: { score: number; rationale: string; supporting_evidence?: string };
+      efficiency: { score: number; rationale: string; supporting_evidence?: string };
+      agility: { score: number; rationale: string; supporting_evidence?: string };
     };
     overall_alignment_score: number;
     alignment_grade: string;
-    key_gaps: string[];
+    key_gaps: KeyGap[];
+    alignment_strengths?: string[];
   };
-  category_4_recommended_archetypes?: Array<{
-    archetype: string;
-    business_model_match_score: number;
-    why_it_fits: string;
-    expected_benefits: string[];
-    implementation_challenges: string[];
-    transformation_timeline: string;
-    confidence_level: string;
-    critical_success_factors: string[];
-  }>;
+  category_4_recommended_archetypes?: Category4Archetypes;
   action_plan?: {
     phase_1_quick_wins: string[];
     phase_2_structural: string[];
