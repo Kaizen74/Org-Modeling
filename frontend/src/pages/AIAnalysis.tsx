@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Brain, Loader2, AlertTriangle, ArrowRight, ChevronDown, ChevronUp, FileText, Upload, X } from 'lucide-react';
 import { aiAnalysisApi, settingsApi } from '../services/api';
-import type { AIAnalysisResult } from '../types';
+import type { AIAnalysisResult, ArchetypeScoreSummary } from '../types';
 
 export default function AIAnalysis() {
   const [analysis, setAnalysis] = useState<AIAnalysisResult | null>(null);
@@ -394,20 +394,91 @@ export default function AIAnalysis() {
           {/* Recommended Archetypes */}
           {analysis.category_4_recommended_archetypes && (
             <CollapsibleSection
-              title="Recommended Organizational Archetypes"
+              title="Recommended Organizational Archetypes (7-Archetype Framework)"
               isOpen={expandedSections.archetypes}
               onToggle={() => toggleSection('archetypes')}
             >
-              {/* Show design criteria analyzed if available */}
+              {/* Show design criteria and scope if available */}
+              {!Array.isArray(analysis.category_4_recommended_archetypes) && (
+                <div className="mb-4 space-y-2">
+                  {analysis.category_4_recommended_archetypes.analysis_scope && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-700">
+                        <span className="font-medium">Analysis Scope:</span>{' '}
+                        {analysis.category_4_recommended_archetypes.analysis_scope === 'department'
+                          ? `Department-Level (${analysis.category_4_recommended_archetypes.department_analyzed || 'Not specified'})`
+                          : 'Organization-Wide'}
+                      </p>
+                    </div>
+                  )}
+                  {analysis.category_4_recommended_archetypes.design_criteria_analyzed && (
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        <span className="font-medium">Design Criteria Analyzed:</span>{' '}
+                        {analysis.category_4_recommended_archetypes.design_criteria_analyzed}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* All Archetype Scores Comparison */}
               {!Array.isArray(analysis.category_4_recommended_archetypes) &&
-                analysis.category_4_recommended_archetypes.design_criteria_analyzed && (
-                <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-blue-700">
-                    <span className="font-medium">Design Criteria Analyzed:</span>{' '}
-                    {analysis.category_4_recommended_archetypes.design_criteria_analyzed}
+                analysis.category_4_recommended_archetypes.all_archetype_scores &&
+                analysis.category_4_recommended_archetypes.all_archetype_scores.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-md font-semibold mb-3">All 7 Archetypes - Fit Score Comparison</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="text-left p-2">Archetype</th>
+                          <th className="text-center p-2">Overall Score</th>
+                          <th className="text-center p-2 hidden md:table-cell">Industry</th>
+                          <th className="text-center p-2 hidden md:table-cell">Size</th>
+                          <th className="text-center p-2 hidden lg:table-cell">Revenue</th>
+                          <th className="text-center p-2 hidden lg:table-cell">Indicators</th>
+                          <th className="text-left p-2">Fit Summary</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...analysis.category_4_recommended_archetypes.all_archetype_scores]
+                          .sort((a: ArchetypeScoreSummary, b: ArchetypeScoreSummary) => b.overall_score - a.overall_score)
+                          .map((archScore: ArchetypeScoreSummary, i: number) => (
+                          <tr key={i} className={`border-b ${i < 2 ? 'bg-green-50' : ''}`}>
+                            <td className="p-2">
+                              <span className="font-medium">{archScore.archetype_name}</span>
+                              {!archScore.digital_first_applicable && (
+                                <span className="ml-1 text-xs text-gray-400">(Digital-first)</span>
+                              )}
+                            </td>
+                            <td className="text-center p-2">
+                              <span className={`font-bold ${
+                                archScore.overall_score >= 70 ? 'text-green-600' :
+                                archScore.overall_score >= 50 ? 'text-yellow-600' :
+                                'text-red-600'
+                              }`}>
+                                {archScore.overall_score}
+                              </span>
+                            </td>
+                            <td className="text-center p-2 hidden md:table-cell">{archScore.score_breakdown?.industry_match || '-'}</td>
+                            <td className="text-center p-2 hidden md:table-cell">{archScore.score_breakdown?.size_match || '-'}</td>
+                            <td className="text-center p-2 hidden lg:table-cell">{archScore.score_breakdown?.revenue_model_match || '-'}</td>
+                            <td className="text-center p-2 hidden lg:table-cell">{archScore.score_breakdown?.key_indicators_match || '-'}</td>
+                            <td className="p-2 text-xs text-gray-600">{archScore.fit_summary}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    * Top 2 archetypes highlighted. Score weights: Industry (30%), Key Indicators (25%), Revenue Model (20%), Size (15%), Metrics (10%)
                   </p>
                 </div>
               )}
+
+              {/* Detailed Recommendations for Top 2 */}
+              <h3 className="text-md font-semibold mb-3">Top Recommendations (Detailed Analysis)</h3>
               <div className="space-y-6">
                 {(Array.isArray(analysis.category_4_recommended_archetypes)
                   ? analysis.category_4_recommended_archetypes
@@ -415,14 +486,43 @@ export default function AIAnalysis() {
                 ).map((arch, i) => (
                   <div key={i} className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-lg font-semibold">{arch.archetype}</h4>
+                      <div>
+                        {arch.rank && (
+                          <span className="inline-block px-2 py-0.5 bg-primary-100 text-primary-700 text-xs font-medium rounded mr-2">
+                            #{arch.rank}
+                          </span>
+                        )}
+                        <h4 className="text-lg font-semibold inline">{arch.archetype}</h4>
+                        {arch.archetype_id && (
+                          <span className="text-xs text-gray-400 ml-2">({arch.archetype_id})</span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         <span className="text-2xl font-bold text-primary-600">
-                          {arch.business_model_match_score}
+                          {arch.overall_fit_score || arch.business_model_match_score}
                         </span>
                         <span className="text-sm text-gray-500">/ 100</span>
                       </div>
                     </div>
+
+                    {/* Score Breakdown */}
+                    {arch.score_breakdown && (
+                      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                        <p className="font-medium text-gray-700 mb-2 text-sm">Score Breakdown:</p>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                          {Object.entries(arch.score_breakdown).map(([key, val]) => {
+                            const score = typeof val === 'object' ? val.score : val;
+                            const rationale = typeof val === 'object' ? val.rationale : null;
+                            return (
+                              <div key={key} className="text-center p-2 bg-white rounded" title={rationale || ''}>
+                                <p className="font-bold text-primary-600">{score}</p>
+                                <p className="text-gray-500 capitalize">{key.replace(/_/g, ' ')}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     <p className="text-sm text-gray-600 mb-4">{arch.why_it_fits}</p>
 
@@ -456,6 +556,18 @@ export default function AIAnalysis() {
                         </ul>
                       </div>
                     </div>
+
+                    {/* Warning Signs to Monitor */}
+                    {arch.warning_signs_to_monitor && arch.warning_signs_to_monitor.length > 0 && (
+                      <div className="mt-4 p-3 bg-amber-50 rounded-lg">
+                        <p className="font-medium text-amber-700 mb-1 text-sm">Warning Signs to Monitor:</p>
+                        <ul className="space-y-1 text-sm text-amber-600">
+                          {arch.warning_signs_to_monitor.map((sign, j) => (
+                            <li key={j}>&#9888; {sign}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     {/* Practical Examples */}
                     {arch.practical_examples && arch.practical_examples.length > 0 && (
@@ -493,6 +605,11 @@ export default function AIAnalysis() {
                       }`}>
                         Confidence: {arch.confidence_level}
                       </span>
+                      {arch.confidence_rationale && (
+                        <span className="text-xs text-gray-500 italic">
+                          ({arch.confidence_rationale})
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}

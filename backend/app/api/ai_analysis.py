@@ -21,6 +21,8 @@ class AnalysisRequest(BaseModel):
     analysis_id: Optional[str] = None
     design_criteria: Optional[str] = None
     strategy_text: Optional[str] = None
+    analysis_scope: str = "organization"  # "organization" or "department"
+    department: Optional[str] = None  # Required if analysis_scope is "department"
 
 
 @router.post("/analyze")
@@ -92,7 +94,9 @@ async def analyze_org(
         metrics=metrics,
         employees=employees,
         strategy_documents=strategy_docs,
-        design_criteria=request.design_criteria
+        design_criteria=request.design_criteria,
+        analysis_scope=request.analysis_scope,
+        department=request.department
     )
 
     # Store results
@@ -112,6 +116,8 @@ async def analyze_org(
 async def analyze_with_documents(
     analysis_id: Optional[str] = Form(default=None),
     design_criteria: Optional[str] = Form(default=None),
+    analysis_scope: str = Form(default="organization"),
+    department: Optional[str] = Form(default=None),
     strategy_docs: Union[List[UploadFile], UploadFile, None] = File(default=None),
     db: AsyncSession = Depends(get_session)
 ):
@@ -119,6 +125,7 @@ async def analyze_with_documents(
     Run AI analysis with uploaded strategy documents (PDF/DOCX/PPTX).
 
     Accepts single or multiple file uploads.
+    Supports organization-wide or department-level analysis.
     """
     # Normalize strategy_docs to always be a list
     if strategy_docs is None:
@@ -198,7 +205,9 @@ async def analyze_with_documents(
         metrics=metrics,
         employees=employees,
         strategy_documents=doc_contents if doc_contents else None,
-        design_criteria=design_criteria
+        design_criteria=design_criteria,
+        analysis_scope=analysis_scope,
+        department=department
     )
 
     # Store results

@@ -5,13 +5,21 @@ Provides AI-powered org analysis with structured output categories:
 1. Industry Trends
 2. Org Structure Health Diagnosis
 3. Strategy Alignment Score
-4. Recommended Archetypes
+4. Recommended Archetypes (7-archetype framework)
 """
 
 from anthropic import Anthropic
 from typing import List, Dict, Optional
 import json
 import os
+
+from ..resources.archetypes_reference import (
+    ARCHETYPES,
+    SCORING_WEIGHTS,
+    DEPARTMENT_ARCHETYPES,
+    get_all_archetypes_summary,
+    get_department_recommendation
+)
 
 
 class AIAnalysisService:
@@ -28,16 +36,26 @@ class AIAnalysisService:
         metrics: Dict,
         employees: List[Dict],
         strategy_documents: Optional[List[str]] = None,
-        design_criteria: Optional[str] = None
+        design_criteria: Optional[str] = None,
+        analysis_scope: str = "organization",
+        department: Optional[str] = None
     ) -> Dict:
         """
         Perform comprehensive AI analysis with structured categorization.
+
+        Args:
+            metrics: Organization metrics dict
+            employees: List of employee dicts
+            strategy_documents: Optional list of strategy document contents
+            design_criteria: Optional text describing design criteria
+            analysis_scope: "organization" for full org, "department" for dept-level
+            department: Department name when analysis_scope is "department"
 
         Returns structured insights across 4 categories:
         - Industry trends & benchmarks
         - Health diagnosis
         - Strategy alignment scoring
-        - Recommended archetypes
+        - Recommended archetypes (all 7 evaluated and scored)
         """
         if not self.client:
             return {
@@ -45,7 +63,10 @@ class AIAnalysisService:
                 "message": "Please configure your API key in Settings"
             }
 
-        prompt = self._build_prompt(metrics, employees, strategy_documents, design_criteria)
+        prompt = self._build_prompt(
+            metrics, employees, strategy_documents, design_criteria,
+            analysis_scope, department
+        )
 
         try:
             response = self.client.messages.create(
@@ -65,12 +86,57 @@ class AIAnalysisService:
                 "message": "Failed to get AI analysis"
             }
 
+    def _build_archetype_reference(self, analysis_scope: str, department: Optional[str]) -> str:
+        """Build archetype reference section for the prompt."""
+        archetypes_text = []
+
+        for arch_id, arch_data in ARCHETYPES.items():
+            digital_note = " [DIGITAL-FIRST ONLY]" if arch_data.get("digital_first_only") else ""
+
+            archetypes_text.append(f"""
+**{arch_data['name']}{digital_note}**
+- ID: {arch_id}
+- Best For Industries: {', '.join(arch_data['best_for_industries'][:4])}
+- Best For Departments: {', '.join(arch_data['best_for_departments'][:3])}
+- Org Size Sweet Spot: {arch_data['org_size_sweet_spot']}
+- Primary Organizing Principle: {arch_data['primary_organizing_principle']}
+- Value Creation: {arch_data['value_creation']}
+- Revenue Model: {arch_data['revenue_model']}
+- Key Indicators: {', '.join(arch_data['key_indicators'][:3])}
+- Success Metrics: {', '.join(arch_data['success_metrics'][:3])}
+- Typical Layers: {arch_data['typical_layers']}
+- Typical Span: {arch_data['typical_span']}
+- Core Tension: {arch_data['core_tension']}
+- Failure Mode: {arch_data['failure_mode']}
+- Warning Signs: {', '.join(arch_data['warning_signs'][:2])}
+- Example Companies: {', '.join(arch_data.get('example_companies', [])[:3])}
+""")
+
+        dept_guidance = ""
+        if analysis_scope == "department" and department:
+            dept_key = department.lower().replace(" ", "_").replace("/", "_")
+            dept_rec = get_department_recommendation(dept_key)
+            if dept_rec:
+                primary = ARCHETYPES.get(dept_rec.get("primary", ""), {}).get("name", "")
+                alts = [ARCHETYPES.get(a, {}).get("name", "") for a in dept_rec.get("alternatives", [])]
+                avoid = [ARCHETYPES.get(a, {}).get("name", "") for a in dept_rec.get("avoid", [])]
+                dept_guidance = f"""
+**DEPARTMENT-SPECIFIC GUIDANCE FOR {department.upper()}:**
+- Primary Recommended: {primary}
+- Alternative Options: {', '.join(alts)}
+- Archetypes to Avoid: {', '.join(avoid)}
+"""
+
+        return "\n".join(archetypes_text) + dept_guidance
+
     def _build_prompt(
         self,
         metrics: Dict,
         employees: List[Dict],
         strategy_docs: Optional[List[str]],
-        design_criteria: Optional[str]
+        design_criteria: Optional[str],
+        analysis_scope: str = "organization",
+        department: Optional[str] = None
     ) -> str:
         """Build the comprehensive analysis prompt."""
 
@@ -81,8 +147,18 @@ class AIAnalysisService:
         layer_stats = metrics.get("layer_analysis", {})
         gap_stats = metrics.get("grade_gap_analysis", {})
 
-        return f"""You are an expert organizational design consultant. Analyze this organization and provide structured insights.
+        # Build archetype reference
+        archetype_reference = self._build_archetype_reference(analysis_scope, department)
 
+        # Scope context
+        scope_context = ""
+        if analysis_scope == "department" and department:
+            scope_context = f"\n**ANALYSIS SCOPE: DEPARTMENT-LEVEL for {department}**\nFocus your archetype recommendations on what works best for this specific department, not the entire organization.\n"
+        else:
+            scope_context = "\n**ANALYSIS SCOPE: ORGANIZATION-WIDE**\nProvide archetype recommendations for the entire organization structure.\n"
+
+        return f"""You are an expert organizational design consultant with deep expertise in the 7 canonical organizational archetypes. Analyze this organization and provide structured insights.
+{scope_context}
 **ORGANIZATIONAL DATA:**
 - Total Employees: {metrics.get('total_employees', 0)}
 - Managers: {manager_stats.get('total_managers', 0)} ({manager_stats.get('manager_ratio_pct', 0)}%)
@@ -151,49 +227,42 @@ Score alignment on these dimensions:
 2. Explain how the current org metrics (span, layers, costs) support or hinder those specific strategic objectives
 3. Identify specific structural gaps between current org state and strategic requirements
 
-## 4. RECOMMENDED ORGANIZATIONAL ARCHETYPES
-**CRITICAL: This section recommends org structure archetypes that best achieve the user's DESIGN CRITERIA.**
+## 4. RECOMMENDED ORGANIZATIONAL ARCHETYPES (7-ARCHETYPE FRAMEWORK)
+**CRITICAL: This section evaluates ALL 7 organizational archetypes and recommends the top 2 best fits.**
 **Use the organization design criteria (user-specified) to guide your recommendations.**
 
-If design criteria are provided, your archetype recommendations MUST:
-- Directly address each requirement stated in the design criteria
-- Explain how the recommended archetype enables the desired outcomes (e.g., "seamless coordination", "quick decision-making", "cost efficiency")
-- Prioritize archetypes that best fulfill the user's stated organizational objectives
+**ARCHETYPE SCORING METHODOLOGY:**
+Score each archetype (0-100) based on these weighted criteria:
+- Industry Match (30%): How well does the archetype fit the apparent industry/sector?
+- Size Match (15%): Is the org size within the archetype's sweet spot?
+- Revenue Model Match (20%): Does the business model align with the archetype's value creation logic?
+- Key Indicators Match (25%): Do the org's characteristics match the archetype's key indicators?
+- Metrics Match (10%): Do span, layers, and structure metrics align with the archetype's typical patterns?
 
-Evaluate the organization against these 5 proven industry archetypes and recommend 2-3 best fits:
+**THE 7 ORGANIZATIONAL ARCHETYPES:**
+{archetype_reference}
 
-**ARCHETYPE 1: The Functional Structure (The Efficiency Machine)**
-- Best For: Utilities, Mining, Heavy Manufacturing, Single-Product businesses
-- Logic: Centralize engineering/operations for reliability and safety
+**EVALUATION REQUIREMENTS:**
+1. Score ALL 7 archetypes using the methodology above
+2. Rank them from highest to lowest fit
+3. Select the TOP 2 archetypes for detailed recommendations
+4. For digital-first archetypes (Platform Ecosystem, Team Topologies), explicitly assess if the organization has sufficient digital DNA
 
-**ARCHETYPE 2: The Divisional Structure (The Conglomerate)**
-- Best For: Diversified Holding Companies, Banks with distinct units
-- Logic: Business units as investment portfolios with autonomy
-
-**ARCHETYPE 3: The Front-Back Hybrid (The Global Maker-Seller)**
-- Best For: FMCG, Pharma, Consumer Goods, Automotive
-- Logic: Centralized production + local sales/marketing
-
-**ARCHETYPE 4: The Process-Based Structure (The Lean Flow)**
-- Best For: Logistics, Insurance, High-Volume Manufacturing
-- Logic: Organize around workflow, not departments
-
-**ARCHETYPE 5: The Matrix Project Organization (The Builder)**
-- Best For: Construction, Oil & Gas, Aerospace, Defense
-- Logic: Project managers control budget/schedule, functions provide expertise
-
-**FOR EACH RECOMMENDED ARCHETYPE, PROVIDE:**
-1. Business Model Match Score (0-100)
-2. Why It Fits: Specific evidence
-3. Expected Benefits: Quantified where possible
-4. Implementation Challenges
-5. Transformation Timeline (Quick: 3-6 months, Medium: 6-12 months, Long: 12-18 months)
-6. Confidence Level: High/Medium/Low
-7. Critical Success Factors: Top 3 things for success
-8. **Practical Examples**: Provide 1-2 real-world examples to illustrate what this archetype looks like in practice:
-   - Include well-known companies that successfully use this structure (e.g., "Toyota's production system for Process-Based", "P&G's brand management for Divisional")
-   - Describe how they implemented it and what makes it work for them
-   - If no well-known example exists for the specific context, provide an illustrative scenario showing how the archetype would work in practice for the organization
+**FOR EACH OF THE TOP 2 RECOMMENDED ARCHETYPES, PROVIDE:**
+1. Archetype Name and ID
+2. Overall Fit Score (0-100) with breakdown by criteria
+3. Why It Fits: Specific evidence from the org data
+4. Design Criteria Addressed: How this archetype achieves the user's stated design criteria
+5. Expected Benefits: Quantified where possible
+6. Implementation Challenges: Specific to this org's current state
+7. Transformation Timeline: Quick (3-6 months), Medium (6-12 months), or Long (12-18 months)
+8. Confidence Level: High/Medium/Low with rationale
+9. Critical Success Factors: Top 3 things for success
+10. Warning Signs to Monitor: From the archetype's failure mode
+11. **Practical Examples**: 1-2 real-world examples:
+    - Well-known companies that successfully use this structure
+    - How they implemented it and what makes it work
+    - Relevance to this organization's situation
 
 **OUTPUT FORMAT (JSON):**
 
@@ -244,17 +313,46 @@ Evaluate the organization against these 5 proven industry archetypes and recomme
 
   "category_4_recommended_archetypes": {{
     "design_criteria_analyzed": "Summary of user's org design criteria requirements",
+    "analysis_scope": "organization or department",
+    "department_analyzed": "Department name if department-level analysis",
+    "all_archetype_scores": [
+      {{
+        "archetype_id": "1_functional",
+        "archetype_name": "Functional Structure (The Efficiency Machine)",
+        "overall_score": 0,
+        "score_breakdown": {{
+          "industry_match": 0,
+          "size_match": 0,
+          "revenue_model_match": 0,
+          "key_indicators_match": 0,
+          "metrics_match": 0
+        }},
+        "fit_summary": "One-line summary of why this score",
+        "digital_first_applicable": true
+      }}
+    ],
     "recommendations": [
       {{
+        "rank": 1,
+        "archetype_id": "archetype_id",
         "archetype": "Archetype Name",
+        "overall_fit_score": 0,
+        "score_breakdown": {{
+          "industry_match": {{"score": 0, "rationale": "explanation"}},
+          "size_match": {{"score": 0, "rationale": "explanation"}},
+          "revenue_model_match": {{"score": 0, "rationale": "explanation"}},
+          "key_indicators_match": {{"score": 0, "rationale": "explanation"}},
+          "metrics_match": {{"score": 0, "rationale": "explanation"}}
+        }},
         "design_criteria_addressed": ["how this archetype addresses each design criteria requirement"],
-        "business_model_match_score": 0,
-        "why_it_fits": "Detailed explanation linking to design criteria",
+        "why_it_fits": "Detailed explanation linking to design criteria and org data",
         "expected_benefits": ["benefit 1", "benefit 2"],
         "implementation_challenges": ["challenge 1", "challenge 2"],
         "transformation_timeline": "X-Y months",
         "confidence_level": "High/Medium/Low",
+        "confidence_rationale": "Why this confidence level",
         "critical_success_factors": ["factor 1", "factor 2", "factor 3"],
+        "warning_signs_to_monitor": ["warning sign from archetype failure mode"],
         "practical_examples": [
           {{
             "company_or_scenario": "Company name or 'Illustrative Scenario'",
@@ -275,7 +373,7 @@ Evaluate the organization against these 5 proven industry archetypes and recomme
 }}
 ```
 
-Be specific and actionable. Ground all recommendations in the data provided.
+Be specific and actionable. Ground all recommendations in the data provided. Score ALL 7 archetypes in all_archetype_scores, then provide detailed recommendations for the TOP 2.
 """
 
     def _parse_structured_response(self, response) -> Dict:

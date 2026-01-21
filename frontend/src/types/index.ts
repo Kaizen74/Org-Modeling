@@ -87,16 +87,47 @@ export interface PracticalExample {
   relevance_to_your_org: string;
 }
 
+// Score breakdown for individual criteria
+export interface ScoreBreakdown {
+  industry_match: number | { score: number; rationale: string };
+  size_match: number | { score: number; rationale: string };
+  revenue_model_match: number | { score: number; rationale: string };
+  key_indicators_match: number | { score: number; rationale: string };
+  metrics_match: number | { score: number; rationale: string };
+}
+
+// Summary score for all archetypes
+export interface ArchetypeScoreSummary {
+  archetype_id: string;
+  archetype_name: string;
+  overall_score: number;
+  score_breakdown: {
+    industry_match: number;
+    size_match: number;
+    revenue_model_match: number;
+    key_indicators_match: number;
+    metrics_match: number;
+  };
+  fit_summary: string;
+  digital_first_applicable: boolean;
+}
+
 // Archetype recommendation
 export interface ArchetypeRecommendation {
+  rank?: number;
+  archetype_id?: string;
   archetype: string;
-  business_model_match_score: number;
+  overall_fit_score?: number;
+  business_model_match_score?: number; // Legacy field
+  score_breakdown?: ScoreBreakdown;
   why_it_fits: string;
   expected_benefits: string[];
   implementation_challenges: string[];
   transformation_timeline: string;
   confidence_level: string;
+  confidence_rationale?: string;
   critical_success_factors: string[];
+  warning_signs_to_monitor?: string[];
   design_criteria_addressed?: string[];
   practical_examples?: PracticalExample[];
 }
@@ -104,6 +135,9 @@ export interface ArchetypeRecommendation {
 // Category 4 can be an array (old format) or object with recommendations (new format)
 export type Category4Archetypes = ArchetypeRecommendation[] | {
   design_criteria_analyzed?: string;
+  analysis_scope?: string;
+  department_analyzed?: string;
+  all_archetype_scores?: ArchetypeScoreSummary[];
   recommendations: ArchetypeRecommendation[];
 };
 
