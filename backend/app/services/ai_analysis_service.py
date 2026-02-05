@@ -12,6 +12,7 @@ from anthropic import Anthropic
 from typing import List, Dict, Optional
 import json
 import os
+import re
 
 from ..resources.archetypes_reference import (
     ARCHETYPES,
@@ -71,7 +72,7 @@ class AIAnalysisService:
         try:
             response = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=8000,
+                max_tokens=16000,
                 temperature=0.3,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -385,44 +386,125 @@ Be specific and actionable. Ground all recommendations in the data provided. Sco
 
         # Try to extract JSON
         try:
+            json_str = None
+
             # Look for JSON code block
             json_start = full_text.find("```json")
             if json_start != -1:
                 json_end = full_text.find("```", json_start + 7)
                 if json_end != -1:
                     json_str = full_text[json_start + 7:json_end].strip()
+                else:
+                    # No closing ``` - take everything after ```json
+                    json_str = full_text[json_start + 7:].strip()
+
+            # If no code block, try to find raw JSON
+            if not json_str:
+                first_brace = full_text.find("{")
+                last_brace = full_text.rfind("}") + 1
+                if first_brace != -1 and last_brace > first_brace:
+                    json_str = full_text[first_brace:last_brace]
+
+            if json_str:
+                # Try to parse as-is first
+                try:
                     result = json.loads(json_str)
                     result["raw_response"] = full_text
                     return result
+                except json.JSONDecodeError:
+                    # JSON might be truncated - try to repair it
+                    repaired_json = self._repair_truncated_json(json_str)
+                    if repaired_json:
+                        try:
+                            result = json.loads(repaired_json)
+                            result["raw_response"] = full_text
+                            result["_json_repaired"] = True
+                            return result
+                        except json.JSONDecodeError:
+                            pass
 
-            # Try to find raw JSON
-            json_start = full_text.find("{")
-            json_end = full_text.rfind("}") + 1
-            if json_start != -1 and json_end > json_start:
-                json_str = full_text[json_start:json_end]
-                result = json.loads(json_str)
-                result["raw_response"] = full_text
-                return result
+            # Fallback - try to extract what we can from raw text
+            return self._extract_from_raw_text(full_text)
 
-            # Fallback - return as executive summary
-            return {
-                "executive_summary": full_text,
-                "parse_error": "Could not extract structured JSON",
-                "raw_response": full_text
-            }
-
-        except json.JSONDecodeError as e:
-            return {
-                "executive_summary": full_text,
-                "parse_error": f"JSON parse error: {str(e)}",
-                "raw_response": full_text
-            }
         except Exception as e:
-            return {
-                "executive_summary": full_text,
-                "parse_error": str(e),
-                "raw_response": full_text
-            }
+            return self._extract_from_raw_text(full_text, error=str(e))
+
+    def _repair_truncated_json(self, json_str: str) -> Optional[str]:
+        """Attempt to repair truncated JSON by closing open brackets."""
+        # Count unclosed brackets
+        open_braces = json_str.count('{') - json_str.count('}')
+        open_brackets = json_str.count('[') - json_str.count(']')
+
+        if open_braces <= 0 and open_brackets <= 0:
+            return None  # Not a truncation issue
+
+        # Remove trailing incomplete content after last complete value
+        # Look for last complete string, number, boolean, or array/object
+        repaired = json_str.rstrip()
+
+        # Remove incomplete string at end
+        if repaired.count('"') % 2 == 1:
+            last_quote = repaired.rfind('"')
+            # Find the start of this string
+            prev_quote = repaired.rfind('"', 0, last_quote)
+            if prev_quote != -1:
+                repaired = repaired[:prev_quote]
+
+        # Clean up trailing commas and incomplete keys
+        repaired = repaired.rstrip()
+        while repaired and repaired[-1] in ',:"':
+            repaired = repaired[:-1].rstrip()
+
+        # Close brackets
+        open_braces = repaired.count('{') - repaired.count('}')
+        open_brackets = repaired.count('[') - repaired.count(']')
+
+        # Close arrays first (they're usually inside objects)
+        repaired += ']' * open_brackets
+        repaired += '}' * open_braces
+
+        return repaired if open_braces > 0 or open_brackets > 0 else None
+
+    def _extract_from_raw_text(self, full_text: str, error: Optional[str] = None) -> Dict:
+        """Extract structured data from raw text when JSON parsing fails."""
+        result = {
+            "raw_response": full_text,
+            "parse_error": error or "Could not extract structured JSON"
+        }
+
+        # Try to extract executive_summary from the text
+        # Look for the value after "executive_summary":
+        exec_match = re.search(r'"executive_summary"\s*:\s*"((?:[^"\\]|\\.)*)"', full_text)
+        if exec_match:
+            result["executive_summary"] = exec_match.group(1).replace('\\"', '"').replace('\\n', '\n')
+        else:
+            # Clean the text - remove JSON markers
+            clean_text = full_text
+            if clean_text.startswith("```json"):
+                clean_text = clean_text[7:]
+            if clean_text.startswith("```"):
+                clean_text = clean_text[3:]
+            if clean_text.endswith("```"):
+                clean_text = clean_text[:-3]
+            clean_text = clean_text.strip()
+
+            # If it still looks like JSON, don't use as executive summary
+            if clean_text.startswith('{'):
+                result["executive_summary"] = "Analysis completed but response formatting issue occurred. Please try running the analysis again."
+            else:
+                result["executive_summary"] = clean_text[:2000] if len(clean_text) > 2000 else clean_text
+
+        # Try to extract category data
+        for category in ['category_1_industry_trends', 'category_2_health_diagnosis',
+                        'category_3_strategy_alignment', 'category_4_recommended_archetypes']:
+            cat_match = re.search(rf'"{category}"\s*:\s*(\{{[^}}]*\}}|\[[^\]]*\])', full_text, re.DOTALL)
+            if cat_match:
+                try:
+                    result[category] = json.loads(cat_match.group(1))
+                except json.JSONDecodeError:
+                    pass
+
+        return result
 
     def get_quick_analysis(self, metrics: Dict) -> Dict:
         """Get a quick, non-AI analysis based on metrics alone."""
