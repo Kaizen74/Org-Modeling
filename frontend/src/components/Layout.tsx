@@ -6,7 +6,8 @@ import {
   BarChart3,
   Brain,
   GitBranch,
-  DollarSign
+  DollarSign,
+  Briefcase
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -19,6 +20,7 @@ const navigation = [
   { name: 'Upload CSV', href: '/upload', icon: Upload },
   { name: 'Metrics', href: '/metrics', icon: BarChart3 },
   { name: 'AI Analysis', href: '/analysis', icon: Brain },
+  { name: 'Work Activities', href: '/work-activities', icon: Briefcase },
   { name: 'Org Chart', href: '/org-chart', icon: GitBranch },
   { name: 'Grade Config', href: '/grades', icon: DollarSign },
   { name: 'Settings', href: '/settings', icon: Settings },

@@ -21,7 +21,7 @@ class OrgCSVParser:
     """
 
     REQUIRED_COLUMNS = ["Name", "Job Title", "Grade", "Level", "Line Manager"]
-    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Salary"]
+    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Salary", "Work Activities"]
 
     def __init__(self, csv_source):
         """
@@ -140,6 +140,12 @@ class OrgCSVParser:
         else:
             df["Department"] = df["Department"].fillna("Unknown")
 
+        # Handle Work Activities column
+        if "Work Activities" not in df.columns:
+            df["Work Activities"] = ""
+        else:
+            df["Work Activities"] = df["Work Activities"].fillna("")
+
         return df
 
     def _build_employee_records(self) -> List[Dict]:
@@ -158,7 +164,8 @@ class OrgCSVParser:
                 "level": int(row["Level"]) if pd.notna(row["Level"]) else 0,
                 "manager_name": str(row["Line Manager"]).strip() if pd.notna(row["Line Manager"]) else "",
                 "salary": float(row["Salary"]) if pd.notna(row["Salary"]) else 0.0,
-                "employee_id": str(row.get("Employee ID", row["Name"])).strip()
+                "employee_id": str(row.get("Employee ID", row["Name"])).strip(),
+                "work_activities": str(row.get("Work Activities", "")).strip() if pd.notna(row.get("Work Activities", "")) else ""
             })
         return employees
 

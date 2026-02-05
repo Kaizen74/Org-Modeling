@@ -5,7 +5,9 @@ import type {
   AIAnalysisResult,
   UploadResponse,
   APIKeyStatus,
-  Employee
+  Employee,
+  WorkActivitiesAnalysis,
+  QuickWorkActivitiesAnalysis
 } from '../types';
 
 const api = axios.create({
@@ -228,6 +230,37 @@ export const aiAnalysisApi = {
     created_at: string;
   }> => {
     const response = await api.get('/ai-analysis/latest');
+    return response.data;
+  },
+
+  // Work Activities Analysis
+  analyzeWorkActivities: async (industry?: string, analysisId?: string): Promise<{
+    analysis_id: string;
+    analysis_name: string;
+    work_activities_analysis: WorkActivitiesAnalysis;
+  }> => {
+    const response = await api.post('/ai-analysis/work-activities', {
+      analysis_id: analysisId,
+      industry: industry,
+    });
+    return response.data;
+  },
+
+  getQuickWorkActivities: async (): Promise<{
+    analysis_id: string;
+    analysis_name: string;
+  } & QuickWorkActivitiesAnalysis> => {
+    const response = await api.get('/ai-analysis/work-activities/quick');
+    return response.data;
+  },
+
+  getLatestWorkActivities: async (): Promise<{
+    analysis_id: string;
+    analysis_name: string;
+    work_activities_analysis: WorkActivitiesAnalysis;
+    created_at: string;
+  }> => {
+    const response = await api.get('/ai-analysis/work-activities/latest');
     return response.data;
   },
 };

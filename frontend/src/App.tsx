@@ -7,6 +7,7 @@ import Upload from './pages/Upload'
 import Metrics from './pages/Metrics'
 import AIAnalysis from './pages/AIAnalysis'
 import OrgChart from './pages/OrgChart'
+import WorkActivities from './pages/WorkActivities'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/upload" element={<Upload />} />
         <Route path="/metrics" element={<Metrics />} />
         <Route path="/analysis" element={<AIAnalysis />} />
+        <Route path="/work-activities" element={<WorkActivities />} />
         <Route path="/org-chart" element={<OrgChart />} />
       </Routes>
     </Layout>

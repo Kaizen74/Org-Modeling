@@ -9,6 +9,7 @@ export interface Employee {
   manager_name: string;
   salary: number;
   employee_id: string;
+  work_activities?: string;
 }
 
 export interface GradeSalary {
@@ -197,4 +198,120 @@ export interface UploadResponse {
 export interface APIKeyStatus {
   configured: boolean;
   masked_key: string | null;
+}
+
+// Work Activities Analysis Types
+export interface DepartmentCoherence {
+  department: string;
+  position_count: number;
+  coherence_score: number;
+  coherence_rationale: string;
+  synergy_assessment: {
+    strengths: string[];
+    gaps: string[];
+    overlaps: string[];
+  };
+  value_chain_position: string;
+  internal_dependencies: string;
+  key_activities: string[];
+}
+
+export interface WorkTheme {
+  theme: string;
+  description: string;
+  departments_involved: string[];
+  position_count: number;
+  percentage_of_org: number;
+  strategic_importance: string;
+}
+
+export interface EmergingActivity {
+  activity: string;
+  industry_prevalence: string;
+  present_in_org: boolean;
+  recommendation: string;
+}
+
+export interface StructuralRecommendation {
+  recommendation: string;
+  rationale: string;
+  impact: string;
+  effort: string;
+  affected_departments: string[];
+}
+
+export interface RoleOptimization {
+  current_role: string;
+  recommendation: string;
+  rationale: string;
+}
+
+export interface CapabilityDevelopment {
+  capability: string;
+  current_state: string;
+  target_state: string;
+  priority: string;
+}
+
+export interface WorkActivitiesAnalysis {
+  work_activities_summary?: {
+    total_positions_analyzed: number;
+    departments_analyzed: number;
+    positions_with_activities: number;
+    industry_context: string;
+  };
+  departmental_coherence?: DepartmentCoherence[];
+  overall_coherence?: {
+    organization_coherence_score: number;
+    cross_department_synergies: string[];
+    cross_department_gaps: string[];
+    integration_assessment: string;
+  };
+  work_themes?: {
+    primary_themes: WorkTheme[];
+    theme_distribution_assessment: string;
+    strategic_alignment_score: number;
+    missing_capabilities: string[];
+  };
+  industry_comparison?: {
+    industry_identified: string;
+    activity_mix_assessment: {
+      alignment_score: number;
+      over_represented: string[];
+      under_represented: string[];
+      unique_strengths: string[];
+    };
+    role_specialization: {
+      assessment: string;
+      rationale: string;
+    };
+    emerging_industry_activities: EmergingActivity[];
+    competitive_positioning: {
+      potential_advantages: string[];
+      potential_disadvantages: string[];
+      overall_assessment: string;
+    };
+  };
+  recommendations?: {
+    structural: StructuralRecommendation[];
+    role_optimization: RoleOptimization[];
+    capability_development: CapabilityDevelopment[];
+    quick_wins: string[];
+  };
+  executive_summary?: string;
+  error?: string;
+  message?: string;
+}
+
+export interface QuickWorkActivitiesAnalysis {
+  total_employees: number;
+  employees_with_work_activities: number;
+  coverage_percentage: number;
+  departments_with_activities: number;
+  department_breakdown: Array<{
+    department: string;
+    positions_with_activities: number;
+    sample_activities: string[];
+  }>;
+  status: string;
 }

@@ -13,6 +13,7 @@ from ..models.models import OrgAnalysis, GradeSalary
 from ..services.ai_analysis_service import AIAnalysisService
 from ..services.metrics_service import MetricsCalculator
 from ..services.claude_service import claude_service
+from ..services.work_activities_service import WorkActivitiesAnalysisService
 
 router = APIRouter(prefix="/api/v1/ai-analysis", tags=["ai-analysis"])
 
@@ -273,6 +274,155 @@ async def get_latest_ai_analysis(db: AsyncSession = Depends(get_session)):
         "analysis_name": analysis.name,
         "ai_analysis": analysis.ai_analysis,
         "design_criteria": analysis.design_criteria,
+        "created_at": analysis.created_at.isoformat() if analysis.created_at else None
+    }
+
+
+class WorkActivitiesRequest(BaseModel):
+    analysis_id: Optional[str] = None
+    industry: Optional[str] = None
+
+
+@router.post("/work-activities")
+async def analyze_work_activities(
+    request: WorkActivitiesRequest,
+    db: AsyncSession = Depends(get_session)
+):
+    """
+    Run AI analysis on work activities to assess coherence, synergy, and themes.
+
+    Analyzes:
+    - Departmental coherence of work activities
+    - Synergy between roles and teams
+    - Work theme synthesis across the organization
+    - Industry benchmark comparison
+    """
+    # Get org analysis
+    if request.analysis_id:
+        result = await db.execute(
+            select(OrgAnalysis).where(OrgAnalysis.id == request.analysis_id)
+        )
+        analysis = result.scalar_one_or_none()
+    else:
+        result = await db.execute(
+            select(OrgAnalysis).order_by(OrgAnalysis.created_at.desc()).limit(1)
+        )
+        analysis = result.scalar_one_or_none()
+
+    if not analysis:
+        raise HTTPException(
+            status_code=404,
+            detail="No org data found. Please upload a CSV first."
+        )
+
+    employees = analysis.raw_data.get("employees", []) if analysis.raw_data else []
+
+    if not employees:
+        raise HTTPException(
+            status_code=400,
+            detail="No employee data found"
+        )
+
+    # Check if any employees have work activities
+    employees_with_activities = [
+        emp for emp in employees
+        if emp.get("work_activities", "").strip()
+    ]
+
+    if not employees_with_activities:
+        raise HTTPException(
+            status_code=400,
+            detail="No work activities found in employee data. Please ensure your CSV includes a 'Work Activities' column."
+        )
+
+    # Get API key
+    if not claude_service.is_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="Claude API key not configured. Please set it in Settings."
+        )
+
+    # Run work activities analysis
+    service = WorkActivitiesAnalysisService(api_key=claude_service.api_key)
+
+    work_activities_result = await service.analyze_work_activities(
+        employees=employees,
+        industry=request.industry
+    )
+
+    # Store results in the analysis
+    if not analysis.ai_analysis:
+        analysis.ai_analysis = {}
+
+    analysis.ai_analysis["work_activities_analysis"] = work_activities_result
+    await db.commit()
+
+    return {
+        "analysis_id": analysis.id,
+        "analysis_name": analysis.name,
+        "work_activities_analysis": work_activities_result
+    }
+
+
+@router.get("/work-activities/quick")
+async def get_quick_work_activities_analysis(db: AsyncSession = Depends(get_session)):
+    """
+    Get quick work activities statistics without AI analysis.
+
+    Returns coverage and basic breakdown by department.
+    """
+    result = await db.execute(
+        select(OrgAnalysis).order_by(OrgAnalysis.created_at.desc()).limit(1)
+    )
+    analysis = result.scalar_one_or_none()
+
+    if not analysis:
+        raise HTTPException(
+            status_code=404,
+            detail="No org data found. Please upload a CSV first."
+        )
+
+    employees = analysis.raw_data.get("employees", []) if analysis.raw_data else []
+
+    service = WorkActivitiesAnalysisService()
+    quick = service.get_quick_analysis(employees)
+
+    return {
+        "analysis_id": analysis.id,
+        "analysis_name": analysis.name,
+        **quick
+    }
+
+
+@router.get("/work-activities/latest")
+async def get_latest_work_activities_analysis(db: AsyncSession = Depends(get_session)):
+    """Get the most recent work activities analysis results."""
+    result = await db.execute(
+        select(OrgAnalysis)
+        .where(OrgAnalysis.ai_analysis.isnot(None))
+        .order_by(OrgAnalysis.created_at.desc())
+        .limit(1)
+    )
+    analysis = result.scalar_one_or_none()
+
+    if not analysis:
+        raise HTTPException(
+            status_code=404,
+            detail="No AI analysis found. Please run an analysis first."
+        )
+
+    work_activities = analysis.ai_analysis.get("work_activities_analysis") if analysis.ai_analysis else None
+
+    if not work_activities:
+        raise HTTPException(
+            status_code=404,
+            detail="No work activities analysis found. Please run a work activities analysis first."
+        )
+
+    return {
+        "analysis_id": analysis.id,
+        "analysis_name": analysis.name,
+        "work_activities_analysis": work_activities,
         "created_at": analysis.created_at.isoformat() if analysis.created_at else None
     }
 
