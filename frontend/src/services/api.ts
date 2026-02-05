@@ -116,6 +116,15 @@ export const orgDataApi = {
     const response = await api.get('/org-data/analyses');
     return response.data;
   },
+
+  clearAll: async (): Promise<{
+    success: boolean;
+    message: string;
+    deleted_count: number;
+  }> => {
+    const response = await api.delete('/org-data/clear-all');
+    return response.data;
+  },
 };
 
 // Metrics API

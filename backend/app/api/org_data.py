@@ -193,6 +193,32 @@ async def delete_analysis(analysis_id: str, db: AsyncSession = Depends(get_sessi
     return {"message": f"Analysis '{analysis.name}' deleted"}
 
 
+@router.delete("/clear-all")
+async def clear_all_data(db: AsyncSession = Depends(get_session)):
+    """
+    Clear all org data and analyses to start a new project.
+
+    This removes all uploaded org structures, metrics, and AI analyses.
+    API configuration (Claude API key) is preserved.
+    """
+    # Delete all OrgAnalysis records
+    result = await db.execute(select(OrgAnalysis))
+    analyses = result.scalars().all()
+
+    deleted_count = len(analyses)
+
+    for analysis in analyses:
+        await db.delete(analysis)
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Cleared {deleted_count} analysis record(s). Ready for new project.",
+        "deleted_count": deleted_count
+    }
+
+
 async def _auto_import_grades(employees: list, db: AsyncSession):
     """
     Auto-import grades from CSV data based on Level column.
