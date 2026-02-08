@@ -10,6 +10,7 @@ export interface Employee {
   salary: number;
   employee_id: string;
   work_activities?: string;
+  job_description?: string;
 }
 
 export interface GradeSalary {

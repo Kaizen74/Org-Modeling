@@ -21,7 +21,7 @@ class OrgCSVParser:
     """
 
     REQUIRED_COLUMNS = ["Name", "Job Title", "Grade", "Level", "Line Manager"]
-    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Salary", "Work Activities"]
+    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Salary", "Work Activities", "Job Description"]
 
     def __init__(self, csv_source):
         """
@@ -46,13 +46,9 @@ class OrgCSVParser:
                 'metadata': Dict
             }
         """
-        # Read CSV
+        # Read CSV with encoding detection
         try:
-            if isinstance(self.csv_source, (str, Path)):
-                self.df = pd.read_csv(self.csv_source)
-            else:
-                # File-like object
-                self.df = pd.read_csv(self.csv_source)
+            self.df = self._read_csv_with_encoding()
         except Exception as e:
             return {
                 "employees": [],
@@ -95,6 +91,51 @@ class OrgCSVParser:
             "validation_errors": structural_errors,
             "metadata": metadata
         }
+
+    def _read_csv_with_encoding(self) -> pd.DataFrame:
+        """
+        Read CSV with automatic encoding detection.
+
+        Tries multiple encodings in order of likelihood:
+        1. UTF-8 (standard)
+        2. Windows-1252 (common from Excel exports)
+        3. Latin-1 (fallback that accepts any byte)
+        """
+        encodings = ['utf-8', 'cp1252', 'latin-1', 'iso-8859-1']
+
+        if isinstance(self.csv_source, (str, Path)):
+            # File path - try different encodings
+            last_error = None
+            for encoding in encodings:
+                try:
+                    return pd.read_csv(self.csv_source, encoding=encoding)
+                except UnicodeDecodeError as e:
+                    last_error = e
+                    continue
+            raise last_error or Exception("Failed to decode CSV with any encoding")
+        else:
+            # File-like object (from upload)
+            # Read content and try to decode with different encodings
+            content = self.csv_source.read()
+
+            # Reset position if possible
+            if hasattr(self.csv_source, 'seek'):
+                self.csv_source.seek(0)
+
+            # If content is already a string, wrap it
+            if isinstance(content, str):
+                return pd.read_csv(io.StringIO(content))
+
+            # Content is bytes - try different encodings
+            last_error = None
+            for encoding in encodings:
+                try:
+                    decoded = content.decode(encoding)
+                    return pd.read_csv(io.StringIO(decoded))
+                except UnicodeDecodeError as e:
+                    last_error = e
+                    continue
+            raise last_error or Exception("Failed to decode CSV with any encoding")
 
     def _validate_columns(self) -> List[str]:
         """Validate required columns exist."""
@@ -146,6 +187,12 @@ class OrgCSVParser:
         else:
             df["Work Activities"] = df["Work Activities"].fillna("")
 
+        # Handle Job Description column
+        if "Job Description" not in df.columns:
+            df["Job Description"] = ""
+        else:
+            df["Job Description"] = df["Job Description"].fillna("")
+
         return df
 
     def _build_employee_records(self) -> List[Dict]:
@@ -165,7 +212,8 @@ class OrgCSVParser:
                 "manager_name": str(row["Line Manager"]).strip() if pd.notna(row["Line Manager"]) else "",
                 "salary": float(row["Salary"]) if pd.notna(row["Salary"]) else 0.0,
                 "employee_id": str(row.get("Employee ID", row["Name"])).strip(),
-                "work_activities": str(row.get("Work Activities", "")).strip() if pd.notna(row.get("Work Activities", "")) else ""
+                "work_activities": str(row.get("Work Activities", "")).strip() if pd.notna(row.get("Work Activities", "")) else "",
+                "job_description": str(row.get("Job Description", "")).strip() if pd.notna(row.get("Job Description", "")) else ""
             })
         return employees
 

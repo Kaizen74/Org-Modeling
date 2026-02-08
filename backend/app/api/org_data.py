@@ -55,9 +55,11 @@ async def upload_csv(
         )
 
     try:
-        # Read file content
+        # Read file content as bytes
         content = await file.read()
-        csv_content = io.StringIO(content.decode("utf-8"))
+
+        # Pass raw bytes to parser - it handles encoding detection
+        csv_content = io.BytesIO(content)
 
         # Parse CSV
         parser = OrgCSVParser(csv_content)
