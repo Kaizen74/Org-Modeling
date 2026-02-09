@@ -202,6 +202,65 @@ export interface APIKeyStatus {
 }
 
 // Work Activities Analysis Types
+
+// Activity Duplication Types
+export interface ActivityDuplication {
+  activity: string;
+  affected_roles: string[];
+  affected_departments: string[];
+  duplication_type: string;
+  severity: string;
+  business_impact: string;
+  resolution_priority: number;
+  recommended_action: string;
+}
+
+export interface ActivityDuplicationAnalysis {
+  overall_duplication_score: number;
+  severity_assessment: string;
+  duplications: ActivityDuplication[];
+  summary: string;
+}
+
+// Missing Activities Types
+export interface MissingActivity {
+  activity: string;
+  industry_benchmark: string;
+  affected_roles: string[];
+  affected_departments: string[];
+  severity: string;
+  business_risk: string;
+  recommendation: string;
+}
+
+export interface MissingActivitiesAnalysis {
+  overall_gap_score: number;
+  severity_assessment: string;
+  gaps: MissingActivity[];
+  summary: string;
+}
+
+// Coordination Gaps Types
+export interface CoordinationGap {
+  handoff_point: string;
+  from_department: string;
+  to_department: string;
+  from_roles: string[];
+  to_roles: string[];
+  current_state: string;
+  gap_type: string;
+  severity: string;
+  industry_practice: string;
+  recommended_interface: string;
+}
+
+export interface CoordinationGapsAnalysis {
+  overall_coordination_score: number;
+  severity_assessment: string;
+  gaps: CoordinationGap[];
+  summary: string;
+}
+
 export interface DepartmentCoherence {
   department: string;
   position_count: number;
@@ -213,7 +272,7 @@ export interface DepartmentCoherence {
     overlaps: string[];
   };
   value_chain_position: string;
-  internal_dependencies: string;
+  internal_dependencies?: string;
   key_activities: string[];
 }
 
@@ -235,10 +294,12 @@ export interface EmergingActivity {
 
 export interface StructuralRecommendation {
   recommendation: string;
-  rationale: string;
-  impact: string;
-  effort: string;
-  affected_departments: string[];
+  rationale?: string;
+  addresses?: string;
+  impact?: string;
+  effort?: string;
+  priority?: string;
+  affected_departments?: string[];
 }
 
 export interface RoleOptimization {
@@ -261,6 +322,11 @@ export interface WorkActivitiesAnalysis {
     positions_with_activities: number;
     industry_context: string;
   };
+  // New Analysis Areas
+  activity_duplication?: ActivityDuplicationAnalysis;
+  missing_activities?: MissingActivitiesAnalysis;
+  coordination_gaps?: CoordinationGapsAnalysis;
+  // Existing Analysis Areas
   departmental_coherence?: DepartmentCoherence[];
   overall_coherence?: {
     organization_coherence_score: number;
@@ -282,26 +348,31 @@ export interface WorkActivitiesAnalysis {
       under_represented: string[];
       unique_strengths: string[];
     };
-    role_specialization: {
+    role_specialization?: {
       assessment: string;
       rationale: string;
     };
-    emerging_industry_activities: EmergingActivity[];
-    competitive_positioning: {
+    emerging_industry_activities?: EmergingActivity[];
+    competitive_positioning?: {
       potential_advantages: string[];
       potential_disadvantages: string[];
       overall_assessment: string;
     };
   };
   recommendations?: {
-    structural: StructuralRecommendation[];
-    role_optimization: RoleOptimization[];
-    capability_development: CapabilityDevelopment[];
-    quick_wins: string[];
+    duplication_resolution?: StructuralRecommendation[];
+    missing_activity_additions?: StructuralRecommendation[];
+    coordination_improvements?: StructuralRecommendation[];
+    structural?: StructuralRecommendation[];
+    role_optimization?: RoleOptimization[];
+    capability_development?: CapabilityDevelopment[];
+    quick_wins?: string[];
   };
   executive_summary?: string;
   error?: string;
   message?: string;
+  _json_repaired?: boolean;
+  parse_warning?: string;
 }
 
 export interface QuickWorkActivitiesAnalysis {
@@ -313,6 +384,12 @@ export interface QuickWorkActivitiesAnalysis {
     department: string;
     positions_with_activities: number;
     sample_activities: string[];
+  }>;
+  potential_duplications_detected?: number;
+  potential_duplications?: Array<{
+    keyword: string;
+    roles_count: number;
+    roles: string[];
   }>;
   status: string;
 }

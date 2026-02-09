@@ -334,7 +334,7 @@ export default function Metrics() {
             {/* AI Analysis Section */}
             {apiConfigured ? (
               <div className="border-t pt-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">AI-Powered Coherence & Synergy Analysis</h4>
+                <h4 className="text-sm font-medium text-gray-700 mb-3">AI-Powered Current State Analysis</h4>
 
                 {!workActivitiesAnalysis ? (
                   <div className="flex flex-col md:flex-row items-start md:items-end gap-3">
@@ -361,13 +361,212 @@ export default function Metrics() {
                       ) : (
                         <>
                           <Brain className="w-4 h-4" />
-                          Analyze Coherence & Synergy
+                          Run Current State Analysis
                         </>
                       )}
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-5">
+                    {/* Key Findings Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {/* Duplication Score */}
+                      {workActivitiesAnalysis.activity_duplication && (
+                        <div className={`p-4 rounded-lg ${
+                          workActivitiesAnalysis.activity_duplication.severity_assessment === 'High'
+                            ? 'bg-red-50 border border-red-200'
+                            : workActivitiesAnalysis.activity_duplication.severity_assessment === 'Medium'
+                            ? 'bg-yellow-50 border border-yellow-200'
+                            : 'bg-green-50 border border-green-200'
+                        }`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg">🔄</span>
+                            <span className="font-medium text-gray-800">Activity Duplication</span>
+                          </div>
+                          <div className="flex items-baseline gap-2">
+                            <span className={`text-2xl font-bold ${
+                              workActivitiesAnalysis.activity_duplication.severity_assessment === 'High' ? 'text-red-600' :
+                              workActivitiesAnalysis.activity_duplication.severity_assessment === 'Medium' ? 'text-yellow-600' : 'text-green-600'
+                            }`}>
+                              {workActivitiesAnalysis.activity_duplication.duplications?.length || 0}
+                            </span>
+                            <span className="text-sm text-gray-600">issues found</span>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            workActivitiesAnalysis.activity_duplication.severity_assessment === 'High' ? 'bg-red-100 text-red-700' :
+                            workActivitiesAnalysis.activity_duplication.severity_assessment === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                          }`}>
+                            {workActivitiesAnalysis.activity_duplication.severity_assessment} Severity
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Missing Activities Score */}
+                      {workActivitiesAnalysis.missing_activities && (
+                        <div className={`p-4 rounded-lg ${
+                          workActivitiesAnalysis.missing_activities.severity_assessment === 'Critical'
+                            ? 'bg-red-50 border border-red-200'
+                            : workActivitiesAnalysis.missing_activities.severity_assessment === 'Moderate'
+                            ? 'bg-yellow-50 border border-yellow-200'
+                            : 'bg-green-50 border border-green-200'
+                        }`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg">📋</span>
+                            <span className="font-medium text-gray-800">Missing Activities</span>
+                          </div>
+                          <div className="flex items-baseline gap-2">
+                            <span className={`text-2xl font-bold ${
+                              workActivitiesAnalysis.missing_activities.severity_assessment === 'Critical' ? 'text-red-600' :
+                              workActivitiesAnalysis.missing_activities.severity_assessment === 'Moderate' ? 'text-yellow-600' : 'text-green-600'
+                            }`}>
+                              {workActivitiesAnalysis.missing_activities.gaps?.length || 0}
+                            </span>
+                            <span className="text-sm text-gray-600">gaps identified</span>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            workActivitiesAnalysis.missing_activities.severity_assessment === 'Critical' ? 'bg-red-100 text-red-700' :
+                            workActivitiesAnalysis.missing_activities.severity_assessment === 'Moderate' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                          }`}>
+                            {workActivitiesAnalysis.missing_activities.severity_assessment}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Coordination Gaps Score */}
+                      {workActivitiesAnalysis.coordination_gaps && (
+                        <div className={`p-4 rounded-lg ${
+                          workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Critical'
+                            ? 'bg-red-50 border border-red-200'
+                            : workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Moderate'
+                            ? 'bg-yellow-50 border border-yellow-200'
+                            : 'bg-green-50 border border-green-200'
+                        }`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg">🤝</span>
+                            <span className="font-medium text-gray-800">Coordination Gaps</span>
+                          </div>
+                          <div className="flex items-baseline gap-2">
+                            <span className={`text-2xl font-bold ${
+                              workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Critical' ? 'text-red-600' :
+                              workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Moderate' ? 'text-yellow-600' : 'text-green-600'
+                            }`}>
+                              {workActivitiesAnalysis.coordination_gaps.gaps?.length || 0}
+                            </span>
+                            <span className="text-sm text-gray-600">handoff issues</span>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Critical' ? 'bg-red-100 text-red-700' :
+                            workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Moderate' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                          }`}>
+                            {workActivitiesAnalysis.coordination_gaps.severity_assessment}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Activity Duplication Details */}
+                    {workActivitiesAnalysis.activity_duplication?.duplications && workActivitiesAnalysis.activity_duplication.duplications.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h5 className="text-sm font-medium text-gray-800 mb-3 flex items-center gap-2">
+                          🔄 Top Activity Duplications
+                        </h5>
+                        <div className="space-y-2">
+                          {workActivitiesAnalysis.activity_duplication.duplications.slice(0, 3).map((dup, i) => (
+                            <div key={i} className="bg-white p-3 rounded border border-gray-200">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-800">{dup.activity}</p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Affects: {dup.affected_roles?.slice(0, 3).join(', ')}{dup.affected_roles?.length > 3 ? '...' : ''}
+                                  </p>
+                                </div>
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  dup.severity === 'High' ? 'bg-red-100 text-red-700' :
+                                  dup.severity === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                                }`}>
+                                  {dup.severity}
+                                </span>
+                              </div>
+                              {dup.business_impact && (
+                                <p className="text-xs text-gray-600 mt-2 italic">Impact: {dup.business_impact}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Missing Activities Details */}
+                    {workActivitiesAnalysis.missing_activities?.gaps && workActivitiesAnalysis.missing_activities.gaps.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h5 className="text-sm font-medium text-gray-800 mb-3 flex items-center gap-2">
+                          📋 Missing Activities vs Industry Benchmarks
+                        </h5>
+                        <div className="space-y-2">
+                          {workActivitiesAnalysis.missing_activities.gaps.slice(0, 3).map((gap, i) => (
+                            <div key={i} className="bg-white p-3 rounded border border-gray-200">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-800">{gap.activity}</p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Should be in: {gap.affected_roles?.slice(0, 2).join(', ')}
+                                  </p>
+                                </div>
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  gap.severity === 'Critical' ? 'bg-red-100 text-red-700' :
+                                  gap.severity === 'Important' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {gap.severity}
+                                </span>
+                              </div>
+                              {gap.industry_benchmark && (
+                                <p className="text-xs text-indigo-600 mt-2">
+                                  Industry: {gap.industry_benchmark}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Coordination Gaps Details */}
+                    {workActivitiesAnalysis.coordination_gaps?.gaps && workActivitiesAnalysis.coordination_gaps.gaps.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h5 className="text-sm font-medium text-gray-800 mb-3 flex items-center gap-2">
+                          🤝 Coordination & Handoff Gaps
+                        </h5>
+                        <div className="space-y-2">
+                          {workActivitiesAnalysis.coordination_gaps.gaps.slice(0, 3).map((gap, i) => (
+                            <div key={i} className="bg-white p-3 rounded border border-gray-200">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-800">{gap.handoff_point}</p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {gap.from_department} → {gap.to_department}
+                                  </p>
+                                </div>
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  gap.severity === 'Critical' ? 'bg-red-100 text-red-700' :
+                                  gap.severity === 'Important' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {gap.severity}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-600 mt-2">
+                                <span className="font-medium">Gap:</span> {gap.gap_type}
+                              </p>
+                              {gap.industry_practice && (
+                                <p className="text-xs text-indigo-600 mt-1">
+                                  Best Practice: {gap.industry_practice}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Overall Coherence Score */}
                     {workActivitiesAnalysis.overall_coherence && (
                       <div className="flex items-center justify-between p-4 bg-primary-50 rounded-lg">
@@ -396,24 +595,6 @@ export default function Metrics() {
                               </p>
                               <p className="text-xs text-gray-600 truncate" title={dept.department}>{dept.department}</p>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Work Themes Summary */}
-                    {workActivitiesAnalysis.work_themes && workActivitiesAnalysis.work_themes.primary_themes && (
-                      <div>
-                        <h5 className="text-sm font-medium text-gray-700 mb-2">Primary Work Themes</h5>
-                        <div className="flex flex-wrap gap-2">
-                          {workActivitiesAnalysis.work_themes.primary_themes.slice(0, 5).map((theme, i) => (
-                            <span key={i} className={`px-3 py-1 rounded-full text-sm ${
-                              theme.strategic_importance === 'High' ? 'bg-green-100 text-green-700' :
-                              theme.strategic_importance === 'Medium' ? 'bg-blue-100 text-blue-700' :
-                              'bg-gray-100 text-gray-700'
-                            }`}>
-                              {theme.theme} ({theme.percentage_of_org}%)
-                            </span>
                           ))}
                         </div>
                       </div>
@@ -465,7 +646,7 @@ export default function Metrics() {
               <div className="border-t pt-4">
                 <p className="text-sm text-gray-500">
                   <Link to="/settings" className="text-primary-600 hover:underline">Configure Claude API</Link>
-                  {' '}to enable AI-powered coherence and synergy analysis
+                  {' '}to enable AI-powered current state analysis
                 </p>
               </div>
             )}

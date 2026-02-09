@@ -2,14 +2,17 @@
 Work Activities Analysis Service.
 
 Provides AI-powered analysis of work activities across the organization:
-1. Coherence & Synergy Analysis - How well activities align within teams
-2. Work Theme Synthesis - Common patterns and themes of work
-3. Industry Benchmark Comparison - How activities compare to competitors
+1. Activity Duplication Analysis - Identify duplicate work across job titles
+2. Missing Activities Analysis - Compare against industry benchmarks
+3. Coordination Gaps Analysis - Identify handoff/collaboration needs
+4. Coherence & Synergy Analysis - How well activities align within teams
+5. Work Theme Synthesis - Common patterns and themes of work
 """
 
 from anthropic import Anthropic
 from typing import List, Dict, Optional
 import json
+import re
 
 
 class WorkActivitiesAnalysisService:
@@ -33,11 +36,12 @@ class WorkActivitiesAnalysisService:
             employees: List of employee dicts with work_activities field
             industry: Optional industry context for benchmarking
 
-        Returns structured analysis:
+        Returns structured analysis including:
+        - Activity duplication across roles
+        - Missing activities vs industry benchmarks
+        - Coordination gaps between departments
         - Department coherence scores
         - Work theme synthesis
-        - Industry comparison
-        - Recommendations
         """
         if not self.client:
             return {
@@ -62,7 +66,7 @@ class WorkActivitiesAnalysisService:
         try:
             message = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=8000,
+                max_tokens=12000,
                 messages=[
                     {"role": "user", "content": prompt}
                 ]
@@ -117,35 +121,49 @@ class WorkActivitiesAnalysisService:
 **POSITIONS BY DEPARTMENT:**
 {department_data}
 
-**YOUR ANALYSIS MUST COVER 4 AREAS:**
+**YOUR ANALYSIS MUST COVER 6 KEY AREAS:**
 
-## 1. DEPARTMENTAL COHERENCE & SYNERGY ANALYSIS
-For each department/sub-department, analyze:
-- **Activity Coherence Score (0-100):** How well do the work activities within this team align with each other? Do they form a coherent set of responsibilities?
-- **Synergy Assessment:** Are there natural synergies between roles? Are there gaps or overlaps?
-- **Value Chain Position:** Where does this department sit in the organization's value chain?
-- **Internal Dependencies:** How dependent are roles on each other within the department?
+## 1. ACTIVITY DUPLICATION ANALYSIS (CRITICAL)
+Identify and analyze duplication of work activities across different job titles:
+- **Duplicate Activities:** List specific work activities that appear in multiple job titles
+- **Duplication Severity:** Rate the extent of duplication (High/Medium/Low)
+- **Impact Assessment:** Explain the business impact of each duplication (e.g., inefficiency, confusion, conflict)
+- **Affected Roles:** Which specific roles have overlapping activities
+- **Resolution Priority:** Which duplications should be addressed first
 
-## 2. WORK THEME SYNTHESIS
-Identify and synthesize the major themes of work performed across the organization:
-- **Primary Themes:** What are the 3-5 main categories of work?
-- **Theme Distribution:** How are resources allocated across themes?
-- **Strategic Alignment:** Do the work themes align with typical organizational priorities?
-- **Missing Capabilities:** Are there gaps in work themes that might indicate missing capabilities?
+## 2. MISSING ACTIVITIES ANALYSIS (CRITICAL)
+Based on industry research and best practices for similar job titles:
+- **Missing Critical Activities:** Work activities that are typically performed by similar roles in the industry but are absent here
+- **Gap Severity:** Rate how critical each missing activity is (Critical/Important/Nice-to-have)
+- **Industry Benchmark:** Reference what similar organizations typically include
+- **Affected Roles:** Which roles are missing these activities
+- **Business Risk:** What risks arise from these missing activities
 
-## 3. INDUSTRY BENCHMARK COMPARISON
-Compare the organization's work activities against typical competitors and industry standards:
-- **Activity Mix Analysis:** How does the work activity mix compare to industry norms?
-- **Role Specialization:** Are roles appropriately specialized or generalized for the industry?
-- **Emerging Activities:** Are there industry-standard activities that are missing?
-- **Competitive Positioning:** Based on work activities, where might this org have competitive advantages or disadvantages?
+## 3. COORDINATION & HANDOFF GAPS (CRITICAL)
+Identify where coordination between departments needs strengthening:
+- **Handoff Points:** Where work passes between departments/roles
+- **Coordination Gaps:** Where collaboration is weak or undefined
+- **Gap Severity:** Rate each gap (Critical/Important/Minor)
+- **Recommended Interfaces:** What coordination mechanisms should be added
+- **Industry Practice:** How similar organizations handle these handoffs
 
-## 4. RECOMMENDATIONS
-Based on your analysis, provide actionable recommendations:
-- **Structural Recommendations:** How could work be better organized?
-- **Role Optimization:** Which roles might benefit from redesign?
-- **Capability Gaps:** What capabilities should be developed?
-- **Quick Wins:** What changes could be made immediately?
+## 4. DEPARTMENTAL COHERENCE & SYNERGY
+For each department, analyze:
+- **Coherence Score (0-100):** How well activities align within the team
+- **Synergy Assessment:** Natural synergies and gaps between roles
+- **Value Chain Position:** Where department sits in value chain
+
+## 5. WORK THEME SYNTHESIS
+- **Primary Themes:** 3-5 main categories of work
+- **Theme Distribution:** How resources are allocated
+- **Strategic Alignment Score (0-100):** Do themes align with priorities
+
+## 6. RECOMMENDATIONS
+Prioritized, actionable recommendations addressing:
+- Duplication resolution
+- Missing activity additions
+- Coordination improvements
+- Quick wins
 
 **OUTPUT FORMAT (JSON):**
 ```json
@@ -157,6 +175,61 @@ Based on your analysis, provide actionable recommendations:
     "industry_context": "string"
   }},
 
+  "activity_duplication": {{
+    "overall_duplication_score": 0,
+    "severity_assessment": "High/Medium/Low",
+    "duplications": [
+      {{
+        "activity": "Description of duplicated activity",
+        "affected_roles": ["Role 1", "Role 2"],
+        "affected_departments": ["Dept 1", "Dept 2"],
+        "duplication_type": "Full Overlap/Partial Overlap/Ambiguous Boundary",
+        "severity": "High/Medium/Low",
+        "business_impact": "Description of negative impact",
+        "resolution_priority": 1,
+        "recommended_action": "How to resolve this duplication"
+      }}
+    ],
+    "summary": "Overall assessment of duplication issues"
+  }},
+
+  "missing_activities": {{
+    "overall_gap_score": 0,
+    "severity_assessment": "Critical/Moderate/Minor",
+    "gaps": [
+      {{
+        "activity": "Description of missing activity",
+        "industry_benchmark": "What similar orgs typically do",
+        "affected_roles": ["Role that should have this"],
+        "affected_departments": ["Dept"],
+        "severity": "Critical/Important/Nice-to-have",
+        "business_risk": "Risk of not having this activity",
+        "recommendation": "How to address this gap"
+      }}
+    ],
+    "summary": "Overall assessment of activity gaps vs industry"
+  }},
+
+  "coordination_gaps": {{
+    "overall_coordination_score": 0,
+    "severity_assessment": "Critical/Moderate/Minor",
+    "gaps": [
+      {{
+        "handoff_point": "Where work transfers between teams",
+        "from_department": "Source department",
+        "to_department": "Receiving department",
+        "from_roles": ["Role names"],
+        "to_roles": ["Role names"],
+        "current_state": "How it works now (or doesn't)",
+        "gap_type": "Missing Handoff/Unclear Ownership/No Feedback Loop/Timing Issues",
+        "severity": "Critical/Important/Minor",
+        "industry_practice": "How leading orgs handle this",
+        "recommended_interface": "What coordination mechanism to add"
+      }}
+    ],
+    "summary": "Overall assessment of coordination effectiveness"
+  }},
+
   "departmental_coherence": [
     {{
       "department": "Department Name",
@@ -164,20 +237,19 @@ Based on your analysis, provide actionable recommendations:
       "coherence_score": 0,
       "coherence_rationale": "Why this score",
       "synergy_assessment": {{
-        "strengths": ["strength 1", "strength 2"],
+        "strengths": ["strength 1"],
         "gaps": ["gap 1"],
         "overlaps": ["overlap 1"]
       }},
       "value_chain_position": "Front-line/Support/Core Operations/Strategy",
-      "internal_dependencies": "High/Medium/Low",
       "key_activities": ["main activity 1", "main activity 2"]
     }}
   ],
 
   "overall_coherence": {{
     "organization_coherence_score": 0,
-    "cross_department_synergies": ["synergy 1", "synergy 2"],
-    "cross_department_gaps": ["gap 1", "gap 2"],
+    "cross_department_synergies": ["synergy 1"],
+    "cross_department_gaps": ["gap 1"],
     "integration_assessment": "How well departments work together"
   }},
 
@@ -186,7 +258,7 @@ Based on your analysis, provide actionable recommendations:
       {{
         "theme": "Theme Name",
         "description": "What this theme encompasses",
-        "departments_involved": ["dept1", "dept2"],
+        "departments_involved": ["dept1"],
         "position_count": 0,
         "percentage_of_org": 0,
         "strategic_importance": "High/Medium/Low"
@@ -194,29 +266,17 @@ Based on your analysis, provide actionable recommendations:
     ],
     "theme_distribution_assessment": "Analysis of how work is distributed",
     "strategic_alignment_score": 0,
-    "missing_capabilities": ["capability 1", "capability 2"]
+    "missing_capabilities": ["capability 1"]
   }},
 
   "industry_comparison": {{
-    "industry_identified": "Industry name inferred or provided",
+    "industry_identified": "Industry name",
     "activity_mix_assessment": {{
       "alignment_score": 0,
       "over_represented": ["activity type 1"],
       "under_represented": ["activity type 2"],
       "unique_strengths": ["strength 1"]
     }},
-    "role_specialization": {{
-      "assessment": "Too specialized/Well balanced/Too generalized",
-      "rationale": "Why this assessment"
-    }},
-    "emerging_industry_activities": [
-      {{
-        "activity": "Activity name",
-        "industry_prevalence": "High/Medium/Low",
-        "present_in_org": true,
-        "recommendation": "What to do"
-      }}
-    ],
     "competitive_positioning": {{
       "potential_advantages": ["advantage 1"],
       "potential_disadvantages": ["disadvantage 1"],
@@ -225,66 +285,136 @@ Based on your analysis, provide actionable recommendations:
   }},
 
   "recommendations": {{
-    "structural": [
+    "duplication_resolution": [
       {{
         "recommendation": "What to do",
-        "rationale": "Why",
-        "impact": "High/Medium/Low",
-        "effort": "High/Medium/Low",
-        "affected_departments": ["dept1"]
+        "addresses": "Which duplication this resolves",
+        "priority": "High/Medium/Low",
+        "effort": "High/Medium/Low"
       }}
     ],
-    "role_optimization": [
+    "missing_activity_additions": [
       {{
-        "current_role": "Role name",
-        "recommendation": "What to change",
-        "rationale": "Why"
+        "recommendation": "What to add",
+        "addresses": "Which gap this fills",
+        "priority": "High/Medium/Low",
+        "effort": "High/Medium/Low"
       }}
     ],
-    "capability_development": [
+    "coordination_improvements": [
       {{
-        "capability": "Capability name",
-        "current_state": "Description",
-        "target_state": "Description",
-        "priority": "High/Medium/Low"
+        "recommendation": "What to improve",
+        "addresses": "Which coordination gap",
+        "priority": "High/Medium/Low",
+        "effort": "High/Medium/Low"
       }}
     ],
     "quick_wins": ["quick win 1", "quick win 2"]
   }},
 
-  "executive_summary": "2-3 paragraph summary of key findings and recommendations"
+  "executive_summary": "2-3 paragraph summary focusing on duplication, gaps, and coordination issues"
 }}
 ```
 
-Be specific and actionable. Ground all analysis in the actual work activities provided. Identify specific roles and departments in your recommendations.
+Be specific and actionable. Reference actual job titles and departments from the data. Ground all analysis in research-based industry benchmarks where possible.
 """
 
     def _parse_response(self, response_text: str) -> Dict:
         """Parse AI response and extract JSON."""
         try:
-            # Try to find JSON in the response
-            start = response_text.find("{")
-            end = response_text.rfind("}") + 1
-
-            if start != -1 and end > start:
-                json_str = response_text[start:end]
-                return json.loads(json_str)
+            # Try to find JSON code block first
+            json_start = response_text.find("```json")
+            if json_start != -1:
+                json_end = response_text.find("```", json_start + 7)
+                if json_end != -1:
+                    json_str = response_text[json_start + 7:json_end].strip()
+                else:
+                    json_str = response_text[json_start + 7:].strip()
             else:
-                return {
-                    "error": "Could not parse response",
-                    "raw_response": response_text
-                }
-        except json.JSONDecodeError as e:
+                # Try to find raw JSON
+                start = response_text.find("{")
+                end = response_text.rfind("}") + 1
+                if start != -1 and end > start:
+                    json_str = response_text[start:end]
+                else:
+                    return {
+                        "error": "Could not parse response",
+                        "raw_response": response_text
+                    }
+
+            # Try to parse
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                # Try to repair truncated JSON
+                repaired = self._repair_truncated_json(json_str)
+                if repaired:
+                    try:
+                        result = json.loads(repaired)
+                        result["_json_repaired"] = True
+                        return result
+                    except json.JSONDecodeError:
+                        pass
+
+                # Extract what we can
+                return self._extract_partial_data(response_text)
+
+        except Exception as e:
             return {
                 "error": f"JSON parse error: {str(e)}",
                 "raw_response": response_text
             }
 
+    def _repair_truncated_json(self, json_str: str) -> Optional[str]:
+        """Attempt to repair truncated JSON."""
+        open_braces = json_str.count('{') - json_str.count('}')
+        open_brackets = json_str.count('[') - json_str.count(']')
+
+        if open_braces <= 0 and open_brackets <= 0:
+            return None
+
+        repaired = json_str.rstrip()
+
+        # Remove incomplete string
+        if repaired.count('"') % 2 == 1:
+            last_quote = repaired.rfind('"')
+            prev_quote = repaired.rfind('"', 0, last_quote)
+            if prev_quote != -1:
+                repaired = repaired[:prev_quote]
+
+        # Clean trailing
+        repaired = repaired.rstrip()
+        while repaired and repaired[-1] in ',:"':
+            repaired = repaired[:-1].rstrip()
+
+        # Recount and close
+        open_braces = repaired.count('{') - repaired.count('}')
+        open_brackets = repaired.count('[') - repaired.count(']')
+
+        repaired += ']' * open_brackets
+        repaired += '}' * open_braces
+
+        return repaired if open_braces > 0 or open_brackets > 0 else None
+
+    def _extract_partial_data(self, response_text: str) -> Dict:
+        """Extract partial data when full JSON parsing fails."""
+        result = {
+            "parse_warning": "Partial data extracted due to response format issues",
+            "raw_response": response_text
+        }
+
+        # Try to extract executive summary
+        exec_match = re.search(r'"executive_summary"\s*:\s*"((?:[^"\\]|\\.)*)"', response_text)
+        if exec_match:
+            result["executive_summary"] = exec_match.group(1).replace('\\"', '"').replace('\\n', '\n')
+
+        return result
+
     def get_quick_analysis(self, employees: List[Dict]) -> Dict:
         """
         Get quick analysis without API call.
 
-        Provides basic statistics about work activities.
+        Provides basic statistics and preliminary duplication detection.
         """
         employees_with_activities = [
             emp for emp in employees
@@ -313,11 +443,35 @@ Be specific and actionable. Ground all analysis in the actual work activities pr
                 "sample_activities": [e.get("work_activities", "")[:100] for e in emps[:3]]
             })
 
+        # Quick duplication check (simple keyword matching)
+        activity_keywords = {}
+        for emp in employees_with_activities:
+            activities = emp.get("work_activities", "").lower()
+            words = set(activities.replace(",", " ").replace(".", " ").split())
+            for word in words:
+                if len(word) > 4:  # Skip short words
+                    if word not in activity_keywords:
+                        activity_keywords[word] = []
+                    activity_keywords[word].append(emp.get("job_title", "Unknown"))
+
+        # Find potential duplications (keywords appearing in 3+ different job titles)
+        potential_duplications = []
+        for keyword, titles in activity_keywords.items():
+            unique_titles = set(titles)
+            if len(unique_titles) >= 3:
+                potential_duplications.append({
+                    "keyword": keyword,
+                    "roles_count": len(unique_titles),
+                    "roles": list(unique_titles)[:5]
+                })
+
         return {
             "total_employees": total,
             "employees_with_work_activities": with_activities,
             "coverage_percentage": round(coverage_pct, 1),
             "departments_with_activities": len(by_department),
             "department_breakdown": dept_breakdown,
+            "potential_duplications_detected": len(potential_duplications),
+            "potential_duplications": potential_duplications[:5],
             "status": "complete" if coverage_pct > 80 else "partial" if coverage_pct > 20 else "minimal"
         }
