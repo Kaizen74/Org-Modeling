@@ -26,30 +26,90 @@ const CONNECTION_STYLES: Record<DiagramConnectionType, { stroke: string; strokeD
   dotted_line: { stroke: '#6B7280', strokeDasharray: '2,2', strokeWidth: 1 },
 };
 
+// Calculate dynamic node dimensions based on labels
+function calculateNodeDimensions(nodes: DiagramNode[]): { width: number; height: number } {
+  const maxLabelLength = Math.max(...nodes.map(n => n.label.length), 10);
+  // Base width on label length, with min 100 and max 180
+  const width = Math.min(180, Math.max(100, maxLabelLength * 8 + 20));
+  const height = 45;
+  return { width, height };
+}
+
+// Calculate required diagram dimensions based on nodes
+function calculateDiagramDimensions(
+  nodes: DiagramNode[],
+  layoutType: string,
+  nodeWidth: number,
+  nodeHeight: number
+): { width: number; height: number } {
+  // Group by level to understand structure
+  const byLevel = new Map<number, DiagramNode[]>();
+  nodes.forEach(node => {
+    const level = node.level ?? 0;
+    if (!byLevel.has(level)) byLevel.set(level, []);
+    byLevel.get(level)!.push(node);
+  });
+
+  const levels = Array.from(byLevel.keys()).sort((a, b) => a - b);
+  const maxNodesAtLevel = Math.max(...Array.from(byLevel.values()).map(arr => arr.length), 1);
+
+  // Calculate minimum required dimensions
+  const horizontalGap = 30; // Gap between nodes horizontally
+  const verticalGap = 80; // Gap between levels vertically
+  const padding = 60;
+
+  let minWidth: number;
+  let minHeight: number;
+
+  if (layoutType === 'hierarchical') {
+    minWidth = maxNodesAtLevel * (nodeWidth + horizontalGap) + padding * 2;
+    minHeight = levels.length * (nodeHeight + verticalGap) + padding * 2;
+  } else if (layoutType === 'hub_spoke' || layoutType === 'circular') {
+    const radius = Math.max(nodes.length * 25, 120);
+    minWidth = radius * 2 + nodeWidth + padding * 2;
+    minHeight = radius * 2 + nodeHeight + padding * 2;
+  } else {
+    // Matrix or network
+    const cols = Math.ceil(Math.sqrt(nodes.length));
+    const rows = Math.ceil(nodes.length / cols);
+    minWidth = cols * (nodeWidth + horizontalGap) + padding * 2;
+    minHeight = rows * (nodeHeight + verticalGap) + padding * 2;
+  }
+
+  return {
+    width: Math.max(minWidth, 700),
+    height: Math.max(minHeight, 450)
+  };
+}
+
 // Calculate node positions based on layout type
 function calculateNodePositions(
   nodes: DiagramNode[],
   layoutType: string,
   width: number,
-  height: number
+  height: number,
+  nodeWidth: number,
+  nodeHeight: number
 ): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
-  const padding = 80;
-  const nodeWidth = 120;
-  const nodeHeight = 50;
+  const padding = 60;
+  const horizontalGap = 30;
+  const verticalGap = 80;
 
-  // If nodes have explicit positions, use them
+  // If nodes have explicit positions, use them with better scaling
   const hasExplicitPositions = nodes.some(n => n.x !== undefined && n.y !== undefined);
   if (hasExplicitPositions) {
-    // Find bounds of explicit positions
     const xs = nodes.filter(n => n.x !== undefined).map(n => n.x!);
     const ys = nodes.filter(n => n.y !== undefined).map(n => n.y!);
     const minX = Math.min(...xs, 0);
     const maxX = Math.max(...xs, 1);
     const minY = Math.min(...ys, 0);
     const maxY = Math.max(...ys, 1);
-    const scaleX = (width - padding * 2 - nodeWidth) / Math.max(maxX - minX, 1);
-    const scaleY = (height - padding * 2 - nodeHeight) / Math.max(maxY - minY, 1);
+
+    const availableWidth = width - padding * 2 - nodeWidth;
+    const availableHeight = height - padding * 2 - nodeHeight;
+    const scaleX = availableWidth / Math.max(maxX - minX, 1);
+    const scaleY = availableHeight / Math.max(maxY - minY, 1);
 
     nodes.forEach(node => {
       if (node.x !== undefined && node.y !== undefined) {
@@ -64,8 +124,8 @@ function calculateNodePositions(
     let idx = 0;
     nodes.filter(n => n.x === undefined || n.y === undefined).forEach(node => {
       positions.set(node.id, {
-        x: padding + nodeWidth / 2 + (idx % 3) * (nodeWidth + 40),
-        y: height - padding - nodeHeight / 2 - Math.floor(idx / 3) * (nodeHeight + 30),
+        x: padding + nodeWidth / 2 + (idx % 3) * (nodeWidth + horizontalGap),
+        y: height - padding - nodeHeight / 2 - Math.floor(idx / 3) * (nodeHeight + verticalGap),
       });
       idx++;
     });
@@ -84,14 +144,17 @@ function calculateNodePositions(
 
   switch (layoutType) {
     case 'hierarchical': {
-      const levelHeight = (height - padding * 2) / Math.max(levels.length, 1);
+      const availableHeight = height - padding * 2;
+      const levelHeight = availableHeight / Math.max(levels.length, 1);
+
       levels.forEach((level, levelIdx) => {
         const nodesAtLevel = byLevel.get(level)!;
-        const levelWidth = width - padding * 2;
-        const nodeSpacing = levelWidth / (nodesAtLevel.length + 1);
+        const totalNodesWidth = nodesAtLevel.length * nodeWidth + (nodesAtLevel.length - 1) * horizontalGap;
+        const startX = (width - totalNodesWidth) / 2;
+
         nodesAtLevel.forEach((node, nodeIdx) => {
           positions.set(node.id, {
-            x: padding + nodeSpacing * (nodeIdx + 1),
+            x: startX + nodeIdx * (nodeWidth + horizontalGap) + nodeWidth / 2,
             y: padding + levelHeight * levelIdx + levelHeight / 2,
           });
         });
@@ -100,14 +163,17 @@ function calculateNodePositions(
     }
 
     case 'hub_spoke': {
-      // First node or executive type at center
       const centerNode = nodes.find(n => n.type === 'executive') || nodes[0];
       const centerX = width / 2;
       const centerY = height / 2;
       positions.set(centerNode.id, { x: centerX, y: centerY });
 
       const otherNodes = nodes.filter(n => n.id !== centerNode.id);
-      const radius = Math.min(width, height) / 2 - padding - 40;
+      const radius = Math.min(
+        (width - padding * 2 - nodeWidth) / 2,
+        (height - padding * 2 - nodeHeight) / 2
+      ) * 0.85;
+
       otherNodes.forEach((node, idx) => {
         const angle = (2 * Math.PI * idx) / otherNodes.length - Math.PI / 2;
         positions.set(node.id, {
@@ -121,7 +187,11 @@ function calculateNodePositions(
     case 'circular': {
       const centerX = width / 2;
       const centerY = height / 2;
-      const radius = Math.min(width, height) / 2 - padding - 40;
+      const radius = Math.min(
+        (width - padding * 2 - nodeWidth) / 2,
+        (height - padding * 2 - nodeHeight) / 2
+      ) * 0.85;
+
       nodes.forEach((node, idx) => {
         const angle = (2 * Math.PI * idx) / nodes.length - Math.PI / 2;
         positions.set(node.id, {
@@ -133,11 +203,31 @@ function calculateNodePositions(
     }
 
     case 'matrix': {
-      // Arrange in grid
+      const cols = Math.ceil(Math.sqrt(nodes.length));
+      const rows = Math.ceil(nodes.length / cols);
+      const totalWidth = cols * nodeWidth + (cols - 1) * horizontalGap;
+      const totalHeight = rows * nodeHeight + (rows - 1) * verticalGap;
+      const startX = (width - totalWidth) / 2;
+      const startY = (height - totalHeight) / 2;
+
+      nodes.forEach((node, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        positions.set(node.id, {
+          x: startX + col * (nodeWidth + horizontalGap) + nodeWidth / 2,
+          y: startY + row * (nodeHeight + verticalGap) + nodeHeight / 2,
+        });
+      });
+      break;
+    }
+
+    case 'network':
+    default: {
       const cols = Math.ceil(Math.sqrt(nodes.length));
       const rows = Math.ceil(nodes.length / cols);
       const cellWidth = (width - padding * 2) / cols;
       const cellHeight = (height - padding * 2) / rows;
+
       nodes.forEach((node, idx) => {
         const col = idx % cols;
         const row = Math.floor(idx / cols);
@@ -148,59 +238,70 @@ function calculateNodePositions(
       });
       break;
     }
-
-    case 'network':
-    default: {
-      // Force-directed-like layout (simplified)
-      const cols = Math.ceil(Math.sqrt(nodes.length));
-      const cellWidth = (width - padding * 2) / cols;
-      const cellHeight = (height - padding * 2) / Math.ceil(nodes.length / cols);
-      nodes.forEach((node, idx) => {
-        const col = idx % cols;
-        const row = Math.floor(idx / cols);
-        // Add some randomness for network feel
-        const jitterX = (Math.sin(idx * 7) * cellWidth * 0.15);
-        const jitterY = (Math.cos(idx * 11) * cellHeight * 0.15);
-        positions.set(node.id, {
-          x: padding + cellWidth * col + cellWidth / 2 + jitterX,
-          y: padding + cellHeight * row + cellHeight / 2 + jitterY,
-        });
-      });
-      break;
-    }
   }
 
   return positions;
 }
 
-export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }: ArchetypeDiagramProps) {
-  const positions = useMemo(
-    () => calculateNodePositions(diagram.nodes, diagram.layout_type, width, height),
-    [diagram.nodes, diagram.layout_type, width, height]
+// Truncate label with ellipsis, allowing more characters for wider nodes
+function truncateLabel(label: string, nodeWidth: number): string {
+  const maxChars = Math.floor((nodeWidth - 20) / 7); // Approximate char width
+  if (label.length <= maxChars) return label;
+  return label.substring(0, maxChars - 2) + '...';
+}
+
+export default function ArchetypeDiagram({ diagram, width: propWidth, height: propHeight }: ArchetypeDiagramProps) {
+  // Calculate dynamic dimensions
+  const nodeDimensions = useMemo(
+    () => calculateNodeDimensions(diagram.nodes),
+    [diagram.nodes]
   );
 
-  const nodeWidth = 120;
-  const nodeHeight = 50;
+  const nodeWidth = nodeDimensions.width;
+  const nodeHeight = nodeDimensions.height;
 
-  // Get connection path
-  const getConnectionPath = (conn: DiagramConnection): string | null => {
+  // Auto-calculate diagram size if not provided
+  const calculatedDimensions = useMemo(
+    () => calculateDiagramDimensions(diagram.nodes, diagram.layout_type, nodeWidth, nodeHeight),
+    [diagram.nodes, diagram.layout_type, nodeWidth, nodeHeight]
+  );
+
+  const width = propWidth || calculatedDimensions.width;
+  const height = propHeight || calculatedDimensions.height;
+
+  const positions = useMemo(
+    () => calculateNodePositions(diagram.nodes, diagram.layout_type, width, height, nodeWidth, nodeHeight),
+    [diagram.nodes, diagram.layout_type, width, height, nodeWidth, nodeHeight]
+  );
+
+  // Get connection path - simplified to avoid label overlap
+  const getConnectionPath = (conn: DiagramConnection): { path: string; labelPos: { x: number; y: number } } | null => {
     const from = positions.get(conn.from);
     const to = positions.get(conn.to);
     if (!from || !to) return null;
 
-    // Curved line for better visibility
-    const midX = (from.x + to.x) / 2;
-    const midY = (from.y + to.y) / 2;
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    // Add slight curve
-    const curvature = Math.min(dist * 0.15, 30);
+    // Simple curved line
+    const midX = (from.x + to.x) / 2;
+    const midY = (from.y + to.y) / 2;
+
+    // Add curve perpendicular to the line
+    const curvature = Math.min(dist * 0.1, 20);
     const perpX = -dy / dist * curvature;
     const perpY = dx / dist * curvature;
 
-    return `M ${from.x} ${from.y} Q ${midX + perpX} ${midY + perpY} ${to.x} ${to.y}`;
+    const path = `M ${from.x} ${from.y} Q ${midX + perpX} ${midY + perpY} ${to.x} ${to.y}`;
+
+    // Position label offset from the line
+    const labelPos = {
+      x: midX + perpX * 2,
+      y: midY + perpY * 2 - 8
+    };
+
+    return { path, labelPos };
   };
 
   // Get unique node types for legend
@@ -209,10 +310,15 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
   const hasDifferentiatingNodes = diagram.nodes.some(n => n.is_differentiating);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div className="bg-white rounded-lg border border-gray-200 p-4 overflow-x-auto">
       <h4 className="font-semibold text-gray-800 mb-2">{diagram.title}</h4>
 
-      <svg width={width} height={height} className="bg-gray-50 rounded">
+      <svg
+        width={width}
+        height={height}
+        className="bg-gray-50 rounded"
+        style={{ minWidth: width, minHeight: height }}
+      >
         <defs>
           {/* Arrow marker */}
           <marker
@@ -237,31 +343,44 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
           </marker>
         </defs>
 
-        {/* Connections */}
+        {/* Connections - rendered first so they appear behind nodes */}
         {diagram.connections.map((conn, idx) => {
-          const path = getConnectionPath(conn);
-          if (!path) return null;
+          const pathData = getConnectionPath(conn);
+          if (!pathData) return null;
           const style = CONNECTION_STYLES[conn.type] || CONNECTION_STYLES.reporting;
           return (
             <g key={`conn-${idx}`}>
               <path
-                d={path}
+                d={pathData.path}
                 fill="none"
                 stroke={style.stroke}
                 strokeWidth={style.strokeWidth}
                 strokeDasharray={style.strokeDasharray}
                 markerEnd={conn.type === 'reporting' ? 'url(#arrowhead)' : undefined}
               />
-              {conn.label && (
-                <text
-                  x={(positions.get(conn.from)!.x + positions.get(conn.to)!.x) / 2}
-                  y={(positions.get(conn.from)!.y + positions.get(conn.to)!.y) / 2 - 5}
-                  textAnchor="middle"
-                  className="text-xs fill-gray-500"
-                  fontSize={10}
-                >
-                  {conn.label}
-                </text>
+              {/* Only show short connection labels */}
+              {conn.label && conn.label.length <= 15 && (
+                <g>
+                  {/* Background for readability */}
+                  <rect
+                    x={pathData.labelPos.x - conn.label.length * 3}
+                    y={pathData.labelPos.y - 8}
+                    width={conn.label.length * 6}
+                    height={12}
+                    fill="white"
+                    fillOpacity={0.8}
+                    rx={2}
+                  />
+                  <text
+                    x={pathData.labelPos.x}
+                    y={pathData.labelPos.y}
+                    textAnchor="middle"
+                    fill="#6B7280"
+                    fontSize={9}
+                  >
+                    {conn.label}
+                  </text>
+                </g>
               )}
             </g>
           );
@@ -280,28 +399,16 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
               {isDifferentiating && (
                 <>
                   <rect
-                    x={pos.x - nodeWidth / 2 - 4}
-                    y={pos.y - nodeHeight / 2 - 4}
-                    width={nodeWidth + 8}
-                    height={nodeHeight + 8}
+                    x={pos.x - nodeWidth / 2 - 5}
+                    y={pos.y - nodeHeight / 2 - 5}
+                    width={nodeWidth + 10}
+                    height={nodeHeight + 10}
                     rx={10}
                     ry={10}
                     fill="none"
                     stroke="#F59E0B"
                     strokeWidth={3}
-                    opacity={0.6}
-                  />
-                  <rect
-                    x={pos.x - nodeWidth / 2 - 6}
-                    y={pos.y - nodeHeight / 2 - 6}
-                    width={nodeWidth + 12}
-                    height={nodeHeight + 12}
-                    rx={12}
-                    ry={12}
-                    fill="none"
-                    stroke="#FCD34D"
-                    strokeWidth={2}
-                    opacity={0.3}
+                    opacity={0.7}
                   />
                 </>
               )}
@@ -310,39 +417,41 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
                 y={pos.y - nodeHeight / 2}
                 width={nodeWidth}
                 height={nodeHeight}
-                rx={8}
-                ry={8}
+                rx={6}
+                ry={6}
                 fill={colors.fill}
                 stroke={isDifferentiating ? '#F59E0B' : colors.stroke}
                 strokeWidth={isDifferentiating ? 3 : 2}
               />
-              {/* Star icon for differentiating nodes */}
+              {/* Star icon for differentiating nodes - positioned outside */}
               {isDifferentiating && (
                 <text
-                  x={pos.x + nodeWidth / 2 - 12}
-                  y={pos.y - nodeHeight / 2 + 12}
-                  fontSize={14}
+                  x={pos.x + nodeWidth / 2 - 2}
+                  y={pos.y - nodeHeight / 2 - 2}
+                  fontSize={16}
+                  fill="#F59E0B"
                   className="pointer-events-none"
                 >
-                  &#9733;
+                  ★
                 </text>
               )}
+              {/* Node label */}
               <text
                 x={pos.x}
                 y={pos.y}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fill={colors.text}
-                fontSize={12}
+                fontSize={11}
                 fontWeight="500"
                 className="pointer-events-none"
               >
-                {node.label.length > 14 ? node.label.substring(0, 12) + '...' : node.label}
+                {truncateLabel(node.label, nodeWidth)}
               </text>
               <title>
                 {node.label}
-                {node.description ? `: ${node.description}` : ''}
-                {isDifferentiating && node.differentiating_activity ? `\n\nDifferentiating Activity: ${node.differentiating_activity}` : ''}
+                {node.description ? `\n${node.description}` : ''}
+                {isDifferentiating && node.differentiating_activity ? `\n\n★ Differentiating: ${node.differentiating_activity}` : ''}
               </title>
             </g>
           );
@@ -352,7 +461,7 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
       {/* Legend */}
       <div className="mt-3 flex flex-wrap gap-4 text-xs">
         {/* Node types */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <span className="text-gray-500 font-medium">Units:</span>
           {usedNodeTypes.map(type => (
             <span key={type} className="flex items-center gap-1">
@@ -366,7 +475,7 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
         </div>
 
         {/* Connection types */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <span className="text-gray-500 font-medium">Lines:</span>
           {usedConnectionTypes.map(type => {
             const style = CONNECTION_STYLES[type];
@@ -394,11 +503,7 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
           <div className="flex items-center gap-1">
             <span className="text-gray-500 font-medium">Differentiating:</span>
             <span className="flex items-center gap-1">
-              <span className="text-amber-500">&#9733;</span>
-              <span
-                className="w-3 h-3 rounded border-2"
-                style={{ borderColor: '#F59E0B', backgroundColor: 'transparent' }}
-              />
+              <span className="text-amber-500 text-sm">★</span>
               <span className="text-amber-600 font-medium">Competitive Advantage</span>
             </span>
           </div>

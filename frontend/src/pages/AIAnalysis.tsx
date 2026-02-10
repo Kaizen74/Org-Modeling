@@ -639,7 +639,7 @@ export default function AIAnalysis() {
                     {arch.structure_diagram && arch.structure_diagram.nodes && arch.structure_diagram.nodes.length > 0 && (
                       <div className="mt-4">
                         <p className="font-medium text-gray-700 mb-3">Structure Visualization</p>
-                        <ArchetypeDiagram diagram={arch.structure_diagram} width={560} height={350} />
+                        <ArchetypeDiagram diagram={arch.structure_diagram} />
                       </div>
                     )}
 
