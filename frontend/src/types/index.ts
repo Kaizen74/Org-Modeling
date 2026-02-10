@@ -101,6 +101,8 @@ export interface DiagramNode {
   label: string;
   type: DiagramNodeType;
   description?: string;
+  is_differentiating?: boolean;
+  differentiating_activity?: string;
   x?: number;
   y?: number;
   level?: number;
@@ -119,6 +121,16 @@ export interface StructureDiagram {
   nodes: DiagramNode[];
   connections: DiagramConnection[];
   legend?: string;
+}
+
+// Differentiating Activity for competitive advantage
+export interface DifferentiatingActivity {
+  activity: string;
+  description: string;
+  why_differentiating: string;
+  how_archetype_supports: string;
+  strategic_importance: 'High' | 'Medium' | 'Low';
+  related_roles: string[];
 }
 
 // Score breakdown for individual criteria
@@ -164,6 +176,7 @@ export interface ArchetypeRecommendation {
   warning_signs_to_monitor?: string[];
   design_criteria_addressed?: string[];
   practical_examples?: PracticalExample[];
+  differentiating_activities?: DifferentiatingActivity[];
   structure_diagram?: StructureDiagram;
 }
 

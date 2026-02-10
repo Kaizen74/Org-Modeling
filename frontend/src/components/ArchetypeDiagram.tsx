@@ -206,6 +206,7 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
   // Get unique node types for legend
   const usedNodeTypes = [...new Set(diagram.nodes.map(n => n.type))];
   const usedConnectionTypes = [...new Set(diagram.connections.map(c => c.type))];
+  const hasDifferentiatingNodes = diagram.nodes.some(n => n.is_differentiating);
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -271,9 +272,39 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
           const pos = positions.get(node.id);
           if (!pos) return null;
           const colors = NODE_COLORS[node.type] || NODE_COLORS.department;
+          const isDifferentiating = node.is_differentiating === true;
 
           return (
             <g key={node.id} className="cursor-pointer hover:opacity-90">
+              {/* Glow effect for differentiating nodes */}
+              {isDifferentiating && (
+                <>
+                  <rect
+                    x={pos.x - nodeWidth / 2 - 4}
+                    y={pos.y - nodeHeight / 2 - 4}
+                    width={nodeWidth + 8}
+                    height={nodeHeight + 8}
+                    rx={10}
+                    ry={10}
+                    fill="none"
+                    stroke="#F59E0B"
+                    strokeWidth={3}
+                    opacity={0.6}
+                  />
+                  <rect
+                    x={pos.x - nodeWidth / 2 - 6}
+                    y={pos.y - nodeHeight / 2 - 6}
+                    width={nodeWidth + 12}
+                    height={nodeHeight + 12}
+                    rx={12}
+                    ry={12}
+                    fill="none"
+                    stroke="#FCD34D"
+                    strokeWidth={2}
+                    opacity={0.3}
+                  />
+                </>
+              )}
               <rect
                 x={pos.x - nodeWidth / 2}
                 y={pos.y - nodeHeight / 2}
@@ -282,9 +313,20 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
                 rx={8}
                 ry={8}
                 fill={colors.fill}
-                stroke={colors.stroke}
-                strokeWidth={2}
+                stroke={isDifferentiating ? '#F59E0B' : colors.stroke}
+                strokeWidth={isDifferentiating ? 3 : 2}
               />
+              {/* Star icon for differentiating nodes */}
+              {isDifferentiating && (
+                <text
+                  x={pos.x + nodeWidth / 2 - 12}
+                  y={pos.y - nodeHeight / 2 + 12}
+                  fontSize={14}
+                  className="pointer-events-none"
+                >
+                  &#9733;
+                </text>
+              )}
               <text
                 x={pos.x}
                 y={pos.y}
@@ -297,9 +339,11 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
               >
                 {node.label.length > 14 ? node.label.substring(0, 12) + '...' : node.label}
               </text>
-              {node.description && (
-                <title>{`${node.label}: ${node.description}`}</title>
-              )}
+              <title>
+                {node.label}
+                {node.description ? `: ${node.description}` : ''}
+                {isDifferentiating && node.differentiating_activity ? `\n\nDifferentiating Activity: ${node.differentiating_activity}` : ''}
+              </title>
             </g>
           );
         })}
@@ -344,6 +388,21 @@ export default function ArchetypeDiagram({ diagram, width = 600, height = 400 }:
             );
           })}
         </div>
+
+        {/* Differentiating indicator */}
+        {hasDifferentiatingNodes && (
+          <div className="flex items-center gap-1">
+            <span className="text-gray-500 font-medium">Differentiating:</span>
+            <span className="flex items-center gap-1">
+              <span className="text-amber-500">&#9733;</span>
+              <span
+                className="w-3 h-3 rounded border-2"
+                style={{ borderColor: '#F59E0B', backgroundColor: 'transparent' }}
+              />
+              <span className="text-amber-600 font-medium">Competitive Advantage</span>
+            </span>
+          </div>
+        )}
       </div>
 
       {diagram.legend && (

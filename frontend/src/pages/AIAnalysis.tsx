@@ -595,6 +595,46 @@ export default function AIAnalysis() {
                       </div>
                     )}
 
+                    {/* Differentiating Activities */}
+                    {arch.differentiating_activities && arch.differentiating_activities.length > 0 && (
+                      <div className="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                        <p className="font-medium text-amber-800 mb-3 flex items-center gap-2">
+                          <span className="text-amber-500">&#9733;</span>
+                          Differentiating Activities (Competitive Advantage)
+                        </p>
+                        <div className="space-y-3">
+                          {arch.differentiating_activities.map((activity, j) => (
+                            <div key={j} className="p-3 bg-white rounded border border-amber-100">
+                              <div className="flex items-start justify-between">
+                                <p className="font-medium text-amber-700">{activity.activity}</p>
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  activity.strategic_importance === 'High' ? 'bg-amber-200 text-amber-800' :
+                                  activity.strategic_importance === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {activity.strategic_importance} Priority
+                                </span>
+                              </div>
+                              {activity.description && (
+                                <p className="text-sm text-gray-600 mt-1">{activity.description}</p>
+                              )}
+                              <p className="text-xs text-amber-600 mt-2">
+                                <span className="font-medium">Why Differentiating:</span> {activity.why_differentiating}
+                              </p>
+                              <p className="text-xs text-green-600 mt-1">
+                                <span className="font-medium">How Archetype Supports:</span> {activity.how_archetype_supports}
+                              </p>
+                              {activity.related_roles && activity.related_roles.length > 0 && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  <span className="font-medium">Related Roles:</span> {activity.related_roles.join(', ')}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Structure Diagram */}
                     {arch.structure_diagram && arch.structure_diagram.nodes && arch.structure_diagram.nodes.length > 0 && (
                       <div className="mt-4">

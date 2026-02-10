@@ -232,6 +232,19 @@ Score alignment on these dimensions:
 **CRITICAL: This section evaluates ALL 7 organizational archetypes and recommends the top 2 best fits.**
 **Use the organization design criteria (user-specified) to guide your recommendations.**
 
+**DIFFERENTIATING WORK ACTIVITIES ANALYSIS:**
+Before scoring archetypes, identify work activities that could provide COMPETITIVE ADVANTAGE:
+- Analyze the organization's work activities to identify those that are UNIQUE or DISTINCTIVE
+- Compare against industry norms to find activities that differentiate this organization
+- Assess which activities directly support the design criteria or strategic objectives
+- Consider which activities are hard for competitors to replicate
+- Rate each differentiating activity's strategic importance (High/Medium/Low)
+
+These differentiating activities should INFORM your archetype recommendations:
+- Recommend archetypes that PROTECT and AMPLIFY these differentiating capabilities
+- Ensure the recommended structure doesn't inadvertently weaken key differentiators
+- Highlight how each archetype recommendation preserves or enhances these activities
+
 **ARCHETYPE SCORING METHODOLOGY:**
 Score each archetype (0-100) based on these weighted criteria:
 - Industry Match (30%): How well does the archetype fit the apparent industry/sector?
@@ -264,10 +277,16 @@ Score each archetype (0-100) based on these weighted criteria:
     - Well-known companies that successfully use this structure
     - How they implemented it and what makes it work
     - Relevance to this organization's situation
-12. **Structure Diagram**: A visual representation of the archetype showing:
+12. **Differentiating Activities**: Identify 2-4 work activities that provide competitive advantage:
+    - Activity name and description
+    - Why it's differentiating (unique, hard to replicate, strategically important)
+    - How this archetype protects/amplifies this capability
+    - Strategic importance rating (High/Medium/Low)
+13. **Structure Diagram**: A visual representation of the archetype showing:
     - Key organizational units/roles as nodes (5-8 nodes recommended)
     - How they relate spatially (hierarchical, matrix, network layout)
     - Connections showing reporting/coordination relationships
+    - Mark nodes that house differentiating activities with is_differentiating: true
 
 **OUTPUT FORMAT (JSON):**
 
@@ -366,6 +385,16 @@ Score each archetype (0-100) based on these weighted criteria:
             "relevance_to_your_org": "How this example applies to your situation"
           }}
         ],
+        "differentiating_activities": [
+          {{
+            "activity": "Name of the differentiating work activity",
+            "description": "What this activity entails",
+            "why_differentiating": "Why this provides competitive advantage",
+            "how_archetype_supports": "How this archetype protects/amplifies this capability",
+            "strategic_importance": "High/Medium/Low",
+            "related_roles": ["Role or department that performs this activity"]
+          }}
+        ],
         "structure_diagram": {{
           "title": "Diagram title describing the archetype structure",
           "layout_type": "hierarchical|matrix|network|hub_spoke|circular",
@@ -375,6 +404,8 @@ Score each archetype (0-100) based on these weighted criteria:
               "label": "Node label (department/role/unit name)",
               "type": "executive|department|team|role|external|shared_service",
               "description": "Brief description of this unit's function",
+              "is_differentiating": false,
+              "differentiating_activity": "Name of differentiating activity if is_differentiating is true",
               "x": 0,
               "y": 0,
               "level": 0
