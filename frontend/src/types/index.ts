@@ -89,6 +89,38 @@ export interface PracticalExample {
   relevance_to_your_org: string;
 }
 
+// Archetype Structure Diagram Types
+export type DiagramLayoutType = 'hierarchical' | 'matrix' | 'network' | 'hub_spoke' | 'circular';
+
+export type DiagramNodeType = 'executive' | 'department' | 'team' | 'role' | 'external' | 'shared_service';
+
+export type DiagramConnectionType = 'reporting' | 'coordination' | 'advisory' | 'service' | 'dotted_line';
+
+export interface DiagramNode {
+  id: string;
+  label: string;
+  type: DiagramNodeType;
+  description?: string;
+  x?: number;
+  y?: number;
+  level?: number;
+}
+
+export interface DiagramConnection {
+  from: string;
+  to: string;
+  type: DiagramConnectionType;
+  label?: string;
+}
+
+export interface StructureDiagram {
+  title: string;
+  layout_type: DiagramLayoutType;
+  nodes: DiagramNode[];
+  connections: DiagramConnection[];
+  legend?: string;
+}
+
 // Score breakdown for individual criteria
 export interface ScoreBreakdown {
   industry_match: number | { score: number; rationale: string };
@@ -132,6 +164,7 @@ export interface ArchetypeRecommendation {
   warning_signs_to_monitor?: string[];
   design_criteria_addressed?: string[];
   practical_examples?: PracticalExample[];
+  structure_diagram?: StructureDiagram;
 }
 
 // Category 4 can be an array (old format) or object with recommendations (new format)

@@ -264,6 +264,10 @@ Score each archetype (0-100) based on these weighted criteria:
     - Well-known companies that successfully use this structure
     - How they implemented it and what makes it work
     - Relevance to this organization's situation
+12. **Structure Diagram**: A visual representation of the archetype showing:
+    - Key organizational units/roles as nodes (5-8 nodes recommended)
+    - How they relate spatially (hierarchical, matrix, network layout)
+    - Connections showing reporting/coordination relationships
 
 **OUTPUT FORMAT (JSON):**
 
@@ -361,7 +365,31 @@ Score each archetype (0-100) based on these weighted criteria:
             "key_success_factors": "What makes it work for them",
             "relevance_to_your_org": "How this example applies to your situation"
           }}
-        ]
+        ],
+        "structure_diagram": {{
+          "title": "Diagram title describing the archetype structure",
+          "layout_type": "hierarchical|matrix|network|hub_spoke|circular",
+          "nodes": [
+            {{
+              "id": "unique_node_id",
+              "label": "Node label (department/role/unit name)",
+              "type": "executive|department|team|role|external|shared_service",
+              "description": "Brief description of this unit's function",
+              "x": 0,
+              "y": 0,
+              "level": 0
+            }}
+          ],
+          "connections": [
+            {{
+              "from": "source_node_id",
+              "to": "target_node_id",
+              "type": "reporting|coordination|advisory|service|dotted_line",
+              "label": "Optional label for the connection"
+            }}
+          ],
+          "legend": "Brief explanation of what the diagram shows"
+        }}
       }}
     ]
   }},

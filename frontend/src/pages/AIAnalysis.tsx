@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Brain, Loader2, AlertTriangle, ArrowRight, ChevronDown, ChevronUp, FileText, Upload, X } from 'lucide-react';
 import { aiAnalysisApi, settingsApi } from '../services/api';
 import type { AIAnalysisResult, ArchetypeScoreSummary } from '../types';
+import ArchetypeDiagram from '../components/ArchetypeDiagram';
 
 export default function AIAnalysis() {
   const [analysis, setAnalysis] = useState<AIAnalysisResult | null>(null);
@@ -591,6 +592,14 @@ export default function AIAnalysis() {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Structure Diagram */}
+                    {arch.structure_diagram && arch.structure_diagram.nodes && arch.structure_diagram.nodes.length > 0 && (
+                      <div className="mt-4">
+                        <p className="font-medium text-gray-700 mb-3">Structure Visualization</p>
+                        <ArchetypeDiagram diagram={arch.structure_diagram} width={560} height={350} />
                       </div>
                     )}
 
