@@ -91,16 +91,25 @@ async def analyze_org(
     if request.strategy_text:
         strategy_docs = [request.strategy_text]
 
+    # Get existing work activities analysis to inform archetype recommendations
+    existing_work_activities = None
+    if analysis.ai_analysis and "work_activities_analysis" in analysis.ai_analysis:
+        existing_work_activities = analysis.ai_analysis["work_activities_analysis"]
+
     ai_result = await service.analyze_organization(
         metrics=metrics,
         employees=employees,
         strategy_documents=strategy_docs,
         design_criteria=request.design_criteria,
         analysis_scope=request.analysis_scope,
-        department=request.department
+        department=request.department,
+        work_activities_analysis=existing_work_activities
     )
 
-    # Store results
+    # Store results - preserve existing work_activities_analysis
+    if analysis.ai_analysis and "work_activities_analysis" in analysis.ai_analysis:
+        ai_result["work_activities_analysis"] = analysis.ai_analysis["work_activities_analysis"]
+
     analysis.ai_analysis = ai_result
     analysis.design_criteria = request.design_criteria
     analysis.strategy_context = request.strategy_text
@@ -202,16 +211,25 @@ async def analyze_with_documents(
     # Run analysis
     service = AIAnalysisService(api_key=claude_service.api_key)
 
+    # Get existing work activities analysis to inform archetype recommendations
+    existing_work_activities = None
+    if analysis.ai_analysis and "work_activities_analysis" in analysis.ai_analysis:
+        existing_work_activities = analysis.ai_analysis["work_activities_analysis"]
+
     ai_result = await service.analyze_organization(
         metrics=metrics,
         employees=employees,
         strategy_documents=doc_contents if doc_contents else None,
         design_criteria=design_criteria,
         analysis_scope=analysis_scope,
-        department=department
+        department=department,
+        work_activities_analysis=existing_work_activities
     )
 
-    # Store results
+    # Store results - preserve existing work_activities_analysis
+    if analysis.ai_analysis and "work_activities_analysis" in analysis.ai_analysis:
+        ai_result["work_activities_analysis"] = analysis.ai_analysis["work_activities_analysis"]
+
     analysis.ai_analysis = ai_result
     analysis.design_criteria = design_criteria
     if doc_contents:

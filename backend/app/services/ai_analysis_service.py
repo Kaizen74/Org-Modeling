@@ -39,7 +39,8 @@ class AIAnalysisService:
         strategy_documents: Optional[List[str]] = None,
         design_criteria: Optional[str] = None,
         analysis_scope: str = "organization",
-        department: Optional[str] = None
+        department: Optional[str] = None,
+        work_activities_analysis: Optional[Dict] = None
     ) -> Dict:
         """
         Perform comprehensive AI analysis with structured categorization.
@@ -51,6 +52,7 @@ class AIAnalysisService:
             design_criteria: Optional text describing design criteria
             analysis_scope: "organization" for full org, "department" for dept-level
             department: Department name when analysis_scope is "department"
+            work_activities_analysis: Optional prior work activities analysis results
 
         Returns structured insights across 4 categories:
         - Industry trends & benchmarks
@@ -66,7 +68,7 @@ class AIAnalysisService:
 
         prompt = self._build_prompt(
             metrics, employees, strategy_documents, design_criteria,
-            analysis_scope, department
+            analysis_scope, department, work_activities_analysis
         )
 
         try:
@@ -86,6 +88,98 @@ class AIAnalysisService:
                 "error": str(e),
                 "message": "Failed to get AI analysis"
             }
+
+    def _format_work_activities_context(self, work_activities_analysis: Optional[Dict]) -> str:
+        """Format work activities analysis for inclusion in archetype prompt."""
+        if not work_activities_analysis:
+            return ""
+
+        sections = []
+        sections.append("**CURRENT STATE ANALYSIS (FROM WORK ACTIVITIES):**")
+        sections.append("USE FOR: Archetype Recommendations - Use these insights about current work activities, departmental coherence, duplications, gaps, and coordination issues to inform your archetype recommendations.")
+        sections.append("")
+
+        # Executive summary
+        if work_activities_analysis.get("executive_summary"):
+            sections.append(f"**Summary:** {work_activities_analysis['executive_summary']}")
+            sections.append("")
+
+        # Departmental coherence
+        if work_activities_analysis.get("departmental_coherence"):
+            sections.append("**Departmental Work Activities:**")
+            for dept in work_activities_analysis["departmental_coherence"][:5]:  # Limit to top 5
+                dept_name = dept.get("department", "Unknown")
+                coherence_score = dept.get("coherence_score", 0)
+                key_activities = dept.get("key_activities", [])
+                coherence_rationale = dept.get("coherence_rationale", "")
+
+                sections.append(f"- **{dept_name}** (Coherence: {coherence_score}/100)")
+                if key_activities:
+                    sections.append(f"  Key Activities: {', '.join(key_activities[:5])}")
+                if coherence_rationale:
+                    sections.append(f"  Assessment: {coherence_rationale[:200]}")
+
+                # Include synergy assessment if available
+                synergy = dept.get("synergy_assessment", {})
+                if synergy.get("gaps"):
+                    sections.append(f"  Gaps: {', '.join(synergy['gaps'][:3])}")
+                if synergy.get("overlaps"):
+                    sections.append(f"  Overlaps: {', '.join(synergy['overlaps'][:3])}")
+            sections.append("")
+
+        # Activity duplication issues
+        if work_activities_analysis.get("activity_duplication"):
+            dup = work_activities_analysis["activity_duplication"]
+            if dup.get("duplications"):
+                sections.append(f"**Activity Duplication Issues (Severity: {dup.get('severity_assessment', 'Unknown')}):**")
+                for d in dup["duplications"][:5]:
+                    sections.append(f"- {d.get('activity', 'Unknown')}: Affects {', '.join(d.get('affected_roles', [])[:3])}")
+                    sections.append(f"  Impact: {d.get('business_impact', '')[:150]}")
+                sections.append("")
+
+        # Missing activities
+        if work_activities_analysis.get("missing_activities"):
+            missing = work_activities_analysis["missing_activities"]
+            if missing.get("gaps"):
+                sections.append(f"**Missing Activities (Gap Score: {missing.get('overall_gap_score', 0)}/100):**")
+                for gap in missing["gaps"][:5]:
+                    sections.append(f"- {gap.get('activity', 'Unknown')}: {gap.get('business_risk', '')[:100]}")
+                sections.append("")
+
+        # Coordination gaps
+        if work_activities_analysis.get("coordination_gaps"):
+            coord = work_activities_analysis["coordination_gaps"]
+            if coord.get("gaps"):
+                sections.append(f"**Coordination Gaps (Score: {coord.get('overall_coordination_score', 0)}/100):**")
+                for gap in coord["gaps"][:5]:
+                    sections.append(f"- {gap.get('handoff_point', 'Unknown')}: {gap.get('from_department', '')} -> {gap.get('to_department', '')}")
+                    sections.append(f"  Issue: {gap.get('gap_type', '')} | Recommended: {gap.get('recommended_interface', '')[:100]}")
+                sections.append("")
+
+        # Work themes
+        if work_activities_analysis.get("work_themes"):
+            themes = work_activities_analysis["work_themes"]
+            if themes.get("primary_themes"):
+                sections.append("**Primary Work Themes:**")
+                for theme in themes["primary_themes"][:5]:
+                    sections.append(f"- {theme.get('theme', 'Unknown')}: {theme.get('description', '')[:100]}")
+                    sections.append(f"  Strategic Importance: {theme.get('strategic_importance', 'Unknown')}")
+                sections.append("")
+
+        # Industry comparison unique strengths
+        if work_activities_analysis.get("industry_comparison"):
+            ind = work_activities_analysis["industry_comparison"]
+            activity_mix = ind.get("activity_mix_assessment", {})
+            if activity_mix.get("unique_strengths"):
+                sections.append("**Unique Organizational Strengths:**")
+                for strength in activity_mix["unique_strengths"][:5]:
+                    sections.append(f"- {strength}")
+                sections.append("")
+
+        if len(sections) <= 3:
+            return ""  # No meaningful data to include
+
+        return "\n".join(sections)
 
     def _build_archetype_reference(self, analysis_scope: str, department: Optional[str]) -> str:
         """Build archetype reference section for the prompt."""
@@ -137,7 +231,8 @@ class AIAnalysisService:
         strategy_docs: Optional[List[str]],
         design_criteria: Optional[str],
         analysis_scope: str = "organization",
-        department: Optional[str] = None
+        department: Optional[str] = None,
+        work_activities_analysis: Optional[Dict] = None
     ) -> str:
         """Build the comprehensive analysis prompt."""
 
@@ -184,6 +279,8 @@ class AIAnalysisService:
 {"**ORGANIZATION DESIGN CRITERIA (USER-SPECIFIED):**" if design_criteria else ""}
 {"USE FOR: Archetype Recommendations (Category 4) - Recommend org structures that best achieve these design criteria." if design_criteria else ""}
 {design_criteria if design_criteria else "No specific design criteria provided."}
+
+{self._format_work_activities_context(work_activities_analysis)}
 
 **YOUR ANALYSIS MUST BE STRUCTURED IN 4 CATEGORIES:**
 
