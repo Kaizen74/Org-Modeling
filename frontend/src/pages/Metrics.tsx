@@ -480,13 +480,26 @@ export default function Metrics() {
                                     Affects: {dup.affected_roles?.slice(0, 3).join(', ')}{dup.affected_roles?.length > 3 ? '...' : ''}
                                   </p>
                                 </div>
-                                <span className={`text-xs px-2 py-1 rounded ${
-                                  dup.severity === 'High' ? 'bg-red-100 text-red-700' :
-                                  dup.severity === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
-                                }`}>
-                                  {dup.severity}
-                                </span>
+                                <div className="flex flex-col items-end gap-1">
+                                  <span className={`text-xs px-2 py-1 rounded ${
+                                    dup.severity === 'High' ? 'bg-red-100 text-red-700' :
+                                    dup.severity === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+                                  }`}>
+                                    {dup.severity}
+                                  </span>
+                                  {dup.confidence && (
+                                    <span
+                                      className="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-600"
+                                      title={dup.confidence_rationale || ''}
+                                    >
+                                      Confidence: {dup.confidence}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
+                              {dup.evidence && (
+                                <p className="text-xs text-gray-500 mt-2">Evidence: {dup.evidence}</p>
+                              )}
                               {dup.business_impact && (
                                 <p className="text-xs text-gray-600 mt-2 italic">Impact: {dup.business_impact}</p>
                               )}

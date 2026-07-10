@@ -121,6 +121,13 @@ class WorkActivitiesAnalysisService:
 **POSITIONS BY DEPARTMENT:**
 {department_data}
 
+**EVIDENCE DISCIPLINE (MANDATORY):**
+1. Facts, interpretation, and recommendation are separate registers. Quote actual work-activity text as evidence; label your reading of it as interpretation.
+2. Classify evidence: OBSERVABLE (verbatim from the uploaded work activities/job titles) vs MODEL-INFERRED (your industry knowledge). Industry benchmarks are MODEL-INFERRED — never present them as facts about this organization.
+3. Every duplication, gap, and coordination finding carries a confidence level (High/Medium/Low) with one-line justification. Findings resting only on MODEL-INFERRED evidence are capped at Medium.
+4. Do not inflate one phrase match into a duplication pattern; quote the overlapping activity text from each affected role.
+5. Populate data_gaps honestly: what this text-based analysis cannot verify, and the observable indicator that would verify it (e.g., time allocation data, RACI records, handoff logs).
+
 **YOUR ANALYSIS MUST COVER 6 KEY AREAS:**
 
 ## 1. ACTIVITY DUPLICATION ANALYSIS (CRITICAL)
@@ -187,7 +194,10 @@ Prioritized, actionable recommendations addressing:
         "severity": "High/Medium/Low",
         "business_impact": "Description of negative impact",
         "resolution_priority": 1,
-        "recommended_action": "How to resolve this duplication"
+        "recommended_action": "How to resolve this duplication",
+        "evidence": "Quoted overlapping activity text from each affected role",
+        "confidence": "High/Medium/Low",
+        "confidence_rationale": "One-line justification"
       }}
     ],
     "summary": "Overall assessment of duplication issues"
@@ -199,12 +209,14 @@ Prioritized, actionable recommendations addressing:
     "gaps": [
       {{
         "activity": "Description of missing activity",
-        "industry_benchmark": "What similar orgs typically do",
+        "industry_benchmark": "What similar orgs typically do (MODEL-INFERRED — say so)",
         "affected_roles": ["Role that should have this"],
         "affected_departments": ["Dept"],
         "severity": "Critical/Important/Nice-to-have",
         "business_risk": "Risk of not having this activity",
-        "recommendation": "How to address this gap"
+        "recommendation": "How to address this gap",
+        "confidence": "High/Medium/Low",
+        "confidence_rationale": "One-line justification (capped at Medium if purely model-inferred)"
       }}
     ],
     "summary": "Overall assessment of activity gaps vs industry"
@@ -224,7 +236,9 @@ Prioritized, actionable recommendations addressing:
         "gap_type": "Missing Handoff/Unclear Ownership/No Feedback Loop/Timing Issues",
         "severity": "Critical/Important/Minor",
         "industry_practice": "How leading orgs handle this",
-        "recommended_interface": "What coordination mechanism to add"
+        "recommended_interface": "What coordination mechanism to add",
+        "confidence": "High/Medium/Low",
+        "confidence_rationale": "One-line justification"
       }}
     ],
     "summary": "Overall assessment of coordination effectiveness"
@@ -312,7 +326,15 @@ Prioritized, actionable recommendations addressing:
     "quick_wins": ["quick win 1", "quick win 2"]
   }},
 
-  "executive_summary": "2-3 paragraph summary focusing on duplication, gaps, and coordination issues"
+  "executive_summary": "2-3 paragraph summary focusing on duplication, gaps, and coordination issues",
+
+  "data_gaps": [
+    {{
+      "gap": "What this text-based analysis cannot verify",
+      "why_it_matters": "Which finding this limits",
+      "observable_indicator_to_close": "Measurable data that would verify it (e.g., time allocation, RACI records, handoff logs)"
+    }}
+  ]
 }}
 ```
 

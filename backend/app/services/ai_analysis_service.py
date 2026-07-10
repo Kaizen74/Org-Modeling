@@ -21,6 +21,7 @@ from ..resources.archetypes_reference import (
     get_all_archetypes_summary,
     get_department_recommendation
 )
+from ..resources.benchmarks_reference import get_benchmarks_prompt_section
 
 
 class AIAnalysisService:
@@ -282,16 +283,28 @@ class AIAnalysisService:
 
 {self._format_work_activities_context(work_activities_analysis)}
 
+{get_benchmarks_prompt_section()}
+
+**EVIDENCE DISCIPLINE (MANDATORY — applies to every finding in every category):**
+1. Facts, interpretation, and recommendation are separate registers — never blend them. A metric value is a fact; "this suggests over-management" is interpretation; "consolidate teams" is a recommendation.
+2. Classify the evidence behind every finding:
+   - OBSERVABLE: countable/verifiable from the uploaded data (spans, layers, costs, ratios, work activity text)
+   - PERCEPTUAL: from user-supplied strategy documents or design criteria (self-reported intent)
+   - MODEL-INFERRED: from your general knowledge (industry patterns, benchmarks) — never present as evidence from the data
+3. Every pathology, risk, and archetype recommendation carries a confidence level (High/Medium/Low) with a one-line justification. Findings supported only by MODEL-INFERRED evidence are capped at Medium confidence.
+4. Pathologies must state disconfirming evidence: if the pattern only half-fits the data, say which half does not fit. Never inflate a single signal into a named pathology.
+5. Cite benchmark figures ONLY from the research-calibrated benchmarks provided above, with their sources. Do not invent numbers.
+6. Populate the data_gaps section honestly: what the uploaded data cannot tell you, and the specific observable indicator that would close each gap.
+
 **YOUR ANALYSIS MUST BE STRUCTURED IN 4 CATEGORIES:**
 
 ## 1. INDUSTRY TRENDS & BENCHMARKS
-Based on current research and best practices:
-- Optimal span of control for this org size/type
-- Manager ratio benchmarks
-- Cost per employee norms for similar organizations
-- Emerging org design trends relevant to this structure
+Using ONLY the research-calibrated benchmarks provided above (cite their sources):
+- Compare this org's spans against the McKinsey managerial-archetype span targets, not one generic number
+- Compare manager ratio and layers against the sourced ranges
+- Apply the 2026 org design trends (skills-based organization, human-AI work redesign, manager role redefinition) where the data makes them relevant
 
-Provide 3-5 insights with context.
+Provide 3-5 insights with context. Each insight's "source" field must name the actual research source from the benchmarks provided.
 
 ## 2. ORG STRUCTURE HEALTH DIAGNOSIS
 Evaluate against established frameworks:
@@ -407,10 +420,15 @@ Score each archetype (0-100) based on these weighted criteria:
     "weaknesses": ["weakness 1", "weakness 2"],
     "pathologies": [
       {{
-        "name": "Pathology name",
+        "name": "Pathology name (from established frameworks, e.g., Frozen Middle, Collaborative Overload)",
         "description": "What it means",
         "impact": "Business impact",
-        "severity": "High/Medium/Low"
+        "severity": "High/Medium/Low",
+        "evidence_class": "OBSERVABLE/PERCEPTUAL/MODEL-INFERRED",
+        "supporting_evidence": "The specific data points that fit this pattern (cite actual metrics)",
+        "disconfirming_evidence": "What in the data does NOT fit this pattern, or 'None identified'",
+        "confidence": "High/Medium/Low",
+        "confidence_rationale": "One-line justification for the confidence level"
       }}
     ],
     "critical_risks": ["risk 1", "risk 2"]
@@ -526,7 +544,15 @@ Score each archetype (0-100) based on these weighted criteria:
     "phase_1_quick_wins": ["action 1", "action 2"],
     "phase_2_structural": ["action 1", "action 2"],
     "phase_3_optimization": ["action 1", "action 2"]
-  }}
+  }},
+
+  "data_gaps": [
+    {{
+      "gap": "What the uploaded data cannot tell us",
+      "why_it_matters": "Which finding or recommendation this limits",
+      "observable_indicator_to_close": "The specific measurable data that would close this gap (e.g., escalation logs, decision cycle times, attrition by layer)"
+    }}
+  ]
 }}
 ```
 

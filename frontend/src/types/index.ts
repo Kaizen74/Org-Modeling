@@ -81,6 +81,15 @@ export type KeyGap = string | {
   structural_impact?: string;
 };
 
+// Evidence discipline types (facts vs interpretation, provenance, confidence)
+export type EvidenceClass = 'OBSERVABLE' | 'PERCEPTUAL' | 'MODEL-INFERRED';
+
+export interface DataGap {
+  gap: string;
+  why_it_matters?: string;
+  observable_indicator_to_close?: string;
+}
+
 // Practical example for archetype
 export interface PracticalExample {
   company_or_scenario: string;
@@ -207,6 +216,11 @@ export interface AIAnalysisResult {
       description: string;
       impact: string;
       severity: string;
+      evidence_class?: EvidenceClass;
+      supporting_evidence?: string;
+      disconfirming_evidence?: string;
+      confidence?: string;
+      confidence_rationale?: string;
     }>;
     critical_risks: string[];
   };
@@ -229,6 +243,7 @@ export interface AIAnalysisResult {
     phase_2_structural: string[];
     phase_3_optimization: string[];
   };
+  data_gaps?: DataGap[];
   error?: string;
   raw_response?: string;
 }
@@ -259,6 +274,9 @@ export interface ActivityDuplication {
   business_impact: string;
   resolution_priority: number;
   recommended_action: string;
+  evidence?: string;
+  confidence?: string;
+  confidence_rationale?: string;
 }
 
 export interface ActivityDuplicationAnalysis {
@@ -277,6 +295,8 @@ export interface MissingActivity {
   severity: string;
   business_risk: string;
   recommendation: string;
+  confidence?: string;
+  confidence_rationale?: string;
 }
 
 export interface MissingActivitiesAnalysis {
@@ -298,6 +318,8 @@ export interface CoordinationGap {
   severity: string;
   industry_practice: string;
   recommended_interface: string;
+  confidence?: string;
+  confidence_rationale?: string;
 }
 
 export interface CoordinationGapsAnalysis {
@@ -415,6 +437,7 @@ export interface WorkActivitiesAnalysis {
     quick_wins?: string[];
   };
   executive_summary?: string;
+  data_gaps?: DataGap[];
   error?: string;
   message?: string;
   _json_repaired?: boolean;

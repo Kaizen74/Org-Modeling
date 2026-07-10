@@ -104,7 +104,10 @@ def test_pax_metrics_accuracy(sample_csv_path, sample_grade_order):
     )
     metrics = calculator.calculate_all_metrics()
 
-    # Validate against expected
+    # Validate against expected — total cost derived from the fixture so the
+    # assertion can't go stale if fixture salaries change
+    import pandas as pd
+    expected_salary = pd.read_csv(sample_csv_path)["Salary"].sum()
     assert metrics["total_employees"] == 64
-    assert metrics["cost_analysis"]["total_cost"] == 5770000
+    assert metrics["cost_analysis"]["total_cost"] == expected_salary
     assert metrics["layer_analysis"]["total_layers"] == 6

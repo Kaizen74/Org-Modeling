@@ -25,8 +25,11 @@ def test_parse_pax_csv(sample_csv_path):
     manager_count = result["metadata"]["manager_count"]
     assert manager_count > 0, "Should have managers"
 
-    # Should have correct total salary
-    assert result["metadata"]["total_salary_cost"] == 5770000, f"Got ${result['metadata']['total_salary_cost']}"
+    # Total salary must equal the sum of the Salary column in the fixture,
+    # derived from the file so the assertion can't go stale if salaries change
+    import pandas as pd
+    expected_salary = pd.read_csv(sample_csv_path)["Salary"].sum()
+    assert result["metadata"]["total_salary_cost"] == expected_salary, f"Got ${result['metadata']['total_salary_cost']}, expected ${expected_salary}"
 
     # Should have 6 layers
     assert result["metadata"]["organizational_layers"] == 6

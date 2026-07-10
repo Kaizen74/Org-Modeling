@@ -21,6 +21,7 @@ export default function AIAnalysis() {
     alignment: true,
     archetypes: true,
     actions: true,
+    dataGaps: true,
   });
 
   useEffect(() => {
@@ -320,16 +321,44 @@ export default function AIAnalysis() {
                         p.severity === 'High' ? 'bg-red-50' :
                         p.severity === 'Medium' ? 'bg-yellow-50' : 'bg-gray-50'
                       }`}>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium">{p.name}</span>
                           <span className={`text-xs px-2 py-0.5 rounded ${
                             p.severity === 'High' ? 'bg-red-200 text-red-800' :
                             p.severity === 'Medium' ? 'bg-yellow-200 text-yellow-800' :
                             'bg-gray-200 text-gray-800'
                           }`}>{p.severity}</span>
+                          {p.confidence && (
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded border ${
+                                p.confidence === 'High' ? 'border-green-400 text-green-700' :
+                                p.confidence === 'Medium' ? 'border-yellow-400 text-yellow-700' :
+                                'border-gray-400 text-gray-600'
+                              }`}
+                              title={p.confidence_rationale || ''}
+                            >
+                              Confidence: {p.confidence}
+                            </span>
+                          )}
+                          {p.evidence_class && (
+                            <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-300">
+                              {p.evidence_class === 'OBSERVABLE' ? 'Observable data' :
+                               p.evidence_class === 'PERCEPTUAL' ? 'Self-reported' : 'Inferred from research'}
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-gray-600 mt-1">{p.description}</p>
                         <p className="text-xs text-gray-500 mt-1">Impact: {p.impact}</p>
+                        {p.supporting_evidence && (
+                          <p className="text-xs text-gray-600 mt-2">
+                            <span className="font-medium">Evidence:</span> {p.supporting_evidence}
+                          </p>
+                        )}
+                        {p.disconfirming_evidence && p.disconfirming_evidence !== 'None identified' && (
+                          <p className="text-xs text-blue-700 mt-1">
+                            <span className="font-medium">Does not fully fit:</span> {p.disconfirming_evidence}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -698,6 +727,34 @@ export default function AIAnalysis() {
                     ))}
                   </ul>
                 </div>
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* Data Gaps - what the analysis can't verify from uploaded data */}
+          {analysis.data_gaps && analysis.data_gaps.length > 0 && (
+            <CollapsibleSection
+              title="What the Data Can't Tell Us"
+              isOpen={expandedSections.dataGaps}
+              onToggle={() => toggleSection('dataGaps')}
+            >
+              <p className="text-sm text-gray-500 mb-3">
+                Findings above are limited by the data available. Closing these gaps would raise the confidence of the analysis.
+              </p>
+              <div className="space-y-3">
+                {analysis.data_gaps.map((gap, i) => (
+                  <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <p className="font-medium text-slate-700 text-sm">{gap.gap}</p>
+                    {gap.why_it_matters && (
+                      <p className="text-xs text-slate-500 mt-1">Why it matters: {gap.why_it_matters}</p>
+                    )}
+                    {gap.observable_indicator_to_close && (
+                      <p className="text-xs text-slate-600 mt-1">
+                        <span className="font-medium">Data that would close this gap:</span> {gap.observable_indicator_to_close}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             </CollapsibleSection>
           )}
