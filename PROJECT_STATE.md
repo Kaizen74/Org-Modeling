@@ -1,11 +1,11 @@
 # Project State
-*Last updated: 2026-07-10 — update after EVERY increment*
+*Last updated: 2026-07-10 (afternoon) — update after EVERY increment*
 
 ## What this project is
 An Organizational Design Analyzer: upload an org-structure CSV, get metrics (spans, layers, costs, health), AI-powered current-state analysis of work activities (duplication, missing activities, coordination gaps), and AI archetype recommendations (7-archetype framework) with visual structure diagrams — all in a web app (FastAPI backend + React frontend).
 
 ## Current status
-All 23 backend tests pass; frontend builds clean. Evidence-grade analysis discipline (confidence, provenance, disconfirming evidence, data gaps) and research-cited benchmarks are wired into both AI analyses and displayed in the UI.
+All 29 backend tests pass; frontend builds clean; branch pushed to GitHub. Evidence-grade analysis discipline (confidence, provenance, disconfirming evidence, data gaps) and research-cited benchmarks are wired into both AI analyses, displayed in the UI, and covered by mock regression tests.
 
 ## This session (2026-07-10)
 - [x] Fixed 2 stale test assertions (fixture salary total) — root-caused: fixture data changed, tests hard-coded old total; now derived from fixture
@@ -13,6 +13,8 @@ All 23 backend tests pass; frontend builds clean. Evidence-grade analysis discip
 - [x] Added evidence discipline to both AI prompts: OBSERVABLE/PERCEPTUAL/MODEL-INFERRED tagging, confidence + rationale, disconfirming evidence on pathologies, data_gaps section
 - [x] Frontend aligned: new types + confidence/evidence badges on pathologies and duplications, "What the Data Can't Tell Us" section
 - [x] Created run_checks.sh, PROJECT_STATE.md, DECISIONS.md, GUIDE.md, API_CONTRACT.md
+- [x] Pushed to origin (earlier push blocker was a transient environment gap — git proxy restored)
+- [x] Added backend/tests/test_ai_pipeline_mock.py — 6 no-network regression tests covering prompt markers, evidence-field parse round-trip, truncation repair, and the preserve-work-activities rule
 
 ## Done (all sessions)
 - 2024-12: Core app — CSV parser, metrics engine, dashboard, org chart, grades config, Claude API settings
