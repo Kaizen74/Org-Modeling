@@ -1,0 +1,65 @@
+Name,Job Title,Grade,Department,Level,Line Manager,Salary,Employee ID
+Vincent Chan,"SVP, Passenger Services",SVP,Passenger Services,1,Top of Org,350000,E001
+Daniel Boy,"VP, SQ Group",H8,Passenger Services,2,Vincent Chan,250000,E002
+Mohd Fairoz,"VP, Operations",H8,Passenger Services,2,Vincent Chan,250000,E003
+Sarah Lim,"VP, Customer Experience",H8,Passenger Services,2,Vincent Chan,250000,E004
+James Wong,"Senior Manager, Planning",H6,Passenger Services,3,Daniel Boy,180000,E005
+Michelle Tan,"Senior Manager, Quality",H6,Passenger Services,3,Daniel Boy,180000,E006
+Ahmad Hassan,"Senior Manager, Ground Ops",H6,Passenger Services,3,Mohd Fairoz,180000,E007
+David Lee,"Senior Manager, Ramp",H6,Passenger Services,3,Mohd Fairoz,180000,E008
+Karen Ng,"Senior Manager, CX Strategy",H6,Passenger Services,3,Sarah Lim,180000,E009
+Peter Tan,"Senior Manager, Service",H6,Passenger Services,3,Sarah Lim,180000,E010
+Rachel Goh,"Manager, Planning",H5,Passenger Services,4,James Wong,130000,E011
+Michael Chua,"Manager, Analytics",H5,Passenger Services,4,James Wong,130000,E012
+Jennifer Loh,"Manager, Quality Assurance",H5,Passenger Services,4,Michelle Tan,130000,E013
+Kevin Teo,"Manager, Training",H5,Passenger Services,4,Michelle Tan,130000,E014
+Aminah Binte Ahmad,"Manager, Ground Services",H5,Passenger Services,4,Ahmad Hassan,130000,E015
+Ismail Bin Omar,"Manager, Equipment",H5,Passenger Services,4,Ahmad Hassan,130000,E016
+Susan Ho,"Manager, Ramp Ops",H5,Passenger Services,4,David Lee,130000,E017
+Tony Koh,"Manager, Safety",H5,Passenger Services,4,David Lee,130000,E018
+Linda Foo,"Manager, CX Programs",H5,Passenger Services,4,Karen Ng,130000,E019
+Steven Yeo,"Manager, Digital CX",H5,Passenger Services,4,Karen Ng,130000,E020
+Grace Sim,"Manager, Premium Services",H5,Passenger Services,4,Peter Tan,130000,E021
+Henry Ong,"Manager, Lounge Ops",H5,Passenger Services,4,Peter Tan,130000,E022
+Team Lead 1,SQ Planning Lead,TL,Passenger Services,5,Rachel Goh,90000,E023
+Team Lead 2,SQ Analytics Lead,TL,Passenger Services,5,Michael Chua,90000,E024
+Team Lead 3,SQ QA Lead,TL,Passenger Services,5,Jennifer Loh,90000,E025
+Team Lead 4,SQ Training Lead,TL,Passenger Services,5,Kevin Teo,90000,E026
+Team Lead 5,Ground Services Lead,TL,Passenger Services,5,Aminah Binte Ahmad,90000,E027
+Team Lead 6,Equipment Lead,TL,Passenger Services,5,Ismail Bin Omar,90000,E028
+Team Lead 7,Ramp Ops Lead,TL,Passenger Services,5,Susan Ho,90000,E029
+Team Lead 8,Safety Lead,TL,Passenger Services,5,Tony Koh,90000,E030
+Team Lead 9,CX Programs Lead,TL,Passenger Services,5,Linda Foo,90000,E031
+Team Lead 10,Digital CX Lead,TL,Passenger Services,5,Steven Yeo,90000,E032
+Team Lead 11,Premium Services Lead,TL,Passenger Services,5,Grace Sim,90000,E033
+Team Lead 12,Lounge Ops Lead,TL,Passenger Services,5,Henry Ong,90000,E034
+AO1,SQ Planning Associate,AO,Passenger Services,6,Team Lead 1,60000,E035
+AO2,SQ Planning Associate,AO,Passenger Services,6,Team Lead 1,60000,E036
+AO3,SQ Analytics Associate,AO,Passenger Services,6,Team Lead 2,60000,E037
+AO4,SQ Analytics Associate,AO,Passenger Services,6,Team Lead 2,60000,E038
+AO5,SQ QA Associate,AO,Passenger Services,6,Team Lead 3,60000,E039
+AO6,SQ QA Associate,AO,Passenger Services,6,Team Lead 3,60000,E040
+AO7,SQ Training Associate,AO,Passenger Services,6,Team Lead 4,60000,E041
+AO8,SQ Training Associate,AO,Passenger Services,6,Team Lead 4,60000,E042
+AO9,Ground Services Associate,AO,Passenger Services,6,Team Lead 5,60000,E043
+AO10,Ground Services Associate,AO,Passenger Services,6,Team Lead 5,60000,E044
+AO11,Equipment Associate,AO,Passenger Services,6,Team Lead 6,60000,E045
+AO12,Equipment Associate,AO,Passenger Services,6,Team Lead 6,60000,E046
+AO13,Ramp Ops Associate,AO,Passenger Services,6,Team Lead 7,60000,E047
+AO14,Ramp Ops Associate,AO,Passenger Services,6,Team Lead 7,60000,E048
+AO15,Safety Associate,AO,Passenger Services,6,Team Lead 8,60000,E049
+AO16,Safety Associate,AO,Passenger Services,6,Team Lead 8,60000,E050
+AO17,CX Programs Associate,AO,Passenger Services,6,Team Lead 9,60000,E051
+AO18,CX Programs Associate,AO,Passenger Services,6,Team Lead 9,60000,E052
+AO19,Digital CX Associate,AO,Passenger Services,6,Team Lead 10,60000,E053
+AO20,Digital CX Associate,AO,Passenger Services,6,Team Lead 10,60000,E054
+AO21,Premium Services Associate,AO,Passenger Services,6,Team Lead 11,60000,E055
+AO22,Premium Services Associate,AO,Passenger Services,6,Team Lead 11,60000,E056
+AO23,Lounge Ops Associate,AO,Passenger Services,6,Team Lead 12,60000,E057
+AO24,Lounge Ops Associate,AO,Passenger Services,6,Team Lead 12,60000,E058
+AO25,Lounge Ops Associate,AO,Passenger Services,6,Team Lead 12,60000,E059
+AO26,Lounge Ops Associate,AO,Passenger Services,6,Team Lead 12,60000,E060
+AO27,Premium Services Associate,AO,Passenger Services,6,Team Lead 11,60000,E061
+AO28,Premium Services Associate,AO,Passenger Services,6,Team Lead 11,60000,E062
+AO29,Digital CX Associate,AO,Passenger Services,6,Team Lead 10,60000,E063
+AO30,CX Programs Associate,AO,Passenger Services,6,Team Lead 9,60000,E064

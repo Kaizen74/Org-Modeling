@@ -1,0 +1,739 @@
+"""
+AI Analysis Service with Structured Categories.
+
+Provides AI-powered org analysis with structured output categories:
+1. Industry Trends
+2. Org Structure Health Diagnosis
+3. Strategy Alignment Score
+4. Recommended Archetypes (7-archetype framework)
+"""
+
+from anthropic import Anthropic
+from typing import List, Dict, Optional
+import json
+import os
+import re
+
+from ..resources.archetypes_reference import (
+    ARCHETYPES,
+    SCORING_WEIGHTS,
+    DEPARTMENT_ARCHETYPES,
+    get_all_archetypes_summary,
+    get_department_recommendation
+)
+from ..resources.benchmarks_reference import get_benchmarks_prompt_section
+
+
+class AIAnalysisService:
+    """
+    AI-powered org analysis with structured output categories.
+    """
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        self.client = Anthropic(api_key=self.api_key) if self.api_key else None
+
+    async def analyze_organization(
+        self,
+        metrics: Dict,
+        employees: List[Dict],
+        strategy_documents: Optional[List[str]] = None,
+        design_criteria: Optional[str] = None,
+        analysis_scope: str = "organization",
+        department: Optional[str] = None,
+        work_activities_analysis: Optional[Dict] = None
+    ) -> Dict:
+        """
+        Perform comprehensive AI analysis with structured categorization.
+
+        Args:
+            metrics: Organization metrics dict
+            employees: List of employee dicts
+            strategy_documents: Optional list of strategy document contents
+            design_criteria: Optional text describing design criteria
+            analysis_scope: "organization" for full org, "department" for dept-level
+            department: Department name when analysis_scope is "department"
+            work_activities_analysis: Optional prior work activities analysis results
+
+        Returns structured insights across 4 categories:
+        - Industry trends & benchmarks
+        - Health diagnosis
+        - Strategy alignment scoring
+        - Recommended archetypes (all 7 evaluated and scored)
+        """
+        if not self.client:
+            return {
+                "error": "Claude API not configured",
+                "message": "Please configure your API key in Settings"
+            }
+
+        prompt = self._build_prompt(
+            metrics, employees, strategy_documents, design_criteria,
+            analysis_scope, department, work_activities_analysis
+        )
+
+        try:
+            response = self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=16000,
+                temperature=0.3,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            # Parse structured response
+            result = self._parse_structured_response(response)
+            return result
+
+        except Exception as e:
+            return {
+                "error": str(e),
+                "message": "Failed to get AI analysis"
+            }
+
+    def _format_work_activities_context(self, work_activities_analysis: Optional[Dict]) -> str:
+        """Format work activities analysis for inclusion in archetype prompt."""
+        if not work_activities_analysis:
+            return ""
+
+        sections = []
+        sections.append("**CURRENT STATE ANALYSIS (FROM WORK ACTIVITIES):**")
+        sections.append("USE FOR: Archetype Recommendations - Use these insights about current work activities, departmental coherence, duplications, gaps, and coordination issues to inform your archetype recommendations.")
+        sections.append("")
+
+        # Executive summary
+        if work_activities_analysis.get("executive_summary"):
+            sections.append(f"**Summary:** {work_activities_analysis['executive_summary']}")
+            sections.append("")
+
+        # Departmental coherence
+        if work_activities_analysis.get("departmental_coherence"):
+            sections.append("**Departmental Work Activities:**")
+            for dept in work_activities_analysis["departmental_coherence"][:5]:  # Limit to top 5
+                dept_name = dept.get("department", "Unknown")
+                coherence_score = dept.get("coherence_score", 0)
+                key_activities = dept.get("key_activities", [])
+                coherence_rationale = dept.get("coherence_rationale", "")
+
+                sections.append(f"- **{dept_name}** (Coherence: {coherence_score}/100)")
+                if key_activities:
+                    sections.append(f"  Key Activities: {', '.join(key_activities[:5])}")
+                if coherence_rationale:
+                    sections.append(f"  Assessment: {coherence_rationale[:200]}")
+
+                # Include synergy assessment if available
+                synergy = dept.get("synergy_assessment", {})
+                if synergy.get("gaps"):
+                    sections.append(f"  Gaps: {', '.join(synergy['gaps'][:3])}")
+                if synergy.get("overlaps"):
+                    sections.append(f"  Overlaps: {', '.join(synergy['overlaps'][:3])}")
+            sections.append("")
+
+        # Activity duplication issues
+        if work_activities_analysis.get("activity_duplication"):
+            dup = work_activities_analysis["activity_duplication"]
+            if dup.get("duplications"):
+                sections.append(f"**Activity Duplication Issues (Severity: {dup.get('severity_assessment', 'Unknown')}):**")
+                for d in dup["duplications"][:5]:
+                    sections.append(f"- {d.get('activity', 'Unknown')}: Affects {', '.join(d.get('affected_roles', [])[:3])}")
+                    sections.append(f"  Impact: {d.get('business_impact', '')[:150]}")
+                sections.append("")
+
+        # Missing activities
+        if work_activities_analysis.get("missing_activities"):
+            missing = work_activities_analysis["missing_activities"]
+            if missing.get("gaps"):
+                sections.append(f"**Missing Activities (Gap Score: {missing.get('overall_gap_score', 0)}/100):**")
+                for gap in missing["gaps"][:5]:
+                    sections.append(f"- {gap.get('activity', 'Unknown')}: {gap.get('business_risk', '')[:100]}")
+                sections.append("")
+
+        # Coordination gaps
+        if work_activities_analysis.get("coordination_gaps"):
+            coord = work_activities_analysis["coordination_gaps"]
+            if coord.get("gaps"):
+                sections.append(f"**Coordination Gaps (Score: {coord.get('overall_coordination_score', 0)}/100):**")
+                for gap in coord["gaps"][:5]:
+                    sections.append(f"- {gap.get('handoff_point', 'Unknown')}: {gap.get('from_department', '')} -> {gap.get('to_department', '')}")
+                    sections.append(f"  Issue: {gap.get('gap_type', '')} | Recommended: {gap.get('recommended_interface', '')[:100]}")
+                sections.append("")
+
+        # Work themes
+        if work_activities_analysis.get("work_themes"):
+            themes = work_activities_analysis["work_themes"]
+            if themes.get("primary_themes"):
+                sections.append("**Primary Work Themes:**")
+                for theme in themes["primary_themes"][:5]:
+                    sections.append(f"- {theme.get('theme', 'Unknown')}: {theme.get('description', '')[:100]}")
+                    sections.append(f"  Strategic Importance: {theme.get('strategic_importance', 'Unknown')}")
+                sections.append("")
+
+        # Industry comparison unique strengths
+        if work_activities_analysis.get("industry_comparison"):
+            ind = work_activities_analysis["industry_comparison"]
+            activity_mix = ind.get("activity_mix_assessment", {})
+            if activity_mix.get("unique_strengths"):
+                sections.append("**Unique Organizational Strengths:**")
+                for strength in activity_mix["unique_strengths"][:5]:
+                    sections.append(f"- {strength}")
+                sections.append("")
+
+        if len(sections) <= 3:
+            return ""  # No meaningful data to include
+
+        return "\n".join(sections)
+
+    def _build_archetype_reference(self, analysis_scope: str, department: Optional[str]) -> str:
+        """Build archetype reference section for the prompt."""
+        archetypes_text = []
+
+        for arch_id, arch_data in ARCHETYPES.items():
+            digital_note = " [DIGITAL-FIRST ONLY]" if arch_data.get("digital_first_only") else ""
+
+            archetypes_text.append(f"""
+**{arch_data['name']}{digital_note}**
+- ID: {arch_id}
+- Best For Industries: {', '.join(arch_data['best_for_industries'][:4])}
+- Best For Departments: {', '.join(arch_data['best_for_departments'][:3])}
+- Org Size Sweet Spot: {arch_data['org_size_sweet_spot']}
+- Primary Organizing Principle: {arch_data['primary_organizing_principle']}
+- Value Creation: {arch_data['value_creation']}
+- Revenue Model: {arch_data['revenue_model']}
+- Key Indicators: {', '.join(arch_data['key_indicators'][:3])}
+- Success Metrics: {', '.join(arch_data['success_metrics'][:3])}
+- Typical Layers: {arch_data['typical_layers']}
+- Typical Span: {arch_data['typical_span']}
+- Core Tension: {arch_data['core_tension']}
+- Failure Mode: {arch_data['failure_mode']}
+- Warning Signs: {', '.join(arch_data['warning_signs'][:2])}
+- Example Companies: {', '.join(arch_data.get('example_companies', [])[:3])}
+""")
+
+        dept_guidance = ""
+        if analysis_scope == "department" and department:
+            dept_key = department.lower().replace(" ", "_").replace("/", "_")
+            dept_rec = get_department_recommendation(dept_key)
+            if dept_rec:
+                primary = ARCHETYPES.get(dept_rec.get("primary", ""), {}).get("name", "")
+                alts = [ARCHETYPES.get(a, {}).get("name", "") for a in dept_rec.get("alternatives", [])]
+                avoid = [ARCHETYPES.get(a, {}).get("name", "") for a in dept_rec.get("avoid", [])]
+                dept_guidance = f"""
+**DEPARTMENT-SPECIFIC GUIDANCE FOR {department.upper()}:**
+- Primary Recommended: {primary}
+- Alternative Options: {', '.join(alts)}
+- Archetypes to Avoid: {', '.join(avoid)}
+"""
+
+        return "\n".join(archetypes_text) + dept_guidance
+
+    def _build_prompt(
+        self,
+        metrics: Dict,
+        employees: List[Dict],
+        strategy_docs: Optional[List[str]],
+        design_criteria: Optional[str],
+        analysis_scope: str = "organization",
+        department: Optional[str] = None,
+        work_activities_analysis: Optional[Dict] = None
+    ) -> str:
+        """Build the comprehensive analysis prompt."""
+
+        # Format metrics nicely
+        manager_stats = metrics.get("manager_stats", {})
+        span_stats = metrics.get("span_of_control", {})
+        cost_stats = metrics.get("cost_analysis", {})
+        layer_stats = metrics.get("layer_analysis", {})
+        gap_stats = metrics.get("grade_gap_analysis", {})
+
+        # Build archetype reference
+        archetype_reference = self._build_archetype_reference(analysis_scope, department)
+
+        # Scope context
+        scope_context = ""
+        if analysis_scope == "department" and department:
+            scope_context = f"\n**ANALYSIS SCOPE: DEPARTMENT-LEVEL for {department}**\nFocus your archetype recommendations on what works best for this specific department, not the entire organization.\n"
+        else:
+            scope_context = "\n**ANALYSIS SCOPE: ORGANIZATION-WIDE**\nProvide archetype recommendations for the entire organization structure.\n"
+
+        return f"""You are an expert organizational design consultant with deep expertise in the 7 canonical organizational archetypes. Analyze this organization and provide structured insights.
+{scope_context}
+**ORGANIZATIONAL DATA:**
+- Total Employees: {metrics.get('total_employees', 0)}
+- Managers: {manager_stats.get('total_managers', 0)} ({manager_stats.get('manager_ratio_pct', 0)}%)
+- Individual Contributors: {manager_stats.get('total_ics', 0)} ({manager_stats.get('ic_ratio_pct', 0)}%)
+- Average Span of Control: {span_stats.get('average_span', 0)}
+- Median Span: {span_stats.get('median_span', 0)}
+- Total Cost: ${cost_stats.get('total_cost', 0):,.0f}
+- Average Cost per Employee: ${cost_stats.get('average_cost_per_employee', 0):,.0f}
+- Organizational Layers: {layer_stats.get('total_layers', 0)}
+- Average Grade Gap: {gap_stats.get('average_grade_gap', 0)}
+
+**Span Distribution:**
+{json.dumps(span_stats.get('distribution', {}), indent=2)}
+
+**Distribution Percentages:**
+{json.dumps(span_stats.get('distribution_pct', {}), indent=2)}
+
+{"**STRATEGIC CONTEXT (FROM UPLOADED DOCUMENTS):**" if strategy_docs else ""}
+{"USE FOR: Strategy Alignment Score (Category 3) - Assess how well the org structure supports the strategic objectives below." if strategy_docs else ""}
+{chr(10).join(strategy_docs) if strategy_docs else "No strategic documents provided."}
+
+{"**ORGANIZATION DESIGN CRITERIA (USER-SPECIFIED):**" if design_criteria else ""}
+{"USE FOR: Archetype Recommendations (Category 4) - Recommend org structures that best achieve these design criteria." if design_criteria else ""}
+{design_criteria if design_criteria else "No specific design criteria provided."}
+
+{self._format_work_activities_context(work_activities_analysis)}
+
+{get_benchmarks_prompt_section()}
+
+**EVIDENCE DISCIPLINE (MANDATORY — applies to every finding in every category):**
+1. Facts, interpretation, and recommendation are separate registers — never blend them. A metric value is a fact; "this suggests over-management" is interpretation; "consolidate teams" is a recommendation.
+2. Classify the evidence behind every finding:
+   - OBSERVABLE: countable/verifiable from the uploaded data (spans, layers, costs, ratios, work activity text)
+   - PERCEPTUAL: from user-supplied strategy documents or design criteria (self-reported intent)
+   - MODEL-INFERRED: from your general knowledge (industry patterns, benchmarks) — never present as evidence from the data
+3. Every pathology, risk, and archetype recommendation carries a confidence level (High/Medium/Low) with a one-line justification. Findings supported only by MODEL-INFERRED evidence are capped at Medium confidence.
+4. Pathologies must state disconfirming evidence: if the pattern only half-fits the data, say which half does not fit. Never inflate a single signal into a named pathology.
+5. Cite benchmark figures ONLY from the research-calibrated benchmarks provided above, with their sources. Do not invent numbers.
+6. Populate the data_gaps section honestly: what the uploaded data cannot tell you, and the specific observable indicator that would close each gap.
+
+**YOUR ANALYSIS MUST BE STRUCTURED IN 4 CATEGORIES:**
+
+## 1. INDUSTRY TRENDS & BENCHMARKS
+Using ONLY the research-calibrated benchmarks provided above (cite their sources):
+- Compare this org's spans against the McKinsey managerial-archetype span targets, not one generic number
+- Compare manager ratio and layers against the sourced ranges
+- Apply the 2026 org design trends (skills-based organization, human-AI work redesign, manager role redefinition) where the data makes them relevant
+
+Provide 3-5 insights with context. Each insight's "source" field must name the actual research source from the benchmarks provided.
+
+## 2. ORG STRUCTURE HEALTH DIAGNOSIS
+Evaluate against established frameworks:
+- Kates-Kesler Five Activators
+- McKinsey Managerial Archetypes
+- Spans & Layers best practices
+
+Identify:
+- Strengths (what's working well)
+- Weaknesses (structural issues)
+- Pathologies (Frozen Middle, Collaborative Overload, etc.)
+- Critical risks
+
+## 3. STRATEGY ALIGNMENT SCORE
+**CRITICAL: This section assesses how well the CURRENT org structure aligns with the organization's STRATEGY.**
+**Use ONLY the uploaded strategy documents for this analysis.**
+
+If strategy documents are provided, you MUST:
+- Quote specific strategic objectives, priorities, initiatives, or goals from the documents
+- Assess whether the current org structure (spans, layers, costs, reporting lines) supports or hinders each objective
+
+Score alignment on these dimensions:
+- Strategic clarity (0-100): How well does the current structure support the SPECIFIC strategic objectives mentioned in the strategy documents?
+- Execution readiness (0-100): Does the structure have the capability to deliver on the SPECIFIC initiatives and priorities stated in the strategy?
+- Efficiency score (0-100): Is the cost structure aligned with efficiency/profitability goals mentioned in the strategy?
+- Agility score (0-100): Can the structure adapt to market changes or transformation needs implied by the strategy?
+- OVERALL ALIGNMENT SCORE (0-100): Weighted average
+
+**For each score, you MUST:**
+1. Reference specific text/objectives from the uploaded strategy documents
+2. Explain how the current org metrics (span, layers, costs) support or hinder those specific strategic objectives
+3. Identify specific structural gaps between current org state and strategic requirements
+
+## 4. RECOMMENDED ORGANIZATIONAL ARCHETYPES (7-ARCHETYPE FRAMEWORK)
+**CRITICAL: This section evaluates ALL 7 organizational archetypes and recommends the top 2 best fits.**
+**Use the organization design criteria (user-specified) to guide your recommendations.**
+
+**DIFFERENTIATING WORK ACTIVITIES ANALYSIS:**
+Before scoring archetypes, identify work activities that could provide COMPETITIVE ADVANTAGE:
+- Analyze the organization's work activities to identify those that are UNIQUE or DISTINCTIVE
+- Compare against industry norms to find activities that differentiate this organization
+- Assess which activities directly support the design criteria or strategic objectives
+- Consider which activities are hard for competitors to replicate
+- Rate each differentiating activity's strategic importance (High/Medium/Low)
+
+These differentiating activities should INFORM your archetype recommendations:
+- Recommend archetypes that PROTECT and AMPLIFY these differentiating capabilities
+- Ensure the recommended structure doesn't inadvertently weaken key differentiators
+- Highlight how each archetype recommendation preserves or enhances these activities
+
+**ARCHETYPE SCORING METHODOLOGY:**
+Score each archetype (0-100) based on these weighted criteria:
+- Industry Match (30%): How well does the archetype fit the apparent industry/sector?
+- Size Match (15%): Is the org size within the archetype's sweet spot?
+- Revenue Model Match (20%): Does the business model align with the archetype's value creation logic?
+- Key Indicators Match (25%): Do the org's characteristics match the archetype's key indicators?
+- Metrics Match (10%): Do span, layers, and structure metrics align with the archetype's typical patterns?
+
+**THE 7 ORGANIZATIONAL ARCHETYPES:**
+{archetype_reference}
+
+**EVALUATION REQUIREMENTS:**
+1. Score ALL 7 archetypes using the methodology above
+2. Rank them from highest to lowest fit
+3. Select the TOP 2 archetypes for detailed recommendations
+4. For digital-first archetypes (Platform Ecosystem, Team Topologies), explicitly assess if the organization has sufficient digital DNA
+
+**FOR EACH OF THE TOP 2 RECOMMENDED ARCHETYPES, PROVIDE:**
+1. Archetype Name and ID
+2. Overall Fit Score (0-100) with breakdown by criteria
+3. Why It Fits: Specific evidence from the org data
+4. Design Criteria Addressed: How this archetype achieves the user's stated design criteria
+5. Expected Benefits: Quantified where possible
+6. Implementation Challenges: Specific to this org's current state
+7. Transformation Timeline: Quick (3-6 months), Medium (6-12 months), or Long (12-18 months)
+8. Confidence Level: High/Medium/Low with rationale
+9. Critical Success Factors: Top 3 things for success
+10. Warning Signs to Monitor: From the archetype's failure mode
+11. **Practical Examples**: 1-2 real-world examples:
+    - Well-known companies that successfully use this structure
+    - How they implemented it and what makes it work
+    - Relevance to this organization's situation
+12. **Differentiating Activities**: Identify 2-4 work activities that provide competitive advantage:
+    - Activity name and description
+    - Why it's differentiating (unique, hard to replicate, strategically important)
+    - How this archetype protects/amplifies this capability
+    - Strategic importance rating (High/Medium/Low)
+13. **Structure Diagram**: A visual representation of the archetype showing:
+    - Key organizational units/roles as nodes (5-8 nodes recommended)
+    - How they relate spatially (hierarchical, matrix, network layout)
+    - Connections showing reporting/coordination relationships
+    - Mark nodes that house differentiating activities with is_differentiating: true
+
+**OUTPUT FORMAT (JSON):**
+
+```json
+{{
+  "executive_summary": "2-3 paragraph overview of key findings",
+
+  "category_1_industry_trends": {{
+    "insights": [
+      {{
+        "topic": "Topic name",
+        "finding": "Key finding",
+        "source": "Source/framework",
+        "relevance_to_org": "How this applies"
+      }}
+    ]
+  }},
+
+  "category_2_health_diagnosis": {{
+    "strengths": ["strength 1", "strength 2"],
+    "weaknesses": ["weakness 1", "weakness 2"],
+    "pathologies": [
+      {{
+        "name": "Pathology name (from established frameworks, e.g., Frozen Middle, Collaborative Overload)",
+        "description": "What it means",
+        "impact": "Business impact",
+        "severity": "High/Medium/Low",
+        "evidence_class": "OBSERVABLE/PERCEPTUAL/MODEL-INFERRED",
+        "supporting_evidence": "The specific data points that fit this pattern (cite actual metrics)",
+        "disconfirming_evidence": "What in the data does NOT fit this pattern, or 'None identified'",
+        "confidence": "High/Medium/Low",
+        "confidence_rationale": "One-line justification for the confidence level"
+      }}
+    ],
+    "critical_risks": ["risk 1", "risk 2"]
+  }},
+
+  "category_3_strategy_alignment": {{
+    "strategy_documents_analyzed": "Brief summary of key strategic objectives/themes extracted from uploaded strategy documents",
+    "scores": {{
+      "strategic_clarity": {{"score": 0, "rationale": "explanation referencing specific strategy content", "supporting_evidence": "quote from strategy docs"}},
+      "execution_readiness": {{"score": 0, "rationale": "explanation referencing specific initiatives", "supporting_evidence": "quote from strategy docs"}},
+      "efficiency": {{"score": 0, "rationale": "explanation referencing cost/efficiency goals", "supporting_evidence": "quote from strategy docs"}},
+      "agility": {{"score": 0, "rationale": "explanation referencing adaptability needs", "supporting_evidence": "quote from strategy docs"}}
+    }},
+    "overall_alignment_score": 0,
+    "alignment_grade": "A-F",
+    "key_gaps": [
+      {{"gap": "gap description", "strategy_reference": "specific strategic objective this relates to", "structural_impact": "how current org structure causes this gap"}}
+    ],
+    "alignment_strengths": ["areas where current structure supports strategy well"]
+  }},
+
+  "category_4_recommended_archetypes": {{
+    "design_criteria_analyzed": "Summary of user's org design criteria requirements",
+    "analysis_scope": "organization or department",
+    "department_analyzed": "Department name if department-level analysis",
+    "all_archetype_scores": [
+      {{
+        "archetype_id": "1_functional",
+        "archetype_name": "Functional Structure (The Efficiency Machine)",
+        "overall_score": 0,
+        "score_breakdown": {{
+          "industry_match": 0,
+          "size_match": 0,
+          "revenue_model_match": 0,
+          "key_indicators_match": 0,
+          "metrics_match": 0
+        }},
+        "fit_summary": "One-line summary of why this score",
+        "digital_first_applicable": true
+      }}
+    ],
+    "recommendations": [
+      {{
+        "rank": 1,
+        "archetype_id": "archetype_id",
+        "archetype": "Archetype Name",
+        "overall_fit_score": 0,
+        "score_breakdown": {{
+          "industry_match": {{"score": 0, "rationale": "explanation"}},
+          "size_match": {{"score": 0, "rationale": "explanation"}},
+          "revenue_model_match": {{"score": 0, "rationale": "explanation"}},
+          "key_indicators_match": {{"score": 0, "rationale": "explanation"}},
+          "metrics_match": {{"score": 0, "rationale": "explanation"}}
+        }},
+        "design_criteria_addressed": ["how this archetype addresses each design criteria requirement"],
+        "why_it_fits": "Detailed explanation linking to design criteria and org data",
+        "expected_benefits": ["benefit 1", "benefit 2"],
+        "implementation_challenges": ["challenge 1", "challenge 2"],
+        "transformation_timeline": "X-Y months",
+        "confidence_level": "High/Medium/Low",
+        "confidence_rationale": "Why this confidence level",
+        "critical_success_factors": ["factor 1", "factor 2", "factor 3"],
+        "warning_signs_to_monitor": ["warning sign from archetype failure mode"],
+        "practical_examples": [
+          {{
+            "company_or_scenario": "Company name or 'Illustrative Scenario'",
+            "description": "How they implement this archetype",
+            "key_success_factors": "What makes it work for them",
+            "relevance_to_your_org": "How this example applies to your situation"
+          }}
+        ],
+        "differentiating_activities": [
+          {{
+            "activity": "Name of the differentiating work activity",
+            "description": "What this activity entails",
+            "why_differentiating": "Why this provides competitive advantage",
+            "how_archetype_supports": "How this archetype protects/amplifies this capability",
+            "strategic_importance": "High/Medium/Low",
+            "related_roles": ["Role or department that performs this activity"]
+          }}
+        ],
+        "structure_diagram": {{
+          "title": "Diagram title describing the archetype structure",
+          "layout_type": "hierarchical|matrix|network|hub_spoke|circular",
+          "nodes": [
+            {{
+              "id": "unique_node_id",
+              "label": "Node label (department/role/unit name)",
+              "type": "executive|department|team|role|external|shared_service",
+              "description": "Brief description of this unit's function",
+              "is_differentiating": false,
+              "differentiating_activity": "Name of differentiating activity if is_differentiating is true",
+              "x": 0,
+              "y": 0,
+              "level": 0
+            }}
+          ],
+          "connections": [
+            {{
+              "from": "source_node_id",
+              "to": "target_node_id",
+              "type": "reporting|coordination|advisory|service|dotted_line",
+              "label": "Optional label for the connection"
+            }}
+          ],
+          "legend": "Brief explanation of what the diagram shows"
+        }}
+      }}
+    ]
+  }},
+
+  "action_plan": {{
+    "phase_1_quick_wins": ["action 1", "action 2"],
+    "phase_2_structural": ["action 1", "action 2"],
+    "phase_3_optimization": ["action 1", "action 2"]
+  }},
+
+  "data_gaps": [
+    {{
+      "gap": "What the uploaded data cannot tell us",
+      "why_it_matters": "Which finding or recommendation this limits",
+      "observable_indicator_to_close": "The specific measurable data that would close this gap (e.g., escalation logs, decision cycle times, attrition by layer)"
+    }}
+  ]
+}}
+```
+
+Be specific and actionable. Ground all recommendations in the data provided. Score ALL 7 archetypes in all_archetype_scores, then provide detailed recommendations for the TOP 2.
+"""
+
+    def _parse_structured_response(self, response) -> Dict:
+        """Extract and parse JSON from Claude's response."""
+        full_text = ""
+        for block in response.content:
+            if block.type == "text":
+                full_text += block.text
+
+        # Try to extract JSON
+        try:
+            json_str = None
+
+            # Look for JSON code block
+            json_start = full_text.find("```json")
+            if json_start != -1:
+                json_end = full_text.find("```", json_start + 7)
+                if json_end != -1:
+                    json_str = full_text[json_start + 7:json_end].strip()
+                else:
+                    # No closing ``` - take everything after ```json
+                    json_str = full_text[json_start + 7:].strip()
+
+            # If no code block, try to find raw JSON
+            if not json_str:
+                first_brace = full_text.find("{")
+                last_brace = full_text.rfind("}") + 1
+                if first_brace != -1 and last_brace > first_brace:
+                    json_str = full_text[first_brace:last_brace]
+
+            if json_str:
+                # Try to parse as-is first
+                try:
+                    result = json.loads(json_str)
+                    result["raw_response"] = full_text
+                    return result
+                except json.JSONDecodeError:
+                    # JSON might be truncated - try to repair it
+                    repaired_json = self._repair_truncated_json(json_str)
+                    if repaired_json:
+                        try:
+                            result = json.loads(repaired_json)
+                            result["raw_response"] = full_text
+                            result["_json_repaired"] = True
+                            return result
+                        except json.JSONDecodeError:
+                            pass
+
+            # Fallback - try to extract what we can from raw text
+            return self._extract_from_raw_text(full_text)
+
+        except Exception as e:
+            return self._extract_from_raw_text(full_text, error=str(e))
+
+    def _repair_truncated_json(self, json_str: str) -> Optional[str]:
+        """Attempt to repair truncated JSON by closing open brackets."""
+        # Count unclosed brackets
+        open_braces = json_str.count('{') - json_str.count('}')
+        open_brackets = json_str.count('[') - json_str.count(']')
+
+        if open_braces <= 0 and open_brackets <= 0:
+            return None  # Not a truncation issue
+
+        # Remove trailing incomplete content after last complete value
+        # Look for last complete string, number, boolean, or array/object
+        repaired = json_str.rstrip()
+
+        # Remove incomplete string at end
+        if repaired.count('"') % 2 == 1:
+            last_quote = repaired.rfind('"')
+            # Find the start of this string
+            prev_quote = repaired.rfind('"', 0, last_quote)
+            if prev_quote != -1:
+                repaired = repaired[:prev_quote]
+
+        # Clean up trailing commas and incomplete keys
+        repaired = repaired.rstrip()
+        while repaired and repaired[-1] in ',:"':
+            repaired = repaired[:-1].rstrip()
+
+        # Close brackets
+        open_braces = repaired.count('{') - repaired.count('}')
+        open_brackets = repaired.count('[') - repaired.count(']')
+
+        # Close arrays first (they're usually inside objects)
+        repaired += ']' * open_brackets
+        repaired += '}' * open_braces
+
+        return repaired if open_braces > 0 or open_brackets > 0 else None
+
+    def _extract_from_raw_text(self, full_text: str, error: Optional[str] = None) -> Dict:
+        """Extract structured data from raw text when JSON parsing fails."""
+        result = {
+            "raw_response": full_text,
+            "parse_error": error or "Could not extract structured JSON"
+        }
+
+        # Try to extract executive_summary from the text
+        # Look for the value after "executive_summary":
+        exec_match = re.search(r'"executive_summary"\s*:\s*"((?:[^"\\]|\\.)*)"', full_text)
+        if exec_match:
+            result["executive_summary"] = exec_match.group(1).replace('\\"', '"').replace('\\n', '\n')
+        else:
+            # Clean the text - remove JSON markers
+            clean_text = full_text
+            if clean_text.startswith("```json"):
+                clean_text = clean_text[7:]
+            if clean_text.startswith("```"):
+                clean_text = clean_text[3:]
+            if clean_text.endswith("```"):
+                clean_text = clean_text[:-3]
+            clean_text = clean_text.strip()
+
+            # If it still looks like JSON, don't use as executive summary
+            if clean_text.startswith('{'):
+                result["executive_summary"] = "Analysis completed but response formatting issue occurred. Please try running the analysis again."
+            else:
+                result["executive_summary"] = clean_text[:2000] if len(clean_text) > 2000 else clean_text
+
+        # Try to extract category data
+        for category in ['category_1_industry_trends', 'category_2_health_diagnosis',
+                        'category_3_strategy_alignment', 'category_4_recommended_archetypes']:
+            cat_match = re.search(rf'"{category}"\s*:\s*(\{{[^}}]*\}}|\[[^\]]*\])', full_text, re.DOTALL)
+            if cat_match:
+                try:
+                    result[category] = json.loads(cat_match.group(1))
+                except json.JSONDecodeError:
+                    pass
+
+        return result
+
+    def get_quick_analysis(self, metrics: Dict) -> Dict:
+        """Get a quick, non-AI analysis based on metrics alone."""
+        manager_stats = metrics.get("manager_stats", {})
+        span_stats = metrics.get("span_of_control", {})
+        health = metrics.get("health_indicators", {})
+
+        insights = []
+
+        # Span analysis
+        avg_span = span_stats.get("average_span", 0)
+        if avg_span < 4:
+            insights.append({
+                "type": "warning",
+                "category": "span",
+                "message": f"Low average span ({avg_span}) suggests over-management",
+                "recommendation": "Consider consolidating teams to increase spans to 5-8"
+            })
+        elif avg_span > 10:
+            insights.append({
+                "type": "warning",
+                "category": "span",
+                "message": f"High average span ({avg_span}) may strain managers",
+                "recommendation": "Consider adding team leads or splitting large teams"
+            })
+        else:
+            insights.append({
+                "type": "success",
+                "category": "span",
+                "message": f"Healthy average span of control ({avg_span})",
+                "recommendation": "Maintain current structure"
+            })
+
+        # Manager ratio
+        mgr_ratio = manager_stats.get("manager_ratio_pct", 0)
+        if mgr_ratio > 30:
+            insights.append({
+                "type": "warning",
+                "category": "ratio",
+                "message": f"High manager ratio ({mgr_ratio}%) indicates overhead",
+                "recommendation": "Benchmark: Industry average is 15-25% managers"
+            })
+
+        return {
+            "quick_insights": insights,
+            "health_score": health.get("health_score", 0),
+            "health_grade": health.get("health_grade", "?"),
+            "warnings": health.get("warnings", []),
+            "recommendations": health.get("recommendations", [])
+        }
