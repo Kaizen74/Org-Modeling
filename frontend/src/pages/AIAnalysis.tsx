@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { Brain, Loader2, AlertTriangle, ArrowRight, ChevronDown, ChevronUp, FileText, Upload, X } from 'lucide-react';
-import { aiAnalysisApi, settingsApi, metricsApi } from '../services/api';
+import { Link, useNavigate } from 'react-router-dom';
+import { Brain, Loader2, AlertTriangle, ChevronDown, ChevronUp, FileText, Upload, X } from 'lucide-react';
+import { aiAnalysisApi, settingsApi, metricsApi, scenariosApi } from '../services/api';
 import type { AIAnalysisResult, ArchetypeScoreSummary } from '../types';
 import ArchetypeDiagram from '../components/ArchetypeDiagram';
 
@@ -17,6 +17,14 @@ export default function AIAnalysis() {
   const [departments, setDepartments] = useState<string[]>([]);
   const [scopeDepartment, setScopeDepartment] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const startScenarioFor = async (archetypeId: string | undefined, archetypeName: string) => {
+    await scenariosApi.create(`${archetypeName.split(' (')[0]} design`, {
+      source: archetypeId ? `archetype:${archetypeId}` : 'manual',
+      description: `Implements the ${archetypeName} archetype`,
+    });
+    navigate('/scenarios');
+  };
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     trends: true,
     health: true,
@@ -103,27 +111,19 @@ export default function AIAnalysis() {
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  if (!apiConfigured) {
-    return (
-      <div>
-        <h1 className="text-2xl font-bold mb-6">AI Analysis</h1>
-        <div className="card text-center py-8">
-          <Brain className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h2 className="text-lg font-medium text-gray-600 mb-2">Claude API Not Configured</h2>
-          <p className="text-gray-500 mb-4">
-            Configure your Anthropic API key to enable AI-powered analysis.
-          </p>
-          <Link to="/settings" className="btn btn-primary inline-flex items-center gap-2">
-            Configure API Key <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">AI-Powered Analysis</h1>
+
+      {!apiConfigured && (
+        <div className="card mb-6 py-4">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[.14em] text-primary-600">AI analysis is off</p>
+          <p className="text-sm text-secondary">
+            Add your Claude API key in <Link to="/settings" className="text-primary-600 underline">Settings</Link> to run a new analysis. Saved results below remain available.
+          </p>
+        </div>
+      )}
 
       {/* Input Section */}
       <div className="card mb-6">
@@ -242,7 +242,8 @@ export default function AIAnalysis() {
 
           <button
             onClick={handleRunAnalysis}
-            disabled={loading}
+            disabled={loading || !apiConfigured}
+            title={apiConfigured ? undefined : 'Add your Claude API key in Settings to run an analysis'}
             className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             {loading ? (
@@ -700,6 +701,13 @@ export default function AIAnalysis() {
                         <ArchetypeDiagram diagram={arch.structure_diagram} />
                       </div>
                     )}
+
+                    <div className="mt-4">
+                      <button className="btn btn-secondary" onClick={() => startScenarioFor(arch.archetype_id, arch.archetype)}>
+                        Build this as a scenario →
+                      </button>
+                      <p className="mt-1.5 text-xs text-faint">Creates a scenario tagged with this archetype in the Scenario Studio, where you add the design moves and measure them.</p>
+                    </div>
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <span className="px-2 py-1 bg-gray-100 rounded text-xs">

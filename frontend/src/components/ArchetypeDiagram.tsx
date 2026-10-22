@@ -31,7 +31,8 @@ function calculateNodeDimensions(nodes: DiagramNode[]): { width: number; height:
   const maxLabelLength = Math.max(...nodes.map(n => n.label.length), 10);
   // Base width on label length, with min 100 and max 180
   const width = Math.min(180, Math.max(100, maxLabelLength * 8 + 20));
-  const height = 45;
+  // Room for a second line when units carry real headcount or are new
+  const height = nodes.some(n => n.headcount != null || n.is_new) ? 56 : 45;
   return { width, height };
 }
 
@@ -435,22 +436,49 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
                   ★
                 </text>
               )}
-              {/* Node label */}
-              <text
-                x={pos.x}
-                y={pos.y}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fill={colors.text}
-                fontSize={11}
-                fontWeight="500"
-                className="pointer-events-none"
-              >
-                {truncateLabel(node.label, nodeWidth)}
-              </text>
+              {/* Node label, plus real headcount (or "new unit") underneath */}
+              {(() => {
+                const subline = node.is_new && !node.headcount
+                  ? 'New unit'
+                  : node.headcount != null
+                    ? `${node.headcount} ${node.headcount === 1 ? "person" : "people"}${node.shared_departments?.length ? ' (shared)' : ''}`
+                    : '';
+                return (
+                  <>
+                    <text
+                      x={pos.x}
+                      y={subline ? pos.y - 7 : pos.y}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill={colors.text}
+                      fontSize={11}
+                      fontWeight="500"
+                      className="pointer-events-none"
+                    >
+                      {truncateLabel(node.label, nodeWidth)}
+                    </text>
+                    {subline && (
+                      <text
+                        x={pos.x}
+                        y={pos.y + 10}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill={colors.text}
+                        fontSize={10}
+                        opacity={0.85}
+                        className="pointer-events-none"
+                      >
+                        {subline}
+                      </text>
+                    )}
+                  </>
+                );
+              })()}
               <title>
                 {node.label}
                 {node.description ? `\n${node.description}` : ''}
+                {node.source_departments?.length ? `\nDraws from: ${node.source_departments.join(', ')}` : ''}
+                {node.unknown_departments?.length ? `\nNot found in your data: ${node.unknown_departments.join(', ')}` : ''}
                 {isDifferentiating && node.differentiating_activity ? `\n\n★ Differentiating: ${node.differentiating_activity}` : ''}
               </title>
             </g>
@@ -512,6 +540,15 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
 
       {diagram.legend && (
         <p className="text-xs text-gray-500 mt-2 italic">{diagram.legend}</p>
+      )}
+
+      {diagram.coverage && (
+        <p className="mt-2 text-xs text-faint">
+          Headcounts come from your data. {diagram.coverage.mapped_departments} of {diagram.coverage.total_departments} current departments are placed in this design
+          {diagram.coverage.unmapped_departments.length > 0 && (
+            <> — not yet placed: <span className="text-secondary">{diagram.coverage.unmapped_departments.join(', ')}</span> ({diagram.coverage.unmapped_headcount} people)</>
+          )}.
+        </p>
       )}
     </div>
   );

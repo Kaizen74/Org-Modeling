@@ -23,6 +23,7 @@ from ..resources.archetypes_reference import (
 )
 from ..resources.benchmarks_reference import get_benchmarks_prompt_section
 from .archetype_scoring import reconcile_archetype_scores
+from .archetype_grounding import ground_diagrams
 from .llm_client import run_analysis, AnalysisRefused
 
 
@@ -82,6 +83,8 @@ class AIAnalysisService:
                 result["parse_warning"] = "The AI response hit the output limit; later sections may be incomplete."
             # Overall archetype scores are computed from the weights, not taken from the AI
             reconcile_archetype_scores(result)
+            # Diagram units carry real headcount and cost from the data
+            ground_diagrams(result, metrics)
             return result
 
         except AnalysisRefused as e:
@@ -463,8 +466,10 @@ The application recomputes every overall score from your five criterion scores u
     - Why it's differentiating (unique, hard to replicate, strategically important)
     - How this archetype protects/amplifies this capability
     - Strategic importance rating (High/Medium/Low)
-13. **Structure Diagram**: A visual representation of the archetype showing:
-    - Key organizational units/roles as nodes (5-8 nodes recommended)
+13. **Structure Diagram**: This organization redrawn in the archetype, showing:
+    - Key organizational units/roles as nodes (5-8 nodes recommended), labelled with THIS organization's actual department names and role titles from ORGANIZATION COMPOSITION — not generic archetype labels
+    - For every node, `source_departments`: the exact current department names whose people would sit in that unit (use the names exactly as listed). A unit that does not exist today gets `is_new: true` and an empty list
+    - Every current department should appear in at least one node's source_departments
     - How they relate spatially (hierarchical, matrix, network layout)
     - Connections showing reporting/coordination relationships
     - Mark nodes that house differentiating activities with is_differentiating: true
@@ -593,6 +598,8 @@ The application recomputes every overall score from your five criterion scores u
               "description": "Brief description of this unit's function",
               "is_differentiating": false,
               "differentiating_activity": "Name of differentiating activity if is_differentiating is true",
+              "source_departments": ["Exact current department name(s) whose people move into this unit"],
+              "is_new": false,
               "x": 0,
               "y": 0,
               "level": 0

@@ -220,6 +220,13 @@ export interface DiagramNode {
   description?: string;
   is_differentiating?: boolean;
   differentiating_activity?: string;
+  // Grounding in the real organization (computed by the backend from the data)
+  source_departments?: string[];
+  unknown_departments?: string[];
+  shared_departments?: string[];
+  is_new?: boolean;
+  headcount?: number | null;
+  cost?: number | null;
   x?: number;
   y?: number;
   level?: number;
@@ -238,6 +245,12 @@ export interface StructureDiagram {
   nodes: DiagramNode[];
   connections: DiagramConnection[];
   legend?: string;
+  coverage?: {
+    mapped_departments: number;
+    total_departments: number;
+    unmapped_departments: string[];
+    unmapped_headcount: number;
+  };
 }
 
 // Differentiating Activity for competitive advantage
