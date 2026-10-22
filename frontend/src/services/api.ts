@@ -13,7 +13,9 @@ import type {
   ScenarioDetail,
   ScenarioEvaluation,
   ScenarioHeadline,
-  ScenarioListItem
+  ScenarioListItem,
+  ComparisonCriterion,
+  ComparisonPayload
 } from '../types';
 
 /** Whole organization when department is empty, otherwise one department. */
@@ -296,4 +298,15 @@ export const scenariosApi = {
   removeMove: async (id: string, index: number): Promise<ScenarioDetail> => (await api.delete(`/scenarios/${id}/moves/${index}`)).data,
   remove: async (id: string): Promise<void> => { await api.delete(`/scenarios/${id}`); },
   preview: async (moves: DesignMove[]): Promise<ScenarioEvaluation> => (await api.post('/scenarios/preview', { moves })).data,
+};
+
+// Option comparison API
+export const comparisonApi = {
+  get: async (): Promise<ComparisonPayload> => (await api.get('/comparison')).data,
+  saveCriteria: async (criteria: ComparisonCriterion[]): Promise<ComparisonPayload> =>
+    (await api.put('/comparison/criteria', { criteria })).data,
+  resetCriteria: async (): Promise<ComparisonPayload> => (await api.post('/comparison/criteria/reset')).data,
+  judge: async (optionId: string, criterionId: string, score: number | null, rationale?: string): Promise<ComparisonPayload> =>
+    (await api.put('/comparison/judgments', { option_id: optionId, criterion_id: criterionId, score, rationale })).data,
+  suggest: async (): Promise<ComparisonPayload> => (await api.post('/comparison/suggest')).data,
 };

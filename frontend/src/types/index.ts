@@ -702,3 +702,51 @@ export interface ScenarioListItem extends ScenarioSummary {
   delta: ScenarioHeadline;
   skipped_moves: number;
 }
+
+// ---------- Option comparison ----------
+
+export interface ComparisonCriterion {
+  id: string;
+  name: string;
+  kind: 'measured' | 'judged';
+  weight: number;
+  metric?: string; // measured: a ScenarioHeadline key or people_affected_pct
+  better?: 'higher' | 'lower';
+  description?: string;
+}
+
+export interface Judgment {
+  score: number; // 1-5
+  rationale?: string;
+  source: 'user' | 'ai';
+  evidence_class?: EvidenceClass;
+  confidence?: string;
+}
+
+export interface ComparisonOption {
+  id: string; // "current" or a scenario id
+  name: string;
+  source: string; // "current", "manual", "archetype:<id>"
+  description?: string;
+  move_count: number;
+  figures: ScenarioHeadline & { people_affected_pct: number };
+  moves_summary: string[];
+}
+
+export interface ComparisonResult {
+  cells: Record<string, Record<string, number | null>>;
+  totals: Record<string, number | null>;
+  ranking: string[];
+  missing: Record<string, string[]>;
+  complete: boolean;
+}
+
+export interface ComparisonPayload {
+  criteria: ComparisonCriterion[];
+  measurable: Record<string, { label: string; better: 'higher' | 'lower' }>;
+  options: ComparisonOption[];
+  judgments: Record<string, Record<string, Judgment>>;
+  result: ComparisonResult;
+  ai_available: boolean;
+  suggestions_added?: number;
+}

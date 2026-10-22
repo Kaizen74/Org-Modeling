@@ -77,6 +77,16 @@ Headline keys: `headcount, managers, manager_ratio_pct, average_span, median_spa
 Deleting an upload or starting a new project deletes its scenarios.
 Used by: Scenario Studio page (`frontend/src/pages/Scenarios.tsx`).
 
+## Option comparison
+One comparison per upload: weighted criteria + judged scores. Options = `current` + every scenario.
+- `GET /comparison` → `{ criteria[], measurable{metric:{label,better}}, options[{id,name,source,description,move_count,figures,moves_summary[]}], judgments{option_id:{criterion_id:{score 1-5, rationale, source user|ai, evidence_class?, confidence?}}}, result{cells{option:{criterion:0-100|null}}, totals{}, ranking[], missing{}, complete}, ai_available }`
+- `PUT /comparison/criteria` `{criteria[{id,name,kind measured|judged,weight,metric?,better?,description?}]}` (400 with reasons if invalid) · `POST /comparison/criteria/reset`
+- `PUT /comparison/judgments` `{option_id, criterion_id, score 1-5|null, rationale?}`
+- `POST /comparison/suggest` → AI-suggested judged scores (never overwrites `source: user`); prompt uses job titles, never names
+Scoring (backend `comparison_service.score_options`): measured → 0-100 between worst and best option (ties = 100); judged 1-5 → 0-100; total = weighted average of scored criteria; missing judged scores listed.
+Scenario `source` may be `archetype:<archetype_id>` to tie a scenario to a recommended archetype.
+Used by: Compare page (`frontend/src/pages/Compare.tsx`).
+
 ## Grades
 ### GET/POST /grades, POST /grades/bulk-import
 Returns/accepts `GradeSalary { id, grade, median_salary, currency, display_order }`

@@ -26,6 +26,7 @@ const stages: Array<{ number: string; title: string; items: Array<{ name: string
     items: [
       { name: 'Archetype options', href: '/analysis', hint: 'Strategy-fit structures' },
       { name: 'Scenario Studio', href: '/scenarios', hint: 'Build and test options' },
+      { name: 'Compare options', href: '/compare', hint: 'Score against your criteria' },
     ],
   },
 ];

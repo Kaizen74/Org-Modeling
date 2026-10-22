@@ -73,6 +73,18 @@ class Scenario(Base):
         return f"<Scenario(name='{self.name}', moves={len(self.moves or [])})>"
 
 
+class Comparison(Base):
+    """Weighted design criteria and judged scores for comparing options on one upload."""
+    __tablename__ = "comparisons"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    analysis_id = Column(String(36), ForeignKey("org_analyses.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    criteria = Column(JSON, default=list)
+    judgments = Column(JSON, default=dict)  # {option_id: {criterion_id: {score, rationale, source}}}
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Setting(Base):
     """Application settings key-value store."""
     __tablename__ = "settings"

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
-import { scenariosApi, orgDataApi, metricsApi } from '../services/api';
+import { scenariosApi, orgDataApi, metricsApi, aiAnalysisApi } from '../services/api';
 import type {
   DesignMove,
   MoveType,
@@ -208,6 +208,8 @@ export default function Scenarios() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
+  const [newArchetype, setNewArchetype] = useState('');
+  const [archetypes, setArchetypes] = useState<Array<{ id: string; name: string }>>([]);
 
   const refreshList = async () => {
     const r = await scenariosApi.list();
@@ -232,6 +234,12 @@ export default function Scenarios() {
             .filter((id) => org.employees.find((e) => e.employee_id === id)?.manager_id)
         );
         if (scenarios.length) setActive(await scenariosApi.get(scenarios[scenarios.length - 1].id));
+        // Recommended archetypes (if an archetype analysis has been run) can be tagged on a scenario
+        aiAnalysisApi.getLatest().then((r) => {
+          const cat = r.ai_analysis?.category_4_recommended_archetypes;
+          const recs = cat && !Array.isArray(cat) ? cat.recommendations ?? [] : [];
+          setArchetypes(recs.filter((x) => x.archetype_id).map((x) => ({ id: x.archetype_id as string, name: x.archetype })));
+        }).catch(() => undefined);
       } catch {
         setError('Upload an org structure CSV first — scenarios start from the current state.');
       } finally {
@@ -251,8 +259,8 @@ export default function Scenarios() {
     }
   };
 
-  const create = (name: string, moves: DesignMove[] = [], cloneFrom?: string) =>
-    run(() => scenariosApi.create(name, { moves, cloneFrom }));
+  const create = (name: string, moves: DesignMove[] = [], cloneFrom?: string, source?: string) =>
+    run(() => scenariosApi.create(name, { moves, cloneFrom, source }));
 
   const departments = useMemo(() => [...new Set(people.map((p) => p.department).filter(Boolean))].sort(), [people]);
   const pickerPeople = active?.people ?? people;
@@ -294,7 +302,10 @@ export default function Scenarios() {
               className={clsx('card block w-full py-4 text-left transition-colors hover:bg-wash', active?.id === s.id && 'border-primary-600')}
             >
               <p className="font-medium text-ink">{s.name}</p>
-              <p className="text-xs text-faint">{s.move_count} move{s.move_count === 1 ? '' : 's'}{s.skipped_moves ? ` · ${s.skipped_moves} skipped` : ''}</p>
+              <p className="text-xs text-faint">
+                {s.source?.startsWith('archetype:') && <span className="text-primary-600">Archetype · </span>}
+                {s.move_count} move{s.move_count === 1 ? '' : 's'}{s.skipped_moves ? ` · ${s.skipped_moves} skipped` : ''}
+              </p>
               <p className="tabular mt-2 flex flex-wrap gap-x-3 text-xs">
                 <span style={{ color: changeColor(s.delta.health_score, 'up') }}>Health {signed(s.delta.health_score)}</span>
                 <span style={{ color: changeColor(s.delta.layers, 'down') }}>Layers {signed(s.delta.layers)}</span>
@@ -304,10 +315,23 @@ export default function Scenarios() {
           ))}
           <form
             className="card space-y-2 py-4"
-            onSubmit={(e) => { e.preventDefault(); if (newName.trim()) { create(newName.trim()); setNewName(''); } }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (newName.trim()) {
+                create(newName.trim(), [], undefined, newArchetype ? `archetype:${newArchetype}` : 'manual');
+                setNewName('');
+                setNewArchetype('');
+              }
+            }}
           >
             <label className="label" htmlFor="new-scenario">New scenario</label>
             <input id="new-scenario" className="input" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Delayer Customer Experience" />
+            {archetypes.length > 0 && (
+              <select className="input text-sm" value={newArchetype} onChange={(e) => setNewArchetype(e.target.value)} aria-label="Implements archetype">
+                <option value="">Not tied to an archetype</option>
+                {archetypes.map((a) => <option key={a.id} value={a.id}>Implements: {a.name}</option>)}
+              </select>
+            )}
             <button type="submit" className="btn btn-secondary w-full justify-center" disabled={!newName.trim() || busy}>Create</button>
           </form>
           {singleReportIds.length > 0 && (

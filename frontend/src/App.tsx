@@ -9,6 +9,7 @@ import AIAnalysis from './pages/AIAnalysis'
 import OrgChart from './pages/OrgChart'
 import WorkActivities from './pages/WorkActivities'
 import Scenarios from './pages/Scenarios'
+import Compare from './pages/Compare'
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
         <Route path="/work-activities" element={<WorkActivities />} />
         <Route path="/org-chart" element={<OrgChart />} />
         <Route path="/scenarios" element={<Scenarios />} />
+        <Route path="/compare" element={<Compare />} />
       </Routes>
     </Layout>
   )
