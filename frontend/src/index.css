@@ -1,35 +1,147 @@
+/* OrgDesign Playbook visual language: paper surfaces, hairline borders,
+   serif display type, one restrained accent red. Tokens mirror the Playbook. */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-50 text-gray-900;
+:root {
+  /* Surfaces */
+  --color-paper: #FAF7F3;
+  --color-bg-white: #FFFFFF;
+  --color-hairline: #E7E0D8;
+  --color-hover-wash: #F6F1EA;
+  --color-track: #EFE9E1;
+
+  /* Text */
+  --color-ink: #1C1F24;
+  --color-secondary: #575C63;
+  --color-faint: #8A8F96;
+  --color-placeholder: #D8CFC2;
+
+  /* Accent */
+  --color-primary: #C41E3A;
+  --color-primary-dark: #9D182E;
+  --color-red-tint: #FBEEF0;
+
+  /* Score status (always paired with a glyph or label, never colour alone) */
+  --color-score-green: #257A55;
+  --color-score-amber: #B97F24;
+  --color-score-red: #B02E2E;
+
+  /* Typography */
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
 }
 
-.card {
-  @apply bg-white rounded-lg shadow-md p-6;
+@layer base {
+  body {
+    margin: 0;
+    font-family: var(--font-body);
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--color-ink);
+    text-wrap: balance;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
 }
 
-.btn {
-  @apply px-4 py-2 rounded-md font-medium transition-colors duration-200;
+@layer components {
+  /* Cards: white, hairline, sharp corners, no shadow, no hover lift */
+  .card {
+    background: var(--color-bg-white);
+    border: 1px solid var(--color-hairline);
+    border-radius: 2px;
+    box-shadow: none;
+    padding: 1.5rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 14px;
+    border-radius: 2px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary { background: var(--color-primary); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--color-primary-dark); }
+  .btn-secondary { background: transparent; border-color: var(--color-ink); color: var(--color-ink); }
+  .btn-secondary:hover:not(:disabled) { background: var(--color-ink); color: #fff; }
+  .btn-quiet { background: transparent; border-color: var(--color-hairline); color: var(--color-secondary); }
+  .btn-quiet:hover:not(:disabled) { border-color: var(--color-ink); color: var(--color-ink); }
+  .btn-danger { background: var(--color-score-red); color: #fff; }
+  .btn-danger:hover:not(:disabled) { background: #8E2424; }
+
+  .input {
+    width: 100%;
+    padding: 9px 12px;
+    background: #fff;
+    border: 1px solid var(--color-hairline);
+    border-radius: 2px;
+    color: var(--color-ink);
+    transition: border-color .15s ease;
+  }
+  .input:focus { outline: none; border-color: var(--color-primary); }
+
+  .label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+    margin-bottom: 6px;
+  }
+
+  /* Eyebrow: numbered section label, e.g. "01 · Current state" */
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+  .eyebrow-faint { color: var(--color-faint); }
+
+  .display-number {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-variant-numeric: lining-nums tabular-nums;
+    line-height: 1.05;
+  }
+
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  .hairline-t { border-top: 1px solid var(--color-hairline); }
+  .hairline-b { border-bottom: 1px solid var(--color-hairline); }
+
+  .fade-up { animation: fadeUp .3s ease-out both; }
 }
 
-.btn-primary {
-  @apply bg-primary-600 text-white hover:bg-primary-700;
-}
-
-.btn-secondary {
-  @apply bg-gray-200 text-gray-700 hover:bg-gray-300;
-}
-
-.btn-danger {
-  @apply bg-red-600 text-white hover:bg-red-700;
-}
-
-.input {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
-}
-
-.label {
-  @apply block text-sm font-medium text-gray-700 mb-1;
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }

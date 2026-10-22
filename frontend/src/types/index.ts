@@ -126,6 +126,23 @@ export interface LLMCallMeta {
   truncated: boolean;
 }
 
+export interface MetricsSummary {
+  total_employees: number;
+  total_managers: number;
+  manager_ratio: number;
+  average_span: number;
+  average_grade_gap: number;
+  total_cost: number;
+  layers: number;
+  health_score: number;
+  health_grade: string;
+  health_components?: HealthComponent[];
+  warnings: string[];
+  recommendations?: string[];
+  departments?: number;
+  data_issues?: string[];
+}
+
 export interface OrgMetrics {
   total_employees: number;
   manager_stats: ManagerStats;

@@ -5,7 +5,7 @@
 An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-Owner approved the 5-phase plan on 2026-10-22. Phase 1 complete (61/61 tests). Next: P2.0 visual foundation.
+Owner approved the 5-phase plan on 2026-10-22. Phase 1 complete; P2.0 done (61/61 tests). Overview page rebuilt in the Playbook style. Next: P2.1 department view.
 
 ## This session (2026-10-22) — approved plan, in order
 Phase 1 — Accuracy fixes
@@ -15,7 +15,7 @@ Phase 1 — Accuracy fixes
 - [x] P1.4 Deterministic weighted archetype scoring (code applies the 30/15/20/25/10 weights)
 - [x] P1.5 Org composition in AI prompts; remove employee names from AI calls; one model setting
 Phase 2 — Current-state depth (visual foundation first so new screens are built in the Playbook style)
-- [ ] P2.0 Playbook visual foundation: tokens, fonts, app shell, shared UI pieces
+- [x] P2.0 Playbook visual foundation: tokens, fonts, app shell, shared UI pieces
 - [ ] P2.1 Department-level metrics + department scope in AI analysis
 - [ ] P2.2 Org chart with span/cost/department overlays and layer-removal flags
 - [ ] P2.3 One Work Activities page + findings tagged by the five dimensions

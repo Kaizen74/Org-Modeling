@@ -66,14 +66,35 @@ def normalize_employees(employees: List[Dict]) -> Tuple[List[Dict], List[str]]:
             f"({', '.join(sorted(duplicate_names)[:5])}) — kept as separate people by Employee ID"
         )
 
-    # Pass 2: resolve managers
+    # Pass 2: resolve managers; shared-name matches are reported once per manager name
+    ambiguous: Dict[Tuple[str, str], List[str]] = {}
     for r in normalized:
-        r["manager_id"] = _resolve_manager(r, ids, by_name, issues)
+        r["manager_id"] = _resolve_manager(r, ids, by_name, issues, ambiguous)
+
+    for (mgr_value, outcome), reports in ambiguous.items():
+        count = len(by_name.get(mgr_value, []))
+        who = ", ".join(reports[:3]) + (f" and {len(reports) - 3} more" if len(reports) > 3 else "")
+        if outcome == "by_level":
+            issues.append(
+                f"Line Manager '{mgr_value}' matches {count} people; {len(reports)} report(s) ({who}) "
+                f"were matched by level (to the one a level above) — add a 'Line Manager ID' column to remove the guesswork"
+            )
+        else:
+            issues.append(
+                f"Line Manager '{mgr_value}' matches {count} people and could not be resolved for "
+                f"{len(reports)} report(s) ({who}) — add a 'Line Manager ID' column"
+            )
 
     return normalized, issues
 
 
-def _resolve_manager(record: Dict, ids: set, by_name: Dict[str, List[Dict]], issues: List[str]) -> Optional[str]:
+def _resolve_manager(
+    record: Dict,
+    ids: set,
+    by_name: Dict[str, List[Dict]],
+    issues: List[str],
+    ambiguous: Dict[Tuple[str, str], List[str]],
+) -> Optional[str]:
     name = record.get("name", "")
     explicit = record.get("manager_id")
     if explicit is not None and not _is_root_marker(explicit):
@@ -102,15 +123,9 @@ def _resolve_manager(record: Dict, ids: set, by_name: Dict[str, List[Dict]], iss
     level = record.get("level")
     one_up = [c for c in candidates if level and c.get("level") == level - 1]
     if len(one_up) == 1:
-        issues.append(
-            f"Line Manager '{mgr_value}' for {name} matches {len(candidates)} people — "
-            f"matched by level; add a 'Line Manager ID' column to remove the guesswork"
-        )
+        ambiguous.setdefault((mgr_value, "by_level"), []).append(name)
         return one_up[0]["employee_id"]
-    issues.append(
-        f"Line Manager '{mgr_value}' for {name} matches {len(candidates)} people and could not be "
-        f"resolved — add a 'Line Manager ID' column"
-    )
+    ambiguous.setdefault((mgr_value, "unresolved"), []).append(name)
     return None
 
 

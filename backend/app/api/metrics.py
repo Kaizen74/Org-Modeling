@@ -134,5 +134,8 @@ async def get_metrics_summary(db: AsyncSession = Depends(get_session)):
         "health_score": health.get("health_score", 0),
         "health_grade": health.get("health_grade", "?"),
         "health_components": health.get("components", []),
-        "warnings": health.get("warnings", [])
+        "warnings": health.get("warnings", []),
+        "recommendations": health.get("recommendations", []),
+        "departments": len(metrics.get("department_analysis", []) or []),
+        "data_issues": (metrics.get("data_quality") or {}).get("issues", [])[:5]
     }

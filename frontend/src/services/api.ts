@@ -7,7 +7,8 @@ import type {
   APIKeyStatus,
   Employee,
   WorkActivitiesAnalysis,
-  QuickWorkActivitiesAnalysis
+  QuickWorkActivitiesAnalysis,
+  MetricsSummary
 } from '../types';
 
 const api = axios.create({
@@ -160,18 +161,7 @@ export const metricsApi = {
     return response.data;
   },
 
-  getSummary: async (): Promise<{
-    total_employees: number;
-    total_managers: number;
-    manager_ratio: number;
-    average_span: number;
-    average_grade_gap: number;
-    total_cost: number;
-    layers: number;
-    health_score: number;
-    health_grade: string;
-    warnings: string[];
-  }> => {
+  getSummary: async (): Promise<MetricsSummary> => {
     const response = await api.get('/metrics/summary');
     return response.data;
   },

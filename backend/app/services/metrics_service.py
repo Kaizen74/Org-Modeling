@@ -474,7 +474,7 @@ class MetricsCalculator:
         if span_fit < 70:
             if below >= above:
                 warnings.append(f"{below} of {managers} managers have spans below the benchmark for their kind of work")
-                recommendations.append("Review the narrowest teams for consolidation, starting with the manager list below")
+                recommendations.append("Review the narrowest teams for consolidation — the Structure view lists every manager against their benchmark")
             else:
                 warnings.append(f"{above} of {managers} managers have spans above the benchmark for their kind of work")
                 recommendations.append("Consider team leads or splitting the widest teams to protect manager capacity")
