@@ -409,6 +409,31 @@ def get_all_archetypes_summary() -> list:
     ]
 
 
+# Keywords that map a real department name onto a guidance key (checked in order)
+DEPARTMENT_KEYWORDS = [
+    ("passenger_services", ["passenger"]),
+    ("it_digital", ["digital", "technology", "information technology", " it", "it ", "data", "software"]),
+    ("rd_engineering", ["engineering", "r&d", "research", "product development"]),
+    ("commercial_sales", ["sales", "commercial", "marketing", "business development"]),
+    ("finance", ["finance", "financial", "accounting", "treasury", "procurement"]),
+    ("hr", ["human resources", "hr", "people", "talent"]),
+    ("service_delivery", ["customer", "service", "experience", "support"]),
+    ("manufacturing_operations", ["operations", "operation", "manufacturing", "production", "ground", "logistics", "cargo"]),
+]
+
+
+def match_department_key(department: str) -> str:
+    """Map a department name (e.g. 'Ground Operations') to a guidance key, or '' if none fits."""
+    key = department.lower().strip().replace(" ", "_").replace("/", "_")
+    if key in DEPARTMENT_ARCHETYPES:
+        return key
+    padded = f" {department.lower().strip()} "
+    for guidance_key, words in DEPARTMENT_KEYWORDS:
+        if any(w in padded for w in words):
+            return guidance_key
+    return ""
+
+
 def get_department_recommendation(department: str) -> dict:
-    """Get archetype recommendation for a specific department."""
-    return DEPARTMENT_ARCHETYPES.get(department, {})
+    """Get archetype recommendation for a department, by exact key or keyword match."""
+    return DEPARTMENT_ARCHETYPES.get(match_department_key(department), {})

@@ -1,6 +1,6 @@
 """SQLAlchemy models for the Org Design Analyzer."""
 
-from sqlalchemy import Column, String, Float, Integer, DateTime, Text, JSON
+from sqlalchemy import Column, String, Float, Integer, DateTime, Text, JSON, ForeignKey
 from datetime import datetime
 import uuid
 
@@ -54,6 +54,47 @@ class OrgAnalysis(Base):
 
     def __repr__(self):
         return f"<OrgAnalysis(name='{self.name}', employees={self.employee_count})>"
+
+
+class Scenario(Base):
+    """A design option: the baseline organization plus an ordered list of design moves."""
+    __tablename__ = "scenarios"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    analysis_id = Column(String(36), ForeignKey("org_analyses.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    source = Column(String(100), default="manual")  # e.g. "manual", "archetype:3_front_back_hybrid"
+    moves = Column(JSON, default=list)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<Scenario(name='{self.name}', moves={len(self.moves or [])})>"
+
+
+class Comparison(Base):
+    """Weighted design criteria and judged scores for comparing options on one upload."""
+    __tablename__ = "comparisons"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    analysis_id = Column(String(36), ForeignKey("org_analyses.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    criteria = Column(JSON, default=list)
+    judgments = Column(JSON, default=dict)  # {option_id: {criterion_id: {score, rationale, source}}}
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AIDisposition(Base):
+    """Optional overlay: role of AI per job title for one upload."""
+    __tablename__ = "ai_dispositions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    analysis_id = Column(String(36), ForeignKey("org_analyses.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    enabled = Column(Integer, default=1)  # 0 = hidden everywhere, tags kept
+    roles = Column(JSON, default=dict)  # {job_title: {disposition, capacity_freed_pct, rationale, source, confidence}}
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Setting(Base):

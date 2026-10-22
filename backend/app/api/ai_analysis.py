@@ -9,9 +9,11 @@ import json
 import os
 
 from ..models.database import get_session
-from ..models.models import OrgAnalysis, GradeSalary
+from ..models.models import OrgAnalysis
 from ..services.ai_analysis_service import AIAnalysisService
-from ..services.metrics_service import MetricsCalculator
+from ..services.metrics_store import ensure_metrics
+from ..services.archetype_scoring import reconcile_archetype_scores
+from ..services.archetype_grounding import ground_diagrams
 from ..services.claude_service import claude_service
 from ..services.work_activities_service import WorkActivitiesAnalysisService
 
@@ -62,20 +64,8 @@ async def analyze_org(
             detail="No employee data found"
         )
 
-    # Get metrics (calculate if not cached)
-    if not analysis.metrics:
-        # Load grade order
-        grade_result = await db.execute(
-            select(GradeSalary).order_by(GradeSalary.display_order)
-        )
-        grades = grade_result.scalars().all()
-        grade_order = {g.grade: g.display_order for g in grades} if grades else {}
-
-        calculator = MetricsCalculator(employees=employees, grade_order=grade_order)
-        metrics = calculator.calculate_all_metrics()
-        analysis.metrics = metrics
-    else:
-        metrics = analysis.metrics
+    # Current metrics (salaries filled from grade table; stale caches recalculated)
+    metrics = await ensure_metrics(analysis, db)
 
     # Get API key from claude_service (handles .env file loading)
     if not claude_service.is_configured():
@@ -164,33 +154,9 @@ async def analyze_with_documents(
         )
 
     employees = analysis.raw_data.get("employees", []) if analysis.raw_data else []
-    metrics = analysis.metrics
 
-    if not metrics:
-        # Try to calculate metrics if not available
-        from ..models.models import GradeSalary
-        grade_result = await db.execute(
-            select(GradeSalary).order_by(GradeSalary.display_order)
-        )
-        grades = grade_result.scalars().all()
-        grade_order = {g.grade: g.display_order for g in grades} if grades else {}
-
-        # Enrich employees with salary from grade config
-        grade_salary_map = {g.grade: g.median_salary for g in grades}
-        enriched_employees = []
-        for emp in employees:
-            emp_copy = emp.copy()
-            if not emp_copy.get("salary", 0):
-                grade = emp_copy.get("grade", "")
-                if grade in grade_salary_map:
-                    emp_copy["salary"] = grade_salary_map[grade]
-            enriched_employees.append(emp_copy)
-
-        from ..services.metrics_service import MetricsCalculator
-        calculator = MetricsCalculator(employees=enriched_employees, grade_order=grade_order)
-        metrics = calculator.calculate_all_metrics()
-        analysis.metrics = metrics
-        await db.commit()
+    # Current metrics (salaries filled from grade table; stale caches recalculated)
+    metrics = await ensure_metrics(analysis, db)
 
     # Extract document text
     doc_contents = []
@@ -254,14 +220,14 @@ async def get_quick_analysis(db: AsyncSession = Depends(get_session)):
     )
     analysis = result.scalar_one_or_none()
 
-    if not analysis or not analysis.metrics:
+    if not analysis or not (analysis.raw_data or {}).get("employees"):
         raise HTTPException(
             status_code=404,
             detail="No metrics available. Please upload and analyze org data first."
         )
 
     service = AIAnalysisService()
-    quick = service.get_quick_analysis(analysis.metrics)
+    quick = service.get_quick_analysis(await ensure_metrics(analysis, db))
 
     return {
         "analysis_id": analysis.id,
@@ -290,7 +256,11 @@ async def get_latest_ai_analysis(db: AsyncSession = Depends(get_session)):
     return {
         "analysis_id": analysis.id,
         "analysis_name": analysis.name,
-        "ai_analysis": analysis.ai_analysis,
+        # Older saved analyses get the same weighted scoring and diagram grounding on read
+        "ai_analysis": ground_diagrams(
+            reconcile_archetype_scores(analysis.ai_analysis),
+            await ensure_metrics(analysis, db) if (analysis.raw_data or {}).get("employees") else {},
+        ),
         "design_criteria": analysis.design_criteria,
         "created_at": analysis.created_at.isoformat() if analysis.created_at else None
     }
@@ -368,11 +338,9 @@ async def analyze_work_activities(
         industry=request.industry
     )
 
-    # Store results in the analysis
-    if not analysis.ai_analysis:
-        analysis.ai_analysis = {}
-
-    analysis.ai_analysis["work_activities_analysis"] = work_activities_result
+    # Store results in the analysis. Assign a new dict: an in-place change to a
+    # JSON column is not detected, so re-runs after an archetype analysis were lost
+    analysis.ai_analysis = {**(analysis.ai_analysis or {}), "work_activities_analysis": work_activities_result}
     await db.commit()
 
     return {

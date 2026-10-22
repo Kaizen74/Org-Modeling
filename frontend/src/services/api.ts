@@ -7,8 +7,24 @@ import type {
   APIKeyStatus,
   Employee,
   WorkActivitiesAnalysis,
-  QuickWorkActivitiesAnalysis
+  QuickWorkActivitiesAnalysis,
+  MetricsSummary,
+  DesignMove,
+  ScenarioDetail,
+  ScenarioEvaluation,
+  ScenarioHeadline,
+  ScenarioListItem,
+  ComparisonCriterion,
+  ComparisonPayload,
+  Disposition,
+  DispositionPayload,
+  ImplementationPlan
 } from '../types';
+
+/** Whole organization when department is empty, otherwise one department. */
+export interface AnalysisScope {
+  department?: string;
+}
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -160,18 +176,7 @@ export const metricsApi = {
     return response.data;
   },
 
-  getSummary: async (): Promise<{
-    total_employees: number;
-    total_managers: number;
-    manager_ratio: number;
-    average_span: number;
-    average_grade_gap: number;
-    total_cost: number;
-    layers: number;
-    health_score: number;
-    health_grade: string;
-    warnings: string[];
-  }> => {
+  getSummary: async (): Promise<MetricsSummary> => {
     const response = await api.get('/metrics/summary');
     return response.data;
   },
@@ -179,7 +184,7 @@ export const metricsApi = {
 
 // AI Analysis API
 export const aiAnalysisApi = {
-  analyze: async (analysisId?: string, designCriteria?: string, strategyText?: string): Promise<{
+  analyze: async (analysisId?: string, designCriteria?: string, strategyText?: string, scope?: AnalysisScope): Promise<{
     analysis_id: string;
     ai_analysis: AIAnalysisResult;
   }> => {
@@ -187,6 +192,8 @@ export const aiAnalysisApi = {
       analysis_id: analysisId,
       design_criteria: designCriteria,
       strategy_text: strategyText,
+      analysis_scope: scope?.department ? 'department' : 'organization',
+      department: scope?.department,
     });
     return response.data;
   },
@@ -194,7 +201,8 @@ export const aiAnalysisApi = {
   analyzeWithDocuments: async (
     files: File[],
     designCriteria?: string,
-    analysisId?: string
+    analysisId?: string,
+    scope?: AnalysisScope
   ): Promise<{
     analysis_id: string;
     ai_analysis: AIAnalysisResult;
@@ -208,6 +216,10 @@ export const aiAnalysisApi = {
     }
     if (analysisId) {
       formData.append('analysis_id', analysisId);
+    }
+    if (scope?.department) {
+      formData.append('analysis_scope', 'department');
+      formData.append('department', scope.department);
     }
     const response = await api.post('/ai-analysis/analyze-with-documents', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -275,3 +287,47 @@ export const aiAnalysisApi = {
 };
 
 export default api;
+
+// Scenario Studio API
+export const scenariosApi = {
+  list: async (): Promise<{ analysis_id: string; baseline: ScenarioHeadline; scenarios: ScenarioListItem[] }> =>
+    (await api.get('/scenarios')).data,
+  create: async (name: string, opts: { description?: string; moves?: DesignMove[]; cloneFrom?: string; source?: string } = {}): Promise<ScenarioDetail> =>
+    (await api.post('/scenarios', { name, description: opts.description, moves: opts.moves ?? [], clone_from: opts.cloneFrom, source: opts.source ?? 'manual' })).data,
+  get: async (id: string): Promise<ScenarioDetail> => (await api.get(`/scenarios/${id}`)).data,
+  update: async (id: string, changes: { name?: string; description?: string; moves?: DesignMove[] }): Promise<ScenarioDetail> =>
+    (await api.put(`/scenarios/${id}`, changes)).data,
+  addMove: async (id: string, move: DesignMove): Promise<ScenarioDetail> => (await api.post(`/scenarios/${id}/moves`, move)).data,
+  removeMove: async (id: string, index: number): Promise<ScenarioDetail> => (await api.delete(`/scenarios/${id}/moves/${index}`)).data,
+  remove: async (id: string): Promise<void> => { await api.delete(`/scenarios/${id}`); },
+  preview: async (moves: DesignMove[]): Promise<ScenarioEvaluation> => (await api.post('/scenarios/preview', { moves })).data,
+  implementation: async (id: string): Promise<ImplementationPlan> => (await api.get(`/scenarios/${id}/implementation`)).data,
+};
+
+/** URL of the board-ready findings pack (opens in a new tab; print to PDF from there). */
+export const packUrl = (scenarioId?: string, includeNames = false) => {
+  const q = new URLSearchParams();
+  if (scenarioId) q.set('scenario_id', scenarioId);
+  if (includeNames) q.set('include_names', 'true');
+  return `/api/v1/export/pack${q.toString() ? `?${q}` : ''}`;
+};
+
+// Option comparison API
+export const comparisonApi = {
+  get: async (): Promise<ComparisonPayload> => (await api.get('/comparison')).data,
+  saveCriteria: async (criteria: ComparisonCriterion[]): Promise<ComparisonPayload> =>
+    (await api.put('/comparison/criteria', { criteria })).data,
+  resetCriteria: async (): Promise<ComparisonPayload> => (await api.post('/comparison/criteria/reset')).data,
+  judge: async (optionId: string, criterionId: string, score: number | null, rationale?: string): Promise<ComparisonPayload> =>
+    (await api.put('/comparison/judgments', { option_id: optionId, criterion_id: criterionId, score, rationale })).data,
+  suggest: async (): Promise<ComparisonPayload> => (await api.post('/comparison/suggest')).data,
+};
+
+// Optional AI-role overlay API
+export const aiDispositionApi = {
+  get: async (): Promise<DispositionPayload> => (await api.get('/ai-disposition')).data,
+  setEnabled: async (enabled: boolean): Promise<DispositionPayload> => (await api.put('/ai-disposition/enabled', { enabled })).data,
+  tag: async (jobTitle: string, disposition: Disposition | null, capacityFreedPct?: number, rationale?: string): Promise<DispositionPayload> =>
+    (await api.put('/ai-disposition/role', { job_title: jobTitle, disposition, capacity_freed_pct: capacityFreedPct, rationale })).data,
+  suggest: async (industry?: string): Promise<DispositionPayload> => (await api.post('/ai-disposition/suggest', { industry })).data,
+};

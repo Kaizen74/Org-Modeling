@@ -20,10 +20,9 @@ def test_parse_pax_csv(sample_csv_path):
     # Should have 64 employees
     assert result["metadata"]["total_employees"] == 64, f"Got {result['metadata']['total_employees']} employees"
 
-    # Should have 16 managers
-    # Note: Need to recalculate based on actual structure
+    # 34 people have at least one direct report (verified against the pre-ID-keying code)
     manager_count = result["metadata"]["manager_count"]
-    assert manager_count > 0, "Should have managers"
+    assert manager_count == 34, f"Got {manager_count} managers"
 
     # Total salary must equal the sum of the Salary column in the fixture,
     # derived from the file so the assertion can't go stale if salaries change
@@ -69,8 +68,10 @@ def test_graph_structure(sample_csv_path):
     graph = result["graph"]
     assert graph is not None
 
-    # Vincent should have 3 direct reports (the VPs)
-    vincent_reports = list(graph.successors("Vincent Chan"))
+    # Graph is keyed by Employee ID; Vincent should have 3 direct reports (the VPs)
+    vincent_id = next(e["employee_id"] for e in result["employees"] if e["name"] == "Vincent Chan")
+    assert vincent_id == "E001"
+    vincent_reports = list(graph.successors(vincent_id))
     assert len(vincent_reports) == 3
 
 

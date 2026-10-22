@@ -14,6 +14,9 @@ from typing import List, Dict, Optional
 import json
 import re
 
+from .llm_client import run_analysis, AnalysisRefused
+from ..resources.benchmarks_reference import FIVE_DIMENSIONS
+
 
 class WorkActivitiesAnalysisService:
     """Analyze work activities using Claude AI."""
@@ -64,19 +67,16 @@ class WorkActivitiesAnalysisService:
         prompt = self._build_prompt(employees_with_activities, industry)
 
         try:
-            message = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=12000,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
+            # content[0] is a thinking block on current models; run_analysis returns the answer text
+            response_text, call_meta = run_analysis(self.client, prompt)
+            result = self._parse_response(response_text)
+            result["_llm"] = call_meta
+            if call_meta["truncated"]:
+                result["parse_warning"] = "The AI response hit the output limit; later sections may be incomplete."
+            return result
 
-            response_text = message.content[0].text
-
-            # Extract JSON from response
-            return self._parse_response(response_text)
-
+        except AnalysisRefused as e:
+            return {"error": str(e), "message": "The AI declined to analyze this input"}
         except Exception as e:
             return {
                 "error": f"Analysis failed: {str(e)}",
@@ -101,14 +101,16 @@ class WorkActivitiesAnalysisService:
         # Build department summaries
         dept_summaries = []
         for dept, emps in by_department.items():
+            # Positions are described by title and grade only — names never leave the app
             emp_list = "\n".join([
-                f"  - {emp['name']} ({emp['job_title']}, {emp['grade']}): {emp.get('work_activities', 'Not specified')}"
+                f"  - {emp['job_title']} ({emp['grade']}): {emp.get('work_activities', 'Not specified')}"
                 for emp in emps
             ])
             dept_summaries.append(f"**{dept}** ({len(emps)} positions):\n{emp_list}")
 
         department_data = "\n\n".join(dept_summaries)
 
+        dimensions = ", ".join(FIVE_DIMENSIONS)
         industry_context = f"\n**INDUSTRY CONTEXT:** {industry}" if industry else "\n**INDUSTRY CONTEXT:** Not specified (infer from organization structure and job titles)"
 
         return f"""You are an expert organizational design consultant specializing in work activity analysis and job design. Analyze the following organization's work activities and provide structured insights.
@@ -127,6 +129,7 @@ class WorkActivitiesAnalysisService:
 3. Every duplication, gap, and coordination finding carries a confidence level (High/Medium/Low) with one-line justification. Findings resting only on MODEL-INFERRED evidence are capped at Medium.
 4. Do not inflate one phrase match into a duplication pattern; quote the overlapping activity text from each affected role.
 5. Populate data_gaps honestly: what this text-based analysis cannot verify, and the observable indicator that would verify it (e.g., time allocation data, RACI records, handoff logs).
+6. Tag every duplication, missing activity and coordination gap with a `dimension` — exactly one of: {dimensions} — and an `indicator_type`: "Leading" (signals future performance) or "Lagging" (shows results already visible).
 
 **YOUR ANALYSIS MUST COVER 6 KEY AREAS:**
 
@@ -196,6 +199,8 @@ Prioritized, actionable recommendations addressing:
         "resolution_priority": 1,
         "recommended_action": "How to resolve this duplication",
         "evidence": "Quoted overlapping activity text from each affected role",
+        "dimension": "One of the five dimensions",
+        "indicator_type": "Leading/Lagging",
         "confidence": "High/Medium/Low",
         "confidence_rationale": "One-line justification"
       }}
@@ -215,6 +220,8 @@ Prioritized, actionable recommendations addressing:
         "severity": "Critical/Important/Nice-to-have",
         "business_risk": "Risk of not having this activity",
         "recommendation": "How to address this gap",
+        "dimension": "One of the five dimensions",
+        "indicator_type": "Leading/Lagging",
         "confidence": "High/Medium/Low",
         "confidence_rationale": "One-line justification (capped at Medium if purely model-inferred)"
       }}
@@ -237,6 +244,8 @@ Prioritized, actionable recommendations addressing:
         "severity": "Critical/Important/Minor",
         "industry_practice": "How leading orgs handle this",
         "recommended_interface": "What coordination mechanism to add",
+        "dimension": "One of the five dimensions",
+        "indicator_type": "Leading/Lagging",
         "confidence": "High/Medium/Low",
         "confidence_rationale": "One-line justification"
       }}

@@ -1,37 +1,49 @@
 # Project State
-*Last updated: 2026-07-10 (afternoon) — update after EVERY increment*
+*Last updated: 2026-10-22 — update after EVERY increment*
 
 ## What this project is
-An Organizational Design Analyzer: upload an org-structure CSV, get metrics (spans, layers, costs, health), AI-powered current-state analysis of work activities (duplication, missing activities, coordination gaps), and AI archetype recommendations (7-archetype framework) with visual structure diagrams — all in a web app (FastAPI backend + React frontend).
+An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-All 29 backend tests pass; frontend builds clean; branch pushed to GitHub. Evidence-grade analysis discipline (confidence, provenance, disconfirming evidence, data gaps) and research-cited benchmarks are wired into both AI analyses, displayed in the UI, and covered by mock regression tests.
+Owner approved the 5-phase plan on 2026-10-22. Phase 1 complete; P2.0 done (61/61 tests). Overview page rebuilt in the Playbook style. P2.3 done (work activities consolidated; done before P2.1 because the Work Activities page lacked the duplication/missing/hand-off sections). All five approved phases complete. Comprehensive mock test run 2026-10-22 (fake Claude, 141-person Windows-1252 org with shared names, unresolved manager, Level mismatch, blank salaries): 73/73 API-journey checks, 18/18 browser-journey checks; it found and fixed 5 defects (lost work-activities re-run, Archetype page hiding its run form, unresolved-manager layer mismatch, new-project dialog not mentioning scenarios, clipped Scenario effect table). 96/96 tests + 11/11 smoke checks. Awaiting owner review.
 
-## This session (2026-07-10)
-- [x] Fixed 2 stale test assertions (fixture salary total) — root-caused: fixture data changed, tests hard-coded old total; now derived from fixture
-- [x] Added `backend/app/resources/benchmarks_reference.py` — sourced benchmarks (McKinsey, Gallup 2025, Gartner, Deloitte 2026) injected into AI prompts
-- [x] Added evidence discipline to both AI prompts: OBSERVABLE/PERCEPTUAL/MODEL-INFERRED tagging, confidence + rationale, disconfirming evidence on pathologies, data_gaps section
-- [x] Frontend aligned: new types + confidence/evidence badges on pathologies and duplications, "What the Data Can't Tell Us" section
-- [x] Created run_checks.sh, PROJECT_STATE.md, DECISIONS.md, GUIDE.md, API_CONTRACT.md
-- [x] Pushed to origin (earlier push blocker was a transient environment gap — git proxy restored)
-- [x] Added backend/tests/test_ai_pipeline_mock.py — 6 no-network regression tests covering prompt markers, evidence-field parse round-trip, truncation repair, and the preserve-work-activities rule
+## This session (2026-10-22) — approved plan, in order
+Phase 1 — Accuracy fixes
+- [x] P1.1 Key people by Employee ID, not name (duplicate names no longer merge)
+- [x] P1.2 Compute layers from the actual reporting chain; flag Level-column mismatches
+- [x] P1.3 Role-aware span benchmarks + transparent health score
+- [x] P1.4 Deterministic weighted archetype scoring (code applies the 30/15/20/25/10 weights)
+- [x] P1.5 Org composition in AI prompts; remove employee names from AI calls; one model setting
+Phase 2 — Current-state depth (visual foundation first so new screens are built in the Playbook style)
+- [x] P2.0 Playbook visual foundation: tokens, fonts, app shell, shared UI pieces
+- [x] P2.1 Department-level metrics + department scope in AI analysis
+- [x] P2.2 Org chart with span/cost/department overlays and layer-removal flags
+- [x] P2.3 One Work Activities page + findings tagged by the five dimensions
+Phase 3 — Scenario Studio
+- [x] P3.1 Scenario engine (design moves → metric deltas)
+- [x] P3.2 Scenario Studio screen
+- [x] P3.3 Option comparison matrix vs weighted design criteria
+- [x] P3.4 Archetype diagrams using the organization's real units
+- [x] P3.5 Optional AI-disposition tagging (automate / augment / keep human) — never blocks the workflow
+Phase 4
+- [x] P4 Implementation implications view + board-ready export pack
+Phase 5
+- [x] P5 Restyle remaining pages in the Playbook style
 
 ## Done (all sessions)
+- 2026-10-22: Approved 5-phase upgrade — accuracy fixes (ID-keyed people, chain-based layers, work-type span benchmarks, transparent health score, weighted archetype scoring, current Claude model, no names to AI), Playbook redesign, department view, new org chart, consolidated work activities with five-dimension tags, Scenario Studio, option comparison, real-unit archetype diagrams, optional AI-role overlay, implementation implications, board pack
 - 2024-12: Core app — CSV parser, metrics engine, dashboard, org chart, grades config, Claude API settings
-- 2026-07: Work activities analysis (duplication / missing activities / coordination gaps); archetype analysis with all-7 scoring; visual archetype diagrams (auto-layout, differentiating-activity highlighting); multi-encoding CSV support (Windows-1252 etc.); JSON-repair for truncated AI responses; archetype analysis now consumes work-activities (current-state) results and preserves them
-- 2026-07-10: Evidence-grade analysis + sourced benchmarks + resilient-build state files (this session)
-
-## Not started yet
-- Optional: smoke test that boots the API and exercises one end-to-end path (upload → metrics)
-- Optional: export findings pack (markdown/PDF) following facts/interpretation/recommendation structure
-- Optional: dashboard hierarchy pass on Metrics page (F-pattern, 40-30-20-10 rule)
+- 2026-07: Work activities analysis (duplication / missing activities / coordination gaps); archetype analysis with all-7 scoring; visual archetype diagrams; multi-encoding CSV support; JSON-repair for truncated AI responses; archetype analysis consumes and preserves work-activities results
+- 2026-07-10: Evidence-grade analysis + sourced benchmarks + resilient-build state files + AI pipeline mock tests
 
 ## How to resume (write this as if for a stranger)
-1. The next task is: whatever the owner asks; nothing is half-done
-2. The relevant files are: backend/app/services/*.py (AI logic), backend/app/resources/*.py (reference data), frontend/src/pages/AIAnalysis.tsx and Metrics.tsx (display), frontend/src/types/index.ts (API shapes)
-3. Watch out for: environment resets between sessions — run `pip install -r backend/requirements.txt` and `npm install` in frontend/ if tools are missing
-4. Run `./run_checks.sh` first — all should pass
+1. The next task is: whatever the owner asks next — nothing is half-done. Suggested: a live run with a real API key to review AI output quality; code-splitting the bundle
+2. The relevant files are: backend/app/parsers/csv_parser.py, backend/app/services/metrics_service.py, backend/app/services/ai_analysis_service.py, frontend/src/pages/*.tsx, frontend/src/types/index.ts
+3. Watch out for: in this container `pip` installs into a different Python than the app uses — always install with `python -m pip install -r backend/requirements.txt`; run `npm install` in frontend/ if node_modules is missing
+4. Run `./run_checks.sh` first — all should pass (step 4 is a browser smoke test; it is skipped automatically where Playwright isn't installed)
 
 ## Known issues
+- Span benchmark (owner's rule, 2026-10-22): managers tagged Operational in the Work Type column → 10-20 direct reports; all others → 5-10. Files without a Work Type column judge every manager against 5-10
 - Backend deprecation warnings (Pydantic class-based config; pandas select_dtypes) — cosmetic, not failures
-- Frontend bundle >500 kB warning from Vite — cosmetic, consider code-splitting later
+- Frontend bundle ~507 kB (was 848 kB) — just over Vite's 500 kB warning; code-splitting would clear it
+- AI features verified with a faked Claude client and sample (fictional) outputs only — no live API key in the build environment

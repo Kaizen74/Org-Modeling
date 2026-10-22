@@ -63,6 +63,37 @@ MANAGER_RATIO_BENCHMARKS = {
     }
 }
 
+# Numeric ranges used by the metrics engine — kept here, next to their
+# sources, so the code and the AI prompts quote the same figures.
+# Owner's calibration: a manager tagged "Operational" in the Work Type column
+# (frontline operational function) is judged against 10-20; every other manager 5-10.
+SPAN_TARGETS = {
+    "knowledge": {
+        "range": (5, 10),
+        "label": "All other managers",
+        "source": "Gartner span-of-control benchmarking (5-10 general target)",
+    },
+    "operational": {
+        "range": (10, 20),
+        "label": "Frontline operational managers",
+        "source": "Organization-design owner's calibration for frontline operational managers (10-20), "
+                  "between McKinsey's supervisor/facilitator archetypes (8-15) and operational benchmarks (15-25)",
+    },
+}
+# Work Type values that mark a manager as frontline operational
+OPERATIONAL_WORK_TYPES = {"operational", "operations", "frontline", "front line", "front-line"}
+MANAGER_RATIO_RANGE = (15, 25)  # % of workforce in people-manager roles
+LAYER_PLANNING_SPAN = 7  # span used to estimate the minimum layers a given headcount needs
+
+# The five diagnostic dimensions every finding is tagged with (owner's framework)
+FIVE_DIMENSIONS = [
+    "Structure & Accountabilities",
+    "People & Skills",
+    "Process & Systems",
+    "Mindset & Behaviors",
+    "Leadership",
+]
+
 ORG_DESIGN_TRENDS_2026 = [
     {
         "trend": "Skills-based organization",
@@ -104,6 +135,7 @@ def get_benchmarks_prompt_section() -> str:
 Span of control:
 - General target: {SPAN_OF_CONTROL_BENCHMARKS['general_target']['range']} [Source: {SPAN_OF_CONTROL_BENCHMARKS['general_target']['source']}]
 - Knowledge work: {SPAN_OF_CONTROL_BENCHMARKS['knowledge_work']['range']}; Operational/transactional: {SPAN_OF_CONTROL_BENCHMARKS['operational_transactional']['range']}
+- THIS ORGANIZATION'S CALIBRATION (every span verdict you are given uses it): managers tagged as frontline operational {SPAN_TARGETS['operational']['range'][0]}-{SPAN_TARGETS['operational']['range'][1]} direct reports; all other managers {SPAN_TARGETS['knowledge']['range'][0]}-{SPAN_TARGETS['knowledge']['range'][1]}
 - Current trend: {SPAN_OF_CONTROL_BENCHMARKS['current_average_trend']['figure']} [Source: {SPAN_OF_CONTROL_BENCHMARKS['current_average_trend']['source']}]
 - Manager overload: {SPAN_OF_CONTROL_BENCHMARKS['manager_overload_signal']['figure']} [Source: {SPAN_OF_CONTROL_BENCHMARKS['manager_overload_signal']['source']}]
 - McKinsey managerial archetypes (set spans per archetype, not org-wide): Player-Coach {mma['player_coach']['span']}, Coach {mma['coach']['span']}, Supervisor {mma['supervisor']['span']}, Facilitator {mma['facilitator']['span']} [Source: {mma['source']}]

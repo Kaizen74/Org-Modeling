@@ -2,21 +2,29 @@
 Metrics Calculator Service.
 
 Calculate org metrics with VALIDATED formulas.
-TESTED: Returns accurate metrics for 64-employee PAX org
-
-Expected results for PAX CSV:
-- total_employees: 64
-- total_managers: 16
-- manager_ratio_pct: 25.0
-- average_span: 3.94
-- total_cost: 5770000
-- average_grade_gap: 2.98
-- organizational_layers: 6
+Reference results for the PAX test fixture (a deliberately bottom-heavy org):
+64 employees, 34 managers (53.1%), average span 1.85, 6 layers from the
+reporting chain, total cost = sum of the fixture's Salary column.
 """
 
 import networkx as nx
 from typing import Dict, List, Optional
 import statistics
+
+from .org_graph import normalize_employees, build_org_graph, display_name, reporting_layers
+from ..resources.benchmarks_reference import (
+    SPAN_TARGETS,
+    MANAGER_RATIO_RANGE,
+    LAYER_PLANNING_SPAN,
+    OPERATIONAL_WORK_TYPES,
+    MANAGER_RATIO_BENCHMARKS,
+    LAYERS_BENCHMARKS,
+)
+import math
+
+# Bump when the shape or meaning of calculated metrics changes, so cached
+# metrics from older uploads are recalculated instead of shown stale
+METRICS_VERSION = 5
 
 
 class MetricsCalculator:
@@ -34,39 +42,31 @@ class MetricsCalculator:
             employees: List of employee dictionaries
             grade_order: Map of grade -> numeric order (1 = highest)
         """
-        self.employees = employees
+        # Keyed by Employee ID; records saved before IDs were resolved are
+        # resolved here by name, so older uploads still work
+        self.employees, self.data_issues = normalize_employees(employees)
         self.grade_order = grade_order or {}
-        self.graph = self._build_graph()
+        self.graph = build_org_graph(self.employees)
+        # Layer = position in the actual reporting chain (top = 1), not the typed Level column
+        self.layers = reporting_layers(self.graph)
 
-    def _build_graph(self) -> nx.DiGraph:
-        """Build directed graph from employee data."""
-        G = nx.DiGraph()
-
-        # Add all employees as nodes
-        for emp in self.employees:
-            G.add_node(emp["name"], **emp)
-
-        # Build name lookup
-        all_names = {emp["name"] for emp in self.employees}
-
-        # Add edges (manager -> direct report)
-        for emp in self.employees:
-            mgr = emp.get("manager_name", "")
-            if mgr and mgr not in ["Top of Org", "N/A", "", "nan"] and mgr in all_names:
-                G.add_edge(mgr, emp["name"])
-
-        return G
+    def _layer_of(self, node: str) -> int:
+        """Actual reporting layer, falling back to the declared Level for people in a reporting loop."""
+        return self.layers.get(node) or self.graph.nodes[node].get("level", 0)
 
     def calculate_all_metrics(self) -> Dict:
         """Calculate all organizational metrics."""
         return {
+            "metrics_version": METRICS_VERSION,
             "total_employees": self._total_employees(),
             "manager_stats": self._manager_statistics(),
             "span_of_control": self._span_of_control(),
             "cost_analysis": self._cost_analysis(),
             "grade_gap_analysis": self._grade_gap_analysis(),
             "layer_analysis": self._layer_analysis(),
-            "health_indicators": self._health_indicators()
+            "health_indicators": self._health_indicators(),
+            "department_analysis": self._department_analysis(),
+            "data_quality": {"issues": self.data_issues[:20]}
         }
 
     def _total_employees(self) -> int:
@@ -101,6 +101,11 @@ class MetricsCalculator:
         }
 
     def _span_of_control(self) -> Dict:
+        if getattr(self, "_span_cache", None) is None:
+            self._span_cache = self._compute_span_of_control()
+        return self._span_cache
+
+    def _compute_span_of_control(self) -> Dict:
         """
         Calculate span of control metrics.
 
@@ -131,10 +136,18 @@ class MetricsCalculator:
                 "max_span": 0,
                 "distribution": distribution,
                 "distribution_pct": {},
-                "by_manager": {}
+                "by_manager": {},
+                "manager_assessments": [],
+                "distribution_vs_benchmark": {"Below benchmark": 0, "Within benchmark": 0, "Above benchmark": 0},
+                "single_report_managers": 0,
             }
 
         total_managers = len(spans)
+        assessments = [self._assess_manager_span(m) for m in by_manager]
+        vs_benchmark = {"Below benchmark": 0, "Within benchmark": 0, "Above benchmark": 0}
+        for a in assessments:
+            vs_benchmark[{"below": "Below benchmark", "within": "Within benchmark", "above": "Above benchmark"}[a["status"]]] += 1
+
         return {
             "average_span": round(statistics.mean(spans), 2),
             "median_span": round(statistics.median(spans), 2),
@@ -145,7 +158,41 @@ class MetricsCalculator:
                 k: round(v / total_managers * 100, 1)
                 for k, v in distribution.items()
             },
-            "by_manager": by_manager
+            "by_manager": by_manager,
+            # Each manager judged against their benchmark: frontline operational or all other
+            "manager_assessments": sorted(assessments, key=lambda a: (a["status"] != "below", a["span"])),
+            "distribution_vs_benchmark": vs_benchmark,
+            "single_report_managers": sum(1 for s in spans if s == 1),
+        }
+
+    def _manager_work_type(self, manager: str) -> Dict:
+        """
+        Decide which span benchmark applies to a manager, and say why: a manager
+        tagged Operational in the Work Type column (frontline operational function)
+        gets the operational range; every other manager the 5-10 range.
+        """
+        declared = str(self.graph.nodes[manager].get("work_type") or "").strip().lower()
+        if declared in OPERATIONAL_WORK_TYPES:
+            return {"work_type": "operational", "basis": "tagged Operational in the Work Type column"}
+        if declared:
+            return {"work_type": "knowledge", "basis": f"Work Type column says '{declared}'"}
+        return {"work_type": "knowledge", "basis": "not tagged Operational in the Work Type column"}
+
+    def _assess_manager_span(self, manager: str) -> Dict:
+        span = self.graph.out_degree(manager)
+        kind = self._manager_work_type(manager)
+        low, high = SPAN_TARGETS[kind["work_type"]]["range"]
+        status = "below" if span < low else "above" if span > high else "within"
+        return {
+            "manager_id": manager,
+            "manager": display_name(self.graph, manager),
+            "job_title": self.graph.nodes[manager].get("job_title", ""),
+            "department": self.graph.nodes[manager].get("department", ""),
+            "span": span,
+            "work_type": kind["work_type"],
+            "work_type_basis": kind["basis"],
+            "benchmark_range": [low, high],
+            "status": status,
         }
 
     def _cost_analysis(self) -> Dict:
@@ -157,10 +204,10 @@ class MetricsCalculator:
 
         total_emp = len(self.graph.nodes())
 
-        # Cost by level
+        # Cost by reporting layer
         by_level = {}
         for node in self.graph.nodes():
-            level = self.graph.nodes[node].get("level", 0)
+            level = self._layer_of(node)
             salary = self.graph.nodes[node].get("salary", 0)
             if level not in by_level:
                 by_level[level] = {"count": 0, "total_cost": 0}
@@ -212,9 +259,9 @@ class MetricsCalculator:
                     gap = self.grade_order[sub_grade] - self.grade_order[mgr_grade]
                     gaps.append(gap)
                     gap_details.append({
-                        "manager": mgr,
+                        "manager": display_name(self.graph, mgr),
                         "manager_grade": mgr_grade,
-                        "subordinate": sub,
+                        "subordinate": display_name(self.graph, sub),
                         "subordinate_grade": sub_grade,
                         "gap": gap
                     })
@@ -231,83 +278,211 @@ class MetricsCalculator:
         }
 
     def _layer_analysis(self) -> Dict:
-        """Count and analyze organizational layers."""
-        levels = [
-            self.graph.nodes[n].get("level", 0)
+        """
+        Count layers from the actual reporting chain and check the typed Level
+        column against it.
+        """
+        if not self.graph.nodes():
+            return {"total_layers": 0, "declared_layers": 0, "by_level": {},
+                    "level_mismatches": {"count": 0, "examples": []}, "longest_chain": []}
+
+        by_level: Dict[int, int] = {}
+        for node in self.graph.nodes():
+            layer = self._layer_of(node)
+            by_level[layer] = by_level.get(layer, 0) + 1
+
+        declared = [self.graph.nodes[n].get("level", 0) for n in self.graph.nodes()]
+        mismatches = [
+            {
+                "name": display_name(self.graph, n),
+                "declared_level": self.graph.nodes[n].get("level", 0),
+                "actual_layer": self.layers[n],
+            }
             for n in self.graph.nodes()
+            if n in self.layers and self.graph.nodes[n].get("level", 0)
+            and self.graph.nodes[n].get("level") != self.layers[n]
         ]
 
-        if not levels:
-            return {"total_layers": 0, "by_level": {}}
-
-        # Count employees per level
-        by_level = {}
-        for node in self.graph.nodes():
-            level = self.graph.nodes[node].get("level", 0)
-            if level not in by_level:
-                by_level[level] = {"count": 0, "employees": []}
-            by_level[level]["count"] += 1
-            by_level[level]["employees"].append(self.graph.nodes[node].get("name"))
+        # Deepest reporting chain, top to bottom — where to look for layer compression
+        longest_chain: List[str] = []
+        if self.layers:
+            node = max(self.layers, key=lambda n: self.layers[n])
+            while node is not None:
+                longest_chain.append(display_name(self.graph, node))
+                preds = list(self.graph.predecessors(node))
+                node = preds[0] if preds else None
+            longest_chain.reverse()
 
         return {
-            "total_layers": max(levels),
-            "by_level": {k: {"count": v["count"]} for k, v in by_level.items()}
+            "total_layers": max(self.layers.values()) if self.layers else max(declared),
+            "declared_layers": max(declared),
+            "by_level": {k: {"count": v} for k, v in sorted(by_level.items())},
+            "level_mismatches": {"count": len(mismatches), "examples": mismatches[:10]},
+            "longest_chain": longest_chain,
         }
 
+    def _department_analysis(self) -> List[Dict]:
+        """
+        The same structural lenses per department: size, cost, managers, spans
+        against benchmark, layers, the most common roles, and how many people
+        report to a manager in a different department.
+        """
+        assessments = {a["manager_id"]: a for a in self._span_of_control().get("manager_assessments", [])}
+        total_people = self._total_employees() or 1
+        total_cost = sum(self.graph.nodes[n].get("salary", 0) or 0 for n in self.graph.nodes()) or 0
+
+        by_dept: Dict[str, List[str]] = {}
+        for n in self.graph.nodes():
+            dept = str(self.graph.nodes[n].get("department") or "Unknown").strip() or "Unknown"
+            by_dept.setdefault(dept, []).append(n)
+
+        result = []
+        for dept, people in by_dept.items():
+            managers = [n for n in people if self.graph.out_degree(n) > 0]
+            spans = [self.graph.out_degree(n) for n in managers]
+            layers = sorted({self._layer_of(n) for n in people})
+            cost = sum(self.graph.nodes[n].get("salary", 0) or 0 for n in people)
+
+            titles: Dict[str, int] = {}
+            for n in people:
+                t = str(self.graph.nodes[n].get("job_title", "")).strip()
+                if t:
+                    titles[t] = titles.get(t, 0) + 1
+
+            vs = {"below": 0, "within": 0, "above": 0}
+            for m in managers:
+                if m in assessments:
+                    vs[assessments[m]["status"]] += 1
+            operational_teams = sum(1 for m in managers if assessments.get(m, {}).get("work_type") == "operational")
+
+            cross_reports = 0
+            for n in people:
+                mgr = next(iter(self.graph.predecessors(n)), None)
+                if mgr is not None and str(self.graph.nodes[mgr].get("department") or "Unknown").strip() != dept:
+                    cross_reports += 1
+
+            result.append({
+                "department": dept,
+                "headcount": len(people),
+                "headcount_pct": round(len(people) / total_people * 100, 1),
+                "managers": len(managers),
+                "manager_ratio_pct": round(len(managers) / len(people) * 100, 1),
+                "average_span": round(statistics.mean(spans), 2) if spans else 0.0,
+                "median_span": round(statistics.median(spans), 2) if spans else 0.0,
+                "layers_spanned": [layers[0], layers[-1]] if layers else [],
+                "layer_count": len(layers),
+                "total_cost": round(cost, 0),
+                "cost_pct": round(cost / total_cost * 100, 1) if total_cost else 0.0,
+                "average_cost": round(cost / len(people), 0),
+                "spans_vs_benchmark": vs,
+                "operational_teams": operational_teams,
+                "single_report_managers": sum(1 for x in spans if x == 1),
+                "reports_from_other_departments": cross_reports,
+                "top_titles": [
+                    {"title": t, "count": c}
+                    for t, c in sorted(titles.items(), key=lambda kv: (-kv[1], kv[0]))[:6]
+                ],
+            })
+        return sorted(result, key=lambda d: -d["headcount"])
+
+    # Weights of the health score components (must sum to 100)
+    HEALTH_WEIGHTS = {"span_fit": 35, "layers": 25, "manager_ratio": 20, "single_report": 20}
+
     def _health_indicators(self) -> Dict:
-        """Flag organizational health issues."""
+        """
+        Structural health as four visible components, each scored 0-100 with
+        the value, the benchmark and the rule used, then weighted together.
+        """
         span = self._span_of_control()
         mgr = self._manager_statistics()
+        layers = self._layer_analysis()
+        total = self._total_employees()
+        managers = mgr["total_managers"]
+        components = []
 
-        warnings = []
-        recommendations = []
+        # 1. Span fit: share of managers within their benchmark
+        within = span.get("distribution_vs_benchmark", {}).get("Within benchmark", 0)
+        span_fit = round(within / managers * 100) if managers else 100
+        below = span.get("distribution_vs_benchmark", {}).get("Below benchmark", 0)
+        above = span.get("distribution_vs_benchmark", {}).get("Above benchmark", 0)
+        components.append({
+            "key": "span_fit", "label": "Spans fit the work",
+            "score": span_fit, "weight": self.HEALTH_WEIGHTS["span_fit"],
+            "value": f"{within} of {managers} managers within benchmark ({below} below, {above} above)",
+            "benchmark": (f"Frontline operational managers {SPAN_TARGETS['operational']['range'][0]}-{SPAN_TARGETS['operational']['range'][1]}, "
+                          f"all other managers {SPAN_TARGETS['knowledge']['range'][0]}-{SPAN_TARGETS['knowledge']['range'][1]} direct reports"),
+            "rule": "Score = % of managers whose span is within their benchmark (Operational in the Work Type column → frontline range)",
+            "source": f"{SPAN_TARGETS['knowledge']['source']}; {SPAN_TARGETS['operational']['source']}",
+        })
 
-        # Check average span
-        if span["average_span"] < 5:
-            warnings.append(
-                f"Low avg span ({span['average_span']}) - consider consolidation"
-            )
-            recommendations.append(
-                "Increase span of control by combining teams or reducing management layers"
-            )
+        # 2. Layers vs the minimum this headcount needs at a planning span
+        actual_layers = layers["total_layers"]
+        needed = max(1, math.ceil(math.log(total, LAYER_PLANNING_SPAN)) + 1) if total > 1 else 1
+        excess = max(0, actual_layers - needed)
+        layer_score = max(0, 100 - excess * 20)
+        components.append({
+            "key": "layers", "label": "Layers for this size",
+            "score": layer_score, "weight": self.HEALTH_WEIGHTS["layers"],
+            "value": f"{actual_layers} layers; about {needed} needed for {total} people at a span of {LAYER_PLANNING_SPAN}",
+            "benchmark": LAYERS_BENCHMARKS["typical_guidance"]["range"],
+            "rule": f"Minimum layers = ceil(log_{LAYER_PLANNING_SPAN}(headcount)) + 1; minus 20 points per extra layer",
+            "source": LAYERS_BENCHMARKS["typical_guidance"]["source"],
+        })
 
-        # Check span distribution
-        narrow_pct = span["distribution_pct"].get("Narrow (<5)", 0)
-        if narrow_pct > 60:
-            warnings.append(
-                f"{narrow_pct}% managers have narrow spans (<5 reports)"
-            )
-            recommendations.append(
-                "Review managers with 1-2 direct reports for potential consolidation"
-            )
+        # 3. Manager ratio vs the typical range
+        ratio = mgr["manager_ratio_pct"]
+        lo, hi = MANAGER_RATIO_RANGE
+        distance = lo - ratio if ratio < lo else ratio - hi if ratio > hi else 0
+        ratio_score = max(0, round(100 - distance * 4))
+        components.append({
+            "key": "manager_ratio", "label": "Manager ratio",
+            "score": ratio_score, "weight": self.HEALTH_WEIGHTS["manager_ratio"],
+            "value": f"{ratio}% of people manage others",
+            "benchmark": f"{lo}-{hi}% of the workforce",
+            "rule": "Minus 4 points per percentage point outside the range",
+            "source": MANAGER_RATIO_BENCHMARKS["typical_range"]["source"],
+        })
 
-        # Check manager ratio
-        if mgr["manager_ratio_pct"] > 30:
-            warnings.append(
-                f"High manager ratio ({mgr['manager_ratio_pct']}%) - potential overhead"
-            )
-            recommendations.append(
-                "Benchmark against industry standards (typically 15-25% managers)"
-            )
+        # 4. Managers with a single direct report (classic layer-compression signal)
+        singles = span.get("single_report_managers", 0)
+        single_pct = round(singles / managers * 100, 1) if managers else 0
+        single_score = max(0, round(100 - single_pct * 3))
+        components.append({
+            "key": "single_report", "label": "Single-report managers",
+            "score": single_score, "weight": self.HEALTH_WEIGHTS["single_report"],
+            "value": f"{singles} of {managers} managers ({single_pct}%) have one direct report",
+            "benchmark": "As few as possible — each is a candidate for removing a layer",
+            "rule": "Minus 3 points per percentage point of managers with one direct report",
+            "source": "Spans-and-layers practice",
+        })
 
-        # Check for very wide spans
-        if span["max_span"] > 15:
-            warnings.append(
-                f"Some managers have very wide spans (max: {span['max_span']})"
-            )
-            recommendations.append(
-                "Consider adding team leads or splitting large teams"
-            )
+        health_score = round(sum(c["score"] * c["weight"] for c in components) / 100)
 
-        # Calculate health score
-        health_score = max(0, 100 - len(warnings) * 15)
+        warnings, recommendations = [], []
+        if span_fit < 70:
+            if below >= above:
+                warnings.append(f"{below} of {managers} managers have spans below their benchmark")
+                recommendations.append("Review the narrowest teams for consolidation — the Structure view lists every manager against their benchmark")
+            else:
+                warnings.append(f"{above} of {managers} managers have spans above their benchmark")
+                recommendations.append("Consider team leads or splitting the widest teams to protect manager capacity")
+        if excess > 0:
+            warnings.append(f"{actual_layers} layers where about {needed} would suffice for {total} people")
+            recommendations.append("Examine the longest reporting chain for layers that can be removed")
+        if ratio_score < 70:
+            warnings.append(f"Manager ratio of {ratio}% is outside the typical {lo}-{hi}% range")
+            recommendations.append("Check whether manager roles are justified by span and complexity")
+        if single_score < 70:
+            warnings.append(f"{singles} managers have only one direct report")
+            recommendations.append("Single-report managers are the first candidates for layer compression")
 
         return {
             "health_score": health_score,
             "health_grade": self._score_to_grade(health_score),
+            "components": components,
             "warnings": warnings,
             "recommendations": recommendations,
-            "is_healthy": len(warnings) <= 2
+            "is_healthy": health_score >= 70,
         }
 
     def _score_to_grade(self, score: int) -> str:

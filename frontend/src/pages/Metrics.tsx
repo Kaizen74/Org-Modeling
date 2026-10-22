@@ -1,733 +1,381 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, AlertTriangle, ArrowRight, RefreshCw, Briefcase, Brain } from 'lucide-react';
+import { metricsApi } from '../services/api';
+import type { OrgMetrics, ManagerSpanAssessment } from '../types';
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts';
-import { metricsApi, aiAnalysisApi, settingsApi } from '../services/api';
-import type { OrgMetrics, QuickWorkActivitiesAnalysis, WorkActivitiesAnalysis } from '../types';
+  PageHeader,
+  Section,
+  StatTile,
+  BenchmarkPill,
+  ScoreBar,
+  ScoreLegend,
+  Callout,
+  Chip,
+  EmptyState,
+  Loading,
+  formatMoney,
+} from '../components/ui';
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+type SpanFilter = 'all' | 'below' | 'within' | 'above';
+
+const BENCH_COLORS = {
+  below: 'var(--color-score-amber)',
+  within: 'var(--color-score-green)',
+  above: 'var(--color-score-red)',
+};
+
+/** Horizontal bar used inside tables and lists (bars start at zero). */
+function InlineBar({ value, max, color = 'var(--color-ink)' }: { value: number; max: number; color?: string }) {
+  return (
+    <span className="block h-1.5 w-full rounded-full bg-track">
+      <span className="block h-full rounded-full" style={{ width: `${max ? (value / max) * 100 : 0}%`, background: color }} />
+    </span>
+  );
+}
 
 export default function Metrics() {
   const [metrics, setMetrics] = useState<OrgMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [recalculating, setRecalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Work Activities State
-  const [workActivitiesQuick, setWorkActivitiesQuick] = useState<QuickWorkActivitiesAnalysis | null>(null);
-  const [workActivitiesAnalysis, setWorkActivitiesAnalysis] = useState<WorkActivitiesAnalysis | null>(null);
-  const [analyzingWorkActivities, setAnalyzingWorkActivities] = useState(false);
-  const [workActivitiesError, setWorkActivitiesError] = useState<string | null>(null);
-  const [apiConfigured, setApiConfigured] = useState(false);
-  const [industry, setIndustry] = useState('');
+  const [spanFilter, setSpanFilter] = useState<SpanFilter>('all');
+  const [deptFilter, setDeptFilter] = useState('');
+  const [showAllManagers, setShowAllManagers] = useState(false);
 
   useEffect(() => {
-    fetchMetrics();
-    fetchWorkActivitiesQuick();
-    fetchWorkActivitiesLatest();
-    checkApiStatus();
+    metricsApi
+      .getLatest()
+      .then((r) => setMetrics(r.metrics))
+      .catch(() => setError('Upload an org structure CSV to see its structure.'))
+      .finally(() => setLoading(false));
   }, []);
-
-  const checkApiStatus = async () => {
-    try {
-      const status = await settingsApi.getStatus();
-      setApiConfigured(status.configured);
-    } catch (err) {
-      console.error('Failed to check API status:', err);
-    }
-  };
-
-  const fetchMetrics = async () => {
-    try {
-      const result = await metricsApi.getLatest();
-      setMetrics(result.metrics);
-    } catch (err) {
-      setError('No metrics available. Please upload org data first.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchWorkActivitiesQuick = async () => {
-    try {
-      const result = await aiAnalysisApi.getQuickWorkActivities();
-      setWorkActivitiesQuick(result);
-    } catch (err) {
-      // No work activities data available
-    }
-  };
-
-  const fetchWorkActivitiesLatest = async () => {
-    try {
-      const result = await aiAnalysisApi.getLatestWorkActivities();
-      setWorkActivitiesAnalysis(result.work_activities_analysis);
-    } catch (err) {
-      // No existing analysis
-    }
-  };
 
   const handleRecalculate = async () => {
     setRecalculating(true);
     try {
-      const result = await metricsApi.recalculate();
-      setMetrics(result.metrics);
-    } catch (err) {
-      console.error('Failed to recalculate:', err);
+      setMetrics((await metricsApi.recalculate()).metrics);
     } finally {
       setRecalculating(false);
     }
   };
 
-  const handleAnalyzeWorkActivities = async () => {
-    setAnalyzingWorkActivities(true);
-    setWorkActivitiesError(null);
-    try {
-      const result = await aiAnalysisApi.analyzeWorkActivities(industry || undefined);
-      setWorkActivitiesAnalysis(result.work_activities_analysis);
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string } } };
-      setWorkActivitiesError(error.response?.data?.detail || 'Failed to analyze work activities');
-    } finally {
-      setAnalyzingWorkActivities(false);
-    }
-  };
+  const assessments = useMemo<ManagerSpanAssessment[]>(
+    () => metrics?.span_of_control.manager_assessments ?? [],
+    [metrics]
+  );
+  const filteredManagers = assessments.filter(
+    (a) => (spanFilter === 'all' || a.status === spanFilter) && (!deptFilter || a.department === deptFilter)
+  );
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
-      </div>
-    );
-  }
-
+  if (loading) return <Loading label="Calculating the structure" />;
   if (error || !metrics) {
     return (
-      <div>
-        <h1 className="text-2xl font-bold mb-6">Organizational Metrics</h1>
-        <div className="card text-center py-8">
-          <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-lg font-medium text-gray-600 mb-2">No Metrics Available</h2>
-          <p className="text-gray-500 mb-4">{error}</p>
-          <Link to="/upload" className="btn btn-primary inline-flex items-center gap-2">
-            Upload CSV <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      </div>
+      <>
+        <PageHeader eyebrow="01 · Diagnose — structure" title="Structure" />
+        <EmptyState title="No organization loaded yet" body={error} action={<Link to="/upload" className="btn btn-primary">Upload org data →</Link>} />
+      </>
     );
   }
 
-  // Prepare chart data
-  const spanDistData = Object.entries(metrics.span_of_control.distribution).map(([name, value]) => ({
-    name,
-    value,
-  }));
+  const span = metrics.span_of_control;
+  const vs = span.distribution_vs_benchmark ?? { 'Below benchmark': 0, 'Within benchmark': 0, 'Above benchmark': 0 };
+  const managers = metrics.manager_stats.total_managers;
+  const below = vs['Below benchmark'];
+  const within = vs['Within benchmark'];
+  const above = vs['Above benchmark'];
+  const depts = metrics.department_analysis ?? [];
+  const layers = metrics.layer_analysis;
+  const layerRows = Object.entries(layers.by_level)
+    .map(([layer, v]) => ({ layer: Number(layer), count: v.count }))
+    .sort((a, b) => a.layer - b.layer);
+  const maxLayerCount = Math.max(1, ...layerRows.map((r) => r.count));
+  const costByLayer = Object.entries(metrics.cost_analysis.by_level ?? {})
+    .map(([layer, v]) => ({ layer: Number(layer), ...v }))
+    .sort((a, b) => a.layer - b.layer);
+  const maxLayerCost = Math.max(1, ...costByLayer.map((r) => r.total_cost));
+  const costByGrade = Object.entries(metrics.cost_analysis.by_grade ?? {})
+    .map(([grade, v]) => ({ grade, ...v }))
+    .sort((a, b) => b.total_cost - a.total_cost);
+  const maxDeptHeadcount = Math.max(1, ...depts.map((d) => d.headcount));
+  const layersComponent = metrics.health_indicators.components?.find((c) => c.key === 'layers');
 
-  const managerICData = [
-    { name: 'Managers', value: metrics.manager_stats.total_managers },
-    { name: 'ICs', value: metrics.manager_stats.total_ics },
-  ];
+  const headline =
+    managers === 0
+      ? 'No reporting lines found'
+      : within * 2 >= managers
+        ? `${within} of ${managers} managers have spans that fit their work`
+        : below >= above
+          ? `${below} of ${managers} managers run teams narrower than their benchmark`
+          : `${above} of ${managers} managers run teams wider than their benchmark`;
+
+  const shownManagers = showAllManagers ? filteredManagers : filteredManagers.slice(0, 20);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Organizational Metrics</h1>
-        <div className="flex gap-3">
-          <button
-            onClick={handleRecalculate}
-            disabled={recalculating}
-            className="btn btn-secondary flex items-center gap-2 disabled:opacity-50"
-          >
-            {recalculating ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4" />
-            )}
-            Recalculate
-          </button>
-          <Link to="/analysis" className="btn btn-primary flex items-center gap-2">
-            Archetype Analysis <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
+    <>
+      <PageHeader
+        eyebrow="01 · Diagnose — structure"
+        title={headline}
+        lede={`Managers tagged Operational in the Work Type column are judged against 10–20 direct reports; all other managers against 5–10. Average span ${span.average_span.toFixed(1)}, median ${span.median_span}.`}
+        actions={
+          <>
+            <button onClick={handleRecalculate} disabled={recalculating} className="btn btn-quiet">
+              {recalculating ? 'Recalculating…' : 'Recalculate'}
+            </button>
+            <Link to="/org-chart" className="btn btn-secondary">See the org chart →</Link>
+          </>
+        }
+      />
+
+      <div className="mb-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatTile label="People" value={metrics.total_employees.toLocaleString()} sub={depts.length ? `${depts.length} departments` : undefined} />
+        <StatTile label="Managers" value={managers} sub={`${metrics.manager_stats.manager_ratio_pct}% of people`} />
+        <StatTile label="Median span" value={span.median_span} sub={`range ${span.min_span}–${span.max_span}`} />
+        <StatTile
+          label="Layers"
+          value={layers.total_layers}
+          sub={layers.declared_layers && layers.declared_layers !== layers.total_layers ? `Level column says ${layers.declared_layers}` : 'in the reporting chain'}
+        />
+        <StatTile label="Cost per person" value={formatMoney(metrics.cost_analysis.average_cost_per_employee)} sub={`${formatMoney(metrics.cost_analysis.total_cost)} in total`} />
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <SummaryCard
-          title="Total Employees"
-          value={metrics.total_employees}
-        />
-        <SummaryCard
-          title="Manager Ratio"
-          value={`${metrics.manager_stats.manager_ratio_pct}%`}
-          subtitle={`${metrics.manager_stats.total_managers} managers`}
-        />
-        <SummaryCard
-          title="Avg Span of Control"
-          value={metrics.span_of_control.average_span.toFixed(2)}
-          subtitle={`Median: ${metrics.span_of_control.median_span}`}
-        />
-        <SummaryCard
-          title="Org Layers"
-          value={metrics.layer_analysis.total_layers}
-        />
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Span Distribution */}
-        <div className="card">
-          <h3 className="font-semibold mb-4">Span of Control Distribution</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={spanDistData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill="#3b82f6" />
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="mt-2 text-sm text-gray-500">
-            {Object.entries(metrics.span_of_control.distribution_pct).map(([k, v]) => (
-              <span key={k} className="mr-4">{k}: {v}%</span>
-            ))}
+      {/* Spans */}
+      <Section eyebrow="01 · Spans" title="Every manager against the benchmark for their work">
+        {managers > 0 && (
+          <div className="card mb-4">
+            <div className="flex h-3 w-full overflow-hidden rounded-full" role="img" aria-label={`${below} below, ${within} within, ${above} above benchmark`}>
+              {([['below', below], ['within', within], ['above', above]] as const).map(([k, n]) =>
+                n ? <span key={k} style={{ width: `${(n / managers) * 100}%`, background: BENCH_COLORS[k] }} /> : null
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-6 text-sm">
+              {([['below', below, 'below benchmark'], ['within', within, 'within'], ['above', above, 'above']] as const).map(([k, n, label]) => (
+                <span key={k} className="flex items-center gap-2">
+                  <BenchmarkPill status={k} />
+                  <span className="tabular font-semibold text-ink">{n}</span>
+                  <span className="text-secondary">{label}</span>
+                </span>
+              ))}
+              {!!span.single_report_managers && (
+                <span className="text-secondary">· <span className="tabular font-semibold text-ink">{span.single_report_managers}</span> managers with one direct report</span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Manager vs IC */}
-        <div className="card">
-          <h3 className="font-semibold mb-4">Manager vs Individual Contributors</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={managerICData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {managerICData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Cost Analysis */}
-      <div className="card mb-8">
-        <h3 className="font-semibold mb-4">Cost Analysis</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <p className="text-sm text-gray-500">Total Cost</p>
-            <p className="text-2xl font-bold">
-              ${(metrics.cost_analysis.total_cost / 1000000).toFixed(2)}M
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Avg Cost per Employee</p>
-            <p className="text-2xl font-bold">
-              ${metrics.cost_analysis.average_cost_per_employee.toLocaleString()}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Avg Grade Gap</p>
-            <p className="text-2xl font-bold">
-              {metrics.grade_gap_analysis.average_grade_gap.toFixed(2)}
-            </p>
-            <p className="text-xs text-gray-400">
-              ({metrics.grade_gap_analysis.total_comparisons} comparisons)
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Work Activities Analysis - Current State */}
-      <div className="card mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold flex items-center gap-2">
-            <Briefcase className="w-5 h-5" />
-            Work Activities Analysis
-          </h3>
-          {workActivitiesQuick && (
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              workActivitiesQuick.coverage_percentage >= 80
-                ? 'bg-green-100 text-green-700'
-                : workActivitiesQuick.coverage_percentage >= 50
-                ? 'bg-yellow-100 text-yellow-700'
-                : 'bg-red-100 text-red-700'
-            }`}>
-              {workActivitiesQuick.coverage_percentage}% Coverage
-            </span>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {(['all', 'below', 'within', 'above'] as SpanFilter[]).map((f) => (
+            <Chip key={f} active={spanFilter === f} onClick={() => setSpanFilter(f)}>
+              {f === 'all' ? `All managers (${assessments.length})` : `${f[0].toUpperCase()}${f.slice(1)} (${assessments.filter((a) => a.status === f).length})`}
+            </Chip>
+          ))}
+          {depts.length > 1 && (
+            <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className="input ml-auto w-auto py-1.5 text-sm" aria-label="Filter by department">
+              <option value="">All departments</option>
+              {depts.map((d) => <option key={d.department} value={d.department}>{d.department}</option>)}
+            </select>
           )}
         </div>
 
-        {!workActivitiesQuick || workActivitiesQuick.employees_with_work_activities === 0 ? (
-          <div className="text-center py-6 bg-gray-50 rounded-lg">
-            <Briefcase className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-600 mb-2">No work activities data found</p>
-            <p className="text-sm text-gray-500">
-              Upload a CSV with a "Work Activities" column to analyze job coherence and synergy
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Coverage Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="p-3 bg-blue-50 rounded-lg text-center">
-                <p className="text-xl font-bold text-blue-600">{workActivitiesQuick.employees_with_work_activities}</p>
-                <p className="text-xs text-blue-700">Positions with Activities</p>
-              </div>
-              <div className="p-3 bg-green-50 rounded-lg text-center">
-                <p className="text-xl font-bold text-green-600">{workActivitiesQuick.departments_with_activities}</p>
-                <p className="text-xs text-green-700">Departments</p>
-              </div>
-              <div className="p-3 bg-purple-50 rounded-lg text-center">
-                <p className="text-xl font-bold text-purple-600">{workActivitiesQuick.coverage_percentage}%</p>
-                <p className="text-xs text-purple-700">Data Coverage</p>
-              </div>
-              <div className="p-3 bg-gray-50 rounded-lg text-center">
-                <p className="text-xl font-bold text-gray-600">{workActivitiesQuick.status}</p>
-                <p className="text-xs text-gray-700">Status</p>
-              </div>
-            </div>
-
-            {/* Department Breakdown */}
-            {workActivitiesQuick.department_breakdown && workActivitiesQuick.department_breakdown.length > 0 && (
-              <div className="mb-6">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Activities by Department</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {workActivitiesQuick.department_breakdown.slice(0, 6).map((dept, i) => (
-                    <div key={i} className="p-3 border rounded-lg">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-medium text-sm">{dept.department}</span>
-                        <span className="text-xs text-gray-500">{dept.positions_with_activities} positions</span>
-                      </div>
-                      {dept.sample_activities.length > 0 && (
-                        <p className="text-xs text-gray-500 truncate" title={dept.sample_activities[0]}>
-                          e.g., {dept.sample_activities[0].substring(0, 60)}...
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* AI Analysis Section */}
-            {apiConfigured ? (
-              <div className="border-t pt-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">AI-Powered Current State Analysis</h4>
-
-                {!workActivitiesAnalysis ? (
-                  <div className="flex flex-col md:flex-row items-start md:items-end gap-3">
-                    <div className="flex-1">
-                      <label className="text-xs text-gray-500">Industry Context (Optional)</label>
-                      <input
-                        type="text"
-                        value={industry}
-                        onChange={(e) => setIndustry(e.target.value)}
-                        className="input mt-1"
-                        placeholder="E.g., Airlines, Technology, Healthcare..."
-                      />
-                    </div>
-                    <button
-                      onClick={handleAnalyzeWorkActivities}
-                      disabled={analyzingWorkActivities}
-                      className="btn btn-primary flex items-center gap-2 whitespace-nowrap"
-                    >
-                      {analyzingWorkActivities ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Analyzing...
-                        </>
-                      ) : (
-                        <>
-                          <Brain className="w-4 h-4" />
-                          Run Current State Analysis
-                        </>
-                      )}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-5">
-                    {/* Key Findings Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {/* Duplication Score */}
-                      {workActivitiesAnalysis.activity_duplication && (
-                        <div className={`p-4 rounded-lg ${
-                          workActivitiesAnalysis.activity_duplication.severity_assessment === 'High'
-                            ? 'bg-red-50 border border-red-200'
-                            : workActivitiesAnalysis.activity_duplication.severity_assessment === 'Medium'
-                            ? 'bg-yellow-50 border border-yellow-200'
-                            : 'bg-green-50 border border-green-200'
-                        }`}>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-lg">🔄</span>
-                            <span className="font-medium text-gray-800">Activity Duplication</span>
-                          </div>
-                          <div className="flex items-baseline gap-2">
-                            <span className={`text-2xl font-bold ${
-                              workActivitiesAnalysis.activity_duplication.severity_assessment === 'High' ? 'text-red-600' :
-                              workActivitiesAnalysis.activity_duplication.severity_assessment === 'Medium' ? 'text-yellow-600' : 'text-green-600'
-                            }`}>
-                              {workActivitiesAnalysis.activity_duplication.duplications?.length || 0}
-                            </span>
-                            <span className="text-sm text-gray-600">issues found</span>
-                          </div>
-                          <span className={`text-xs px-2 py-0.5 rounded ${
-                            workActivitiesAnalysis.activity_duplication.severity_assessment === 'High' ? 'bg-red-100 text-red-700' :
-                            workActivitiesAnalysis.activity_duplication.severity_assessment === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
-                          }`}>
-                            {workActivitiesAnalysis.activity_duplication.severity_assessment} Severity
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Missing Activities Score */}
-                      {workActivitiesAnalysis.missing_activities && (
-                        <div className={`p-4 rounded-lg ${
-                          workActivitiesAnalysis.missing_activities.severity_assessment === 'Critical'
-                            ? 'bg-red-50 border border-red-200'
-                            : workActivitiesAnalysis.missing_activities.severity_assessment === 'Moderate'
-                            ? 'bg-yellow-50 border border-yellow-200'
-                            : 'bg-green-50 border border-green-200'
-                        }`}>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-lg">📋</span>
-                            <span className="font-medium text-gray-800">Missing Activities</span>
-                          </div>
-                          <div className="flex items-baseline gap-2">
-                            <span className={`text-2xl font-bold ${
-                              workActivitiesAnalysis.missing_activities.severity_assessment === 'Critical' ? 'text-red-600' :
-                              workActivitiesAnalysis.missing_activities.severity_assessment === 'Moderate' ? 'text-yellow-600' : 'text-green-600'
-                            }`}>
-                              {workActivitiesAnalysis.missing_activities.gaps?.length || 0}
-                            </span>
-                            <span className="text-sm text-gray-600">gaps identified</span>
-                          </div>
-                          <span className={`text-xs px-2 py-0.5 rounded ${
-                            workActivitiesAnalysis.missing_activities.severity_assessment === 'Critical' ? 'bg-red-100 text-red-700' :
-                            workActivitiesAnalysis.missing_activities.severity_assessment === 'Moderate' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
-                          }`}>
-                            {workActivitiesAnalysis.missing_activities.severity_assessment}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Coordination Gaps Score */}
-                      {workActivitiesAnalysis.coordination_gaps && (
-                        <div className={`p-4 rounded-lg ${
-                          workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Critical'
-                            ? 'bg-red-50 border border-red-200'
-                            : workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Moderate'
-                            ? 'bg-yellow-50 border border-yellow-200'
-                            : 'bg-green-50 border border-green-200'
-                        }`}>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-lg">🤝</span>
-                            <span className="font-medium text-gray-800">Coordination Gaps</span>
-                          </div>
-                          <div className="flex items-baseline gap-2">
-                            <span className={`text-2xl font-bold ${
-                              workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Critical' ? 'text-red-600' :
-                              workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Moderate' ? 'text-yellow-600' : 'text-green-600'
-                            }`}>
-                              {workActivitiesAnalysis.coordination_gaps.gaps?.length || 0}
-                            </span>
-                            <span className="text-sm text-gray-600">handoff issues</span>
-                          </div>
-                          <span className={`text-xs px-2 py-0.5 rounded ${
-                            workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Critical' ? 'bg-red-100 text-red-700' :
-                            workActivitiesAnalysis.coordination_gaps.severity_assessment === 'Moderate' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
-                          }`}>
-                            {workActivitiesAnalysis.coordination_gaps.severity_assessment}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Activity Duplication Details */}
-                    {workActivitiesAnalysis.activity_duplication?.duplications && workActivitiesAnalysis.activity_duplication.duplications.length > 0 && (
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <h5 className="text-sm font-medium text-gray-800 mb-3 flex items-center gap-2">
-                          🔄 Top Activity Duplications
-                        </h5>
-                        <div className="space-y-2">
-                          {workActivitiesAnalysis.activity_duplication.duplications.slice(0, 3).map((dup, i) => (
-                            <div key={i} className="bg-white p-3 rounded border border-gray-200">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-gray-800">{dup.activity}</p>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    Affects: {dup.affected_roles?.slice(0, 3).join(', ')}{dup.affected_roles?.length > 3 ? '...' : ''}
-                                  </p>
-                                </div>
-                                <div className="flex flex-col items-end gap-1">
-                                  <span className={`text-xs px-2 py-1 rounded ${
-                                    dup.severity === 'High' ? 'bg-red-100 text-red-700' :
-                                    dup.severity === 'Medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
-                                  }`}>
-                                    {dup.severity}
-                                  </span>
-                                  {dup.confidence && (
-                                    <span
-                                      className="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-600"
-                                      title={dup.confidence_rationale || ''}
-                                    >
-                                      Confidence: {dup.confidence}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              {dup.evidence && (
-                                <p className="text-xs text-gray-500 mt-2">Evidence: {dup.evidence}</p>
-                              )}
-                              {dup.business_impact && (
-                                <p className="text-xs text-gray-600 mt-2 italic">Impact: {dup.business_impact}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Missing Activities Details */}
-                    {workActivitiesAnalysis.missing_activities?.gaps && workActivitiesAnalysis.missing_activities.gaps.length > 0 && (
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <h5 className="text-sm font-medium text-gray-800 mb-3 flex items-center gap-2">
-                          📋 Missing Activities vs Industry Benchmarks
-                        </h5>
-                        <div className="space-y-2">
-                          {workActivitiesAnalysis.missing_activities.gaps.slice(0, 3).map((gap, i) => (
-                            <div key={i} className="bg-white p-3 rounded border border-gray-200">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-gray-800">{gap.activity}</p>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    Should be in: {gap.affected_roles?.slice(0, 2).join(', ')}
-                                  </p>
-                                </div>
-                                <span className={`text-xs px-2 py-1 rounded ${
-                                  gap.severity === 'Critical' ? 'bg-red-100 text-red-700' :
-                                  gap.severity === 'Important' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
-                                }`}>
-                                  {gap.severity}
-                                </span>
-                              </div>
-                              {gap.industry_benchmark && (
-                                <p className="text-xs text-indigo-600 mt-2">
-                                  Industry: {gap.industry_benchmark}
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Coordination Gaps Details */}
-                    {workActivitiesAnalysis.coordination_gaps?.gaps && workActivitiesAnalysis.coordination_gaps.gaps.length > 0 && (
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <h5 className="text-sm font-medium text-gray-800 mb-3 flex items-center gap-2">
-                          🤝 Coordination & Handoff Gaps
-                        </h5>
-                        <div className="space-y-2">
-                          {workActivitiesAnalysis.coordination_gaps.gaps.slice(0, 3).map((gap, i) => (
-                            <div key={i} className="bg-white p-3 rounded border border-gray-200">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-gray-800">{gap.handoff_point}</p>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    {gap.from_department} → {gap.to_department}
-                                  </p>
-                                </div>
-                                <span className={`text-xs px-2 py-1 rounded ${
-                                  gap.severity === 'Critical' ? 'bg-red-100 text-red-700' :
-                                  gap.severity === 'Important' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
-                                }`}>
-                                  {gap.severity}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-600 mt-2">
-                                <span className="font-medium">Gap:</span> {gap.gap_type}
-                              </p>
-                              {gap.industry_practice && (
-                                <p className="text-xs text-indigo-600 mt-1">
-                                  Best Practice: {gap.industry_practice}
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Overall Coherence Score */}
-                    {workActivitiesAnalysis.overall_coherence && (
-                      <div className="flex items-center justify-between p-4 bg-primary-50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-primary-800">Organization Coherence Score</p>
-                          <p className="text-sm text-primary-600">{workActivitiesAnalysis.overall_coherence.integration_assessment}</p>
-                        </div>
-                        <div className="text-3xl font-bold text-primary-600">
-                          {workActivitiesAnalysis.overall_coherence.organization_coherence_score}/100
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Department Coherence Summary */}
-                    {workActivitiesAnalysis.departmental_coherence && (
-                      <div>
-                        <h5 className="text-sm font-medium text-gray-700 mb-2">Department Coherence Scores</h5>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                          {workActivitiesAnalysis.departmental_coherence.slice(0, 8).map((dept, i) => (
-                            <div key={i} className="p-2 border rounded text-center">
-                              <p className={`text-lg font-bold ${
-                                dept.coherence_score >= 70 ? 'text-green-600' :
-                                dept.coherence_score >= 50 ? 'text-yellow-600' : 'text-red-600'
-                              }`}>
-                                {dept.coherence_score}
-                              </p>
-                              <p className="text-xs text-gray-600 truncate" title={dept.department}>{dept.department}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Industry Comparison */}
-                    {workActivitiesAnalysis.industry_comparison && (
-                      <div className="p-3 bg-indigo-50 rounded-lg">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="font-medium text-indigo-800">Industry Alignment</p>
-                            <p className="text-sm text-indigo-600">{workActivitiesAnalysis.industry_comparison.industry_identified}</p>
-                          </div>
-                          <p className="text-2xl font-bold text-indigo-600">
-                            {workActivitiesAnalysis.industry_comparison.activity_mix_assessment?.alignment_score || 0}/100
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* View Full Analysis Link */}
-                    <div className="flex justify-between items-center pt-2">
-                      <button
-                        onClick={handleAnalyzeWorkActivities}
-                        disabled={analyzingWorkActivities}
-                        className="text-sm text-primary-600 hover:text-primary-800 flex items-center gap-1"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        Re-analyze
-                      </button>
-                      <Link
-                        to="/work-activities"
-                        className="text-sm text-primary-600 hover:text-primary-800 flex items-center gap-1"
-                      >
-                        View Full Analysis <ArrowRight className="w-3 h-3" />
-                      </Link>
-                    </div>
-                  </div>
-                )}
-
-                {workActivitiesError && (
-                  <div className="mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-                    <AlertTriangle className="w-4 h-4 inline mr-1" />
-                    {workActivitiesError}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="border-t pt-4">
-                <p className="text-sm text-gray-500">
-                  <Link to="/settings" className="text-primary-600 hover:underline">Configure Claude API</Link>
-                  {' '}to enable AI-powered current state analysis
-                </p>
-              </div>
-            )}
-          </>
+        <div className="card overflow-x-auto p-0">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="hairline-b text-left text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">
+                <th className="px-6 py-3">Manager</th>
+                <th className="px-4 py-3">Department</th>
+                <th className="px-4 py-3">Manager type</th>
+                <th className="px-4 py-3 text-right">Span</th>
+                <th className="px-4 py-3 text-right">Benchmark</th>
+                <th className="px-6 py-3">Position</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shownManagers.map((a) => (
+                <tr key={a.manager_id} className="hairline-b last:border-0">
+                  <td className="px-6 py-3">
+                    <p className="font-medium text-ink">{a.manager}</p>
+                    <p className="text-xs text-faint">{a.job_title}</p>
+                  </td>
+                  <td className="px-4 py-3 text-secondary">{a.department}</td>
+                  <td className="px-4 py-3 text-secondary" title={`Why: ${a.work_type_basis}`}>
+                    {a.work_type === 'operational' ? 'Frontline operational' : 'Other'}
+                    {/* The default is explained under the table; show the basis only where a tag set it */}
+                    {!a.work_type_basis.startsWith('not tagged') && <span className="block text-xs text-faint">{a.work_type_basis}</span>}
+                  </td>
+                  <td className="tabular px-4 py-3 text-right font-semibold text-ink">{a.span}</td>
+                  <td className="tabular px-4 py-3 text-right text-secondary">{a.benchmark_range[0]}–{a.benchmark_range[1]}</td>
+                  <td className="px-6 py-3"><BenchmarkPill status={a.status} /></td>
+                </tr>
+              ))}
+              {filteredManagers.length === 0 && (
+                <tr><td colSpan={6} className="px-6 py-6 text-center text-faint">No managers match this filter.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {filteredManagers.length > 20 && (
+          <button onClick={() => setShowAllManagers(!showAllManagers)} className="mt-3 text-sm font-semibold text-primary-600">
+            {showAllManagers ? 'Show fewer' : `Show all ${filteredManagers.length} managers`}
+          </button>
         )}
-      </div>
+        <p className="mt-3 text-xs text-faint">
+          Tag frontline operational managers “Operational” in the Work Type column of your CSV to judge them against 10–20; untagged managers are judged against 5–10.
+        </p>
+      </Section>
 
-      {/* Health Indicators */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold">Health Indicators</h3>
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-            metrics.health_indicators.health_score >= 70
-              ? 'bg-green-100 text-green-700'
-              : metrics.health_indicators.health_score >= 50
-              ? 'bg-yellow-100 text-yellow-700'
-              : 'bg-red-100 text-red-700'
-          }`}>
-            Score: {metrics.health_indicators.health_score}/100
-            (Grade: {metrics.health_indicators.health_grade})
+      {/* Departments */}
+      {depts.length > 0 && (
+        <Section eyebrow="02 · Departments" title="The same lenses, department by department" lede="Sorted by size. Bars start at zero.">
+          <div className="card overflow-x-auto p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="hairline-b text-left text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">
+                  <th className="px-6 py-3">Department</th>
+                  <th className="w-48 px-4 py-3">People</th>
+                  <th className="px-4 py-3 text-right">Managers</th>
+                  <th className="px-4 py-3 text-right">Avg span</th>
+                  <th className="px-4 py-3">Spans vs benchmark</th>
+                  <th className="px-4 py-3 text-right">Layers</th>
+                  <th className="px-4 py-3 text-right">Cost share</th>
+                  <th className="px-6 py-3 text-right">Reports from other depts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {depts.map((d) => (
+                  <tr key={d.department} className="hairline-b align-top last:border-0">
+                    <td className="px-6 py-3">
+                      <p className="font-medium text-ink">{d.department}</p>
+                      <p className="text-xs text-faint">{d.top_titles.slice(0, 3).map((t) => `${t.title} (${t.count})`).join(' · ')}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="tabular font-semibold text-ink">{d.headcount}</span>
+                      <span className="ml-1 text-xs text-faint">{d.headcount_pct}%</span>
+                      <span className="mt-1.5 block"><InlineBar value={d.headcount} max={maxDeptHeadcount} /></span>
+                    </td>
+                    <td className="tabular px-4 py-3 text-right text-secondary">{d.managers} <span className="text-xs text-faint">({d.manager_ratio_pct}%)</span></td>
+                    <td className="tabular px-4 py-3 text-right font-semibold text-ink">{d.average_span || '–'}</td>
+                    <td className="px-4 py-3">
+                      <span className="tabular flex gap-3 text-xs">
+                        <span style={{ color: BENCH_COLORS.below }}>↓ {d.spans_vs_benchmark.below}</span>
+                        <span style={{ color: BENCH_COLORS.within }}>✓ {d.spans_vs_benchmark.within}</span>
+                        <span style={{ color: BENCH_COLORS.above }}>↑ {d.spans_vs_benchmark.above}</span>
+                      </span>
+                      {!!d.single_report_managers && <span className="mt-1 block text-xs text-faint">{d.single_report_managers} with one report</span>}
+                    </td>
+                    <td className="tabular px-4 py-3 text-right text-secondary">{d.layers_spanned.join('–')}</td>
+                    <td className="tabular px-4 py-3 text-right text-secondary">{d.cost_pct}%</td>
+                    <td className="tabular px-6 py-3 text-right text-secondary">{d.reports_from_other_departments}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+
+      {/* Layers */}
+      <Section eyebrow="03 · Layers" title={layersComponent ? layersComponent.value : `${layers.total_layers} layers`}>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="card">
+            <p className="label">People in each layer</p>
+            <ul className="mt-3 space-y-3">
+              {layerRows.map((r) => (
+                <li key={r.layer} className="grid grid-cols-[72px_1fr_48px] items-center gap-3 text-sm">
+                  <span className="text-secondary">Layer {r.layer}</span>
+                  <InlineBar value={r.count} max={maxLayerCount} />
+                  <span className="tabular text-right font-semibold text-ink">{r.count}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="card">
+            <p className="label">Longest reporting chain</p>
+            {layers.longest_chain && layers.longest_chain.length > 0 ? (
+              <ol className="mt-3 space-y-2">
+                {layers.longest_chain.map((name, i) => (
+                  <li key={i} className="flex items-center gap-3 text-sm" style={{ paddingLeft: `${i * 14}px` }}>
+                    <span className="tabular w-6 text-xs text-faint">{i + 1}</span>
+                    <span className="text-ink">{name}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : <p className="text-sm text-faint">Not available — recalculate to refresh.</p>}
+            <p className="mt-4 text-xs text-faint">Start delayering conversations here: each step is a hand-off and an approval.</p>
           </div>
         </div>
+        {layers.level_mismatches && layers.level_mismatches.count > 0 && (
+          <div className="mt-4">
+            <Callout label={`${layers.level_mismatches.count} Level ${layers.level_mismatches.count === 1 ? 'value disagrees' : 'values disagree'} with the reporting chain`} tone="developing">
+              Layers above are counted from who reports to whom. Examples:{' '}
+              {layers.level_mismatches.examples.slice(0, 5).map((m) => `${m.name} (Level ${m.declared_level}, actually layer ${m.actual_layer})`).join('; ')}.
+            </Callout>
+          </div>
+        )}
+      </Section>
 
-        {metrics.health_indicators.warnings.length > 0 && (
-          <div className="mb-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Warnings</h4>
-            <ul className="space-y-1">
-              {metrics.health_indicators.warnings.map((warning, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-yellow-700 bg-yellow-50 p-2 rounded">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  {warning}
+      {/* Cost */}
+      <Section eyebrow="04 · Cost" title={`${formatMoney(metrics.cost_analysis.total_cost)} annual people cost`}>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="card">
+            <p className="label">Cost by layer</p>
+            <ul className="mt-3 space-y-3">
+              {costByLayer.map((r) => (
+                <li key={r.layer} className="grid grid-cols-[72px_1fr_72px] items-center gap-3 text-sm">
+                  <span className="text-secondary">Layer {r.layer}</span>
+                  <InlineBar value={r.total_cost} max={maxLayerCost} />
+                  <span className="tabular text-right font-semibold text-ink">{formatMoney(r.total_cost)}</span>
                 </li>
               ))}
             </ul>
           </div>
-        )}
-
-        {metrics.health_indicators.recommendations.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Recommendations</h4>
-            <ul className="space-y-1">
-              {metrics.health_indicators.recommendations.map((rec, i) => (
-                <li key={i} className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
-                  &#8226; {rec}
-                </li>
-              ))}
-            </ul>
+          <div className="card overflow-x-auto">
+            <p className="label">Cost by grade</p>
+            <table className="mt-2 w-full text-sm">
+              <tbody>
+                {costByGrade.map((g) => (
+                  <tr key={g.grade} className="hairline-b last:border-0">
+                    <td className="py-2 font-medium text-ink">{g.grade}</td>
+                    <td className="tabular py-2 text-right text-secondary">{g.count} people</td>
+                    <td className="tabular py-2 text-right font-semibold text-ink">{formatMoney(g.total_cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-4 text-sm text-secondary">
+              Average grade gap between a manager and their reports:{' '}
+              <span className="tabular font-semibold text-ink">{metrics.grade_gap_analysis.average_grade_gap.toFixed(2)}</span>
+              <span className="text-faint"> ({metrics.grade_gap_analysis.total_comparisons} pairs)</span>
+            </p>
+            {metrics.grade_gap_analysis.unusual_gaps && metrics.grade_gap_analysis.unusual_gaps.length > 0 && (
+              <p className="mt-1 text-xs text-faint">
+                {metrics.grade_gap_analysis.unusual_gaps.length} pairs with a gap under 1 or over 4 grades, e.g.{' '}
+                {metrics.grade_gap_analysis.unusual_gaps.slice(0, 2).map((g) => `${g.manager} (${g.manager_grade}) → ${g.subordinate} (${g.subordinate_grade})`).join('; ')}
+              </p>
+            )}
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
+        </div>
+      </Section>
 
-function SummaryCard({
-  title,
-  value,
-  subtitle,
-}: {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-}) {
-  return (
-    <div className="card">
-      <p className="text-sm text-gray-500">{title}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
-      {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
-    </div>
+      {/* Health checks */}
+      {metrics.health_indicators.components && (
+        <Section eyebrow="05 · Health checks" title={`Structural health ${metrics.health_indicators.health_score}/100`}>
+          <div className="card">
+            <div className="grid gap-x-10 gap-y-6 md:grid-cols-2">
+              {metrics.health_indicators.components.map((c) => (
+                <div key={c.key}>
+                  <ScoreBar score={c.score} label={`${c.label} · weight ${c.weight}%`} detail={c.value} />
+                  <p className="mt-1 text-xs text-faint">{c.rule}. Benchmark: {c.benchmark}. Source: {c.source}.</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 hairline-t pt-4"><ScoreLegend /></div>
+          </div>
+        </Section>
+      )}
+
+      <Callout label="Next: read the work" tone="accent">
+        Structure shows who reports to whom. <Link to="/work-activities" className="text-primary-600 underline">Work activities</Link> shows
+        what those people do — duplication, gaps and weak hand-offs.
+      </Callout>
+    </>
   );
 }

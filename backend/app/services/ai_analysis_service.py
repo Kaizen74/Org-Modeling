@@ -21,7 +21,10 @@ from ..resources.archetypes_reference import (
     get_all_archetypes_summary,
     get_department_recommendation
 )
-from ..resources.benchmarks_reference import get_benchmarks_prompt_section
+from ..resources.benchmarks_reference import get_benchmarks_prompt_section, SPAN_TARGETS
+from .archetype_scoring import reconcile_archetype_scores
+from .archetype_grounding import ground_diagrams
+from .llm_client import run_analysis, AnalysisRefused
 
 
 class AIAnalysisService:
@@ -73,17 +76,19 @@ class AIAnalysisService:
         )
 
         try:
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=16000,
-                temperature=0.3,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            # Parse structured response
-            result = self._parse_structured_response(response)
+            text, call_meta = run_analysis(self.client, prompt)
+            result = self._parse_text(text)
+            result["_llm"] = call_meta
+            if call_meta["truncated"]:
+                result["parse_warning"] = "The AI response hit the output limit; later sections may be incomplete."
+            # Overall archetype scores are computed from the weights, not taken from the AI
+            reconcile_archetype_scores(result)
+            # Diagram units carry real headcount and cost from the data
+            ground_diagrams(result, metrics)
             return result
 
+        except AnalysisRefused as e:
+            return {"error": str(e), "message": "The AI declined to analyze this input"}
         except Exception as e:
             return {
                 "error": str(e),
@@ -182,6 +187,73 @@ class AIAnalysisService:
 
         return "\n".join(sections)
 
+    def _format_org_composition(
+        self,
+        metrics: Dict,
+        employees: List[Dict],
+        analysis_scope: str = "organization",
+        department: Optional[str] = None,
+        max_departments: int = 15,
+    ) -> str:
+        """
+        What the organization is actually made of, for grounding archetype fit.
+        Job titles and aggregates only — personal names are never included.
+        """
+        lines = ["**ORGANIZATION COMPOSITION (OBSERVABLE — computed from the uploaded data; no personal names):**"]
+
+        health = metrics.get("health_indicators", {})
+        if health.get("components"):
+            lines.append(f"Structural health {health.get('health_score', 0)}/100:")
+            for c in health["components"]:
+                lines.append(f"- {c['label']}: {c['score']}/100 — {c['value']}")
+
+        span = metrics.get("span_of_control", {})
+        vs = span.get("distribution_vs_benchmark")
+        if vs:
+            lines.append(
+                f"Manager spans vs their benchmark (frontline operational {'-'.join(map(str, SPAN_TARGETS['operational']['range']))}, "
+                f"others {'-'.join(map(str, SPAN_TARGETS['knowledge']['range']))}): {vs.get('Below benchmark', 0)} below, "
+                f"{vs.get('Within benchmark', 0)} within, {vs.get('Above benchmark', 0)} above; "
+                f"{span.get('single_report_managers', 0)} managers have one direct report"
+            )
+        layers = metrics.get("layer_analysis", {})
+        if layers.get("longest_chain"):
+            lines.append(f"Layers: {layers.get('total_layers')} in the actual reporting chain "
+                         f"(declared Level column: {layers.get('declared_layers')})")
+
+        depts = metrics.get("department_analysis") or []
+        if depts:
+            lines.append("")
+            lines.append(f"Departments ({len(depts)}; largest first):")
+            for d in depts[:max_departments]:
+                roles = ", ".join(f"{t['title']} ({t['count']})" for t in d.get("top_titles", [])[:5])
+                vsb = d.get("spans_vs_benchmark", {})
+                lines.append(
+                    f"- {d['department']}: {d['headcount']} people ({d['headcount_pct']}%), {d['managers']} managers, "
+                    f"avg span {d['average_span']}, layers {'-'.join(str(x) for x in d.get('layers_spanned', []))}, "
+                    f"{d['cost_pct']}% of cost; spans below/within/above benchmark {vsb.get('below', 0)}/"
+                    f"{vsb.get('within', 0)}/{vsb.get('above', 0)}; "
+                    f"{d.get('reports_from_other_departments', 0)} report to a manager in another department. "
+                    f"Common roles: {roles}"
+                )
+            if len(depts) > max_departments:
+                rest = sum(d["headcount"] for d in depts[max_departments:])
+                lines.append(f"- {len(depts) - max_departments} smaller departments with {rest} people in total")
+
+        if analysis_scope == "department" and department:
+            in_dept = [e for e in employees if str(e.get("department", "")).strip().lower() == department.strip().lower()]
+            if in_dept:
+                titles: Dict[str, int] = {}
+                for e in in_dept:
+                    titles[e.get("job_title", "")] = titles.get(e.get("job_title", ""), 0) + 1
+                lines.append("")
+                lines.append(f"All roles in {department} ({len(in_dept)} people):")
+                lines.append(", ".join(f"{t} ({c})" for t, c in sorted(titles.items(), key=lambda kv: -kv[1])))
+
+        lines.append("")
+        lines.append("Ground every archetype judgement in these actual departments and roles, and refer to departments by name.")
+        return "\n".join(lines)
+
     def _build_archetype_reference(self, analysis_scope: str, department: Optional[str]) -> str:
         """Build archetype reference section for the prompt."""
         archetypes_text = []
@@ -210,8 +282,7 @@ class AIAnalysisService:
 
         dept_guidance = ""
         if analysis_scope == "department" and department:
-            dept_key = department.lower().replace(" ", "_").replace("/", "_")
-            dept_rec = get_department_recommendation(dept_key)
+            dept_rec = get_department_recommendation(department)
             if dept_rec:
                 primary = ARCHETYPES.get(dept_rec.get("primary", ""), {}).get("name", "")
                 alts = [ARCHETYPES.get(a, {}).get("name", "") for a in dept_rec.get("alternatives", [])]
@@ -272,6 +343,8 @@ class AIAnalysisService:
 
 **Distribution Percentages:**
 {json.dumps(span_stats.get('distribution_pct', {}), indent=2)}
+
+{self._format_org_composition(metrics, employees, analysis_scope, department)}
 
 {"**STRATEGIC CONTEXT (FROM UPLOADED DOCUMENTS):**" if strategy_docs else ""}
 {"USE FOR: Strategy Alignment Score (Category 3) - Assess how well the org structure supports the strategic objectives below." if strategy_docs else ""}
@@ -363,6 +436,8 @@ Score each archetype (0-100) based on these weighted criteria:
 - Key Indicators Match (25%): Do the org's characteristics match the archetype's key indicators?
 - Metrics Match (10%): Do span, layers, and structure metrics align with the archetype's typical patterns?
 
+The application recomputes every overall score from your five criterion scores using exactly these weights, so score each criterion carefully and make your top 2 recommendations the two highest weighted scores.
+
 **THE 7 ORGANIZATIONAL ARCHETYPES:**
 {archetype_reference}
 
@@ -392,8 +467,10 @@ Score each archetype (0-100) based on these weighted criteria:
     - Why it's differentiating (unique, hard to replicate, strategically important)
     - How this archetype protects/amplifies this capability
     - Strategic importance rating (High/Medium/Low)
-13. **Structure Diagram**: A visual representation of the archetype showing:
-    - Key organizational units/roles as nodes (5-8 nodes recommended)
+13. **Structure Diagram**: This organization redrawn in the archetype, showing:
+    - Key organizational units/roles as nodes (5-8 nodes recommended), labelled with THIS organization's actual department names and role titles from ORGANIZATION COMPOSITION — not generic archetype labels
+    - For every node, `source_departments`: the exact current department names whose people would sit in that unit (use the names exactly as listed). A unit that does not exist today gets `is_new: true` and an empty list
+    - Every current department should appear in at least one node's source_departments
     - How they relate spatially (hierarchical, matrix, network layout)
     - Connections showing reporting/coordination relationships
     - Mark nodes that house differentiating activities with is_differentiating: true
@@ -424,6 +501,7 @@ Score each archetype (0-100) based on these weighted criteria:
         "description": "What it means",
         "impact": "Business impact",
         "severity": "High/Medium/Low",
+        "dimension": "One of: Structure & Accountabilities, People & Skills, Process & Systems, Mindset & Behaviors, Leadership",
         "evidence_class": "OBSERVABLE/PERCEPTUAL/MODEL-INFERRED",
         "supporting_evidence": "The specific data points that fit this pattern (cite actual metrics)",
         "disconfirming_evidence": "What in the data does NOT fit this pattern, or 'None identified'",
@@ -521,6 +599,8 @@ Score each archetype (0-100) based on these weighted criteria:
               "description": "Brief description of this unit's function",
               "is_differentiating": false,
               "differentiating_activity": "Name of differentiating activity if is_differentiating is true",
+              "source_departments": ["Exact current department name(s) whose people move into this unit"],
+              "is_new": false,
               "x": 0,
               "y": 0,
               "level": 0
@@ -560,11 +640,11 @@ Be specific and actionable. Ground all recommendations in the data provided. Sco
 """
 
     def _parse_structured_response(self, response) -> Dict:
-        """Extract and parse JSON from Claude's response."""
-        full_text = ""
-        for block in response.content:
-            if block.type == "text":
-                full_text += block.text
+        """Extract and parse JSON from a Claude response object (text blocks only)."""
+        return self._parse_text("".join(b.text for b in response.content if b.type == "text"))
+
+    def _parse_text(self, full_text: str) -> Dict:
+        """Extract and parse JSON from the response text."""
 
         # Try to extract JSON
         try:

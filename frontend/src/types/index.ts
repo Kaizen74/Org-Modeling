@@ -9,8 +9,18 @@ export interface Employee {
   manager_name: string;
   salary: number;
   employee_id: string;
+  manager_id?: string | null; // resolved from Line Manager / Line Manager ID
+  work_type?: string;
   work_activities?: string;
   job_description?: string;
+}
+
+/** Reporting tree as stored at upload (id = Employee ID; older uploads may lack it). */
+export interface HierarchyNode {
+  id?: string;
+  name: string;
+  data: Partial<Employee>;
+  children: HierarchyNode[];
 }
 
 export interface GradeSalary {
@@ -28,6 +38,18 @@ export interface ManagerStats {
   ic_ratio_pct: number;
 }
 
+export interface ManagerSpanAssessment {
+  manager_id: string;
+  manager: string;
+  job_title: string;
+  department: string;
+  span: number;
+  work_type: 'knowledge' | 'operational';
+  work_type_basis: string;
+  benchmark_range: [number, number];
+  status: 'below' | 'within' | 'above';
+}
+
 export interface SpanOfControl {
   average_span: number;
   median_span: number;
@@ -35,6 +57,9 @@ export interface SpanOfControl {
   max_span: number;
   distribution: Record<string, number>;
   distribution_pct: Record<string, number>;
+  manager_assessments?: ManagerSpanAssessment[];
+  distribution_vs_benchmark?: Record<'Below benchmark' | 'Within benchmark' | 'Above benchmark', number>;
+  single_report_managers?: number;
 }
 
 export interface CostAnalysis {
@@ -49,19 +74,85 @@ export interface GradeGapAnalysis {
   min_gap: number;
   max_gap: number;
   total_comparisons: number;
+  unusual_gaps?: Array<{ manager: string; manager_grade: string; subordinate: string; subordinate_grade: string; gap: number }>;
+  note?: string;
 }
 
 export interface LayerAnalysis {
-  total_layers: number;
+  total_layers: number; // from the actual reporting chain
+  declared_layers?: number; // highest value in the CSV Level column
   by_level: Record<string, { count: number }>;
+  level_mismatches?: {
+    count: number;
+    examples: Array<{ name: string; declared_level: number; actual_layer: number }>;
+  };
+  longest_chain?: string[];
+}
+
+export interface HealthComponent {
+  key: 'span_fit' | 'layers' | 'manager_ratio' | 'single_report';
+  label: string;
+  score: number;
+  weight: number;
+  value: string;
+  benchmark: string;
+  rule: string;
+  source: string;
 }
 
 export interface HealthIndicators {
   health_score: number;
   health_grade: string;
+  components?: HealthComponent[];
   warnings: string[];
   recommendations: string[];
   is_healthy: boolean;
+}
+
+export interface DepartmentMetrics {
+  department: string;
+  headcount: number;
+  headcount_pct: number;
+  managers: number;
+  manager_ratio_pct: number;
+  average_span: number;
+  median_span: number;
+  layers_spanned: number[]; // [top layer, bottom layer]
+  layer_count: number;
+  total_cost: number;
+  cost_pct: number;
+  average_cost: number;
+  spans_vs_benchmark: { below: number; within: number; above: number };
+  operational_teams: number;
+  single_report_managers: number;
+  reports_from_other_departments: number;
+  top_titles: Array<{ title: string; count: number }>;
+}
+
+// Which model produced an AI result, and whether it was cut off
+export interface LLMCallMeta {
+  model_requested: string;
+  model_served: string;
+  effort: string;
+  stop_reason: string;
+  truncated: boolean;
+}
+
+export interface MetricsSummary {
+  total_employees: number;
+  total_managers: number;
+  manager_ratio: number;
+  average_span: number;
+  average_grade_gap: number;
+  total_cost: number;
+  layers: number;
+  health_score: number;
+  health_grade: string;
+  health_components?: HealthComponent[];
+  warnings: string[];
+  recommendations?: string[];
+  departments?: number;
+  data_issues?: string[];
 }
 
 export interface OrgMetrics {
@@ -72,6 +163,9 @@ export interface OrgMetrics {
   grade_gap_analysis: GradeGapAnalysis;
   layer_analysis: LayerAnalysis;
   health_indicators: HealthIndicators;
+  data_quality?: { issues: string[] };
+  department_analysis?: DepartmentMetrics[];
+  metrics_version?: number;
 }
 
 // Key gap can be a string or an object with detailed info
@@ -83,6 +177,20 @@ export type KeyGap = string | {
 
 // Evidence discipline types (facts vs interpretation, provenance, confidence)
 export type EvidenceClass = 'OBSERVABLE' | 'PERCEPTUAL' | 'MODEL-INFERRED';
+
+// The five diagnostic dimensions findings are tagged with
+export const FIVE_DIMENSIONS = [
+  'Structure & Accountabilities',
+  'People & Skills',
+  'Process & Systems',
+  'Mindset & Behaviors',
+  'Leadership',
+] as const;
+
+export interface DimensionTag {
+  dimension?: string;
+  indicator_type?: 'Leading' | 'Lagging' | string;
+}
 
 export interface DataGap {
   gap: string;
@@ -112,6 +220,13 @@ export interface DiagramNode {
   description?: string;
   is_differentiating?: boolean;
   differentiating_activity?: string;
+  // Grounding in the real organization (computed by the backend from the data)
+  source_departments?: string[];
+  unknown_departments?: string[];
+  shared_departments?: string[];
+  is_new?: boolean;
+  headcount?: number | null;
+  cost?: number | null;
   x?: number;
   y?: number;
   level?: number;
@@ -130,6 +245,12 @@ export interface StructureDiagram {
   nodes: DiagramNode[];
   connections: DiagramConnection[];
   legend?: string;
+  coverage?: {
+    mapped_departments: number;
+    total_departments: number;
+    unmapped_departments: string[];
+    unmapped_headcount: number;
+  };
 }
 
 // Differentiating Activity for competitive advantage
@@ -165,6 +286,11 @@ export interface ArchetypeScoreSummary {
   };
   fit_summary: string;
   digital_first_applicable: boolean;
+  // Set by the backend: overall_score is computed from the breakdown with the published weights
+  ai_overall_score?: number;
+  score_discrepancy?: number;
+  scoring_method?: 'weighted' | 'ai_reported';
+  weighted_rank?: number;
 }
 
 // Archetype recommendation
@@ -187,6 +313,9 @@ export interface ArchetypeRecommendation {
   practical_examples?: PracticalExample[];
   differentiating_activities?: DifferentiatingActivity[];
   structure_diagram?: StructureDiagram;
+  ai_overall_score?: number;
+  score_discrepancy?: number;
+  scoring_method?: 'weighted' | 'ai_reported';
 }
 
 // Category 4 can be an array (old format) or object with recommendations (new format)
@@ -196,6 +325,8 @@ export type Category4Archetypes = ArchetypeRecommendation[] | {
   department_analyzed?: string;
   all_archetype_scores?: ArchetypeScoreSummary[];
   recommendations: ArchetypeRecommendation[];
+  ranking_note?: string;
+  scoring_weights?: Record<string, number>;
 };
 
 export interface AIAnalysisResult {
@@ -216,6 +347,7 @@ export interface AIAnalysisResult {
       description: string;
       impact: string;
       severity: string;
+      dimension?: string;
       evidence_class?: EvidenceClass;
       supporting_evidence?: string;
       disconfirming_evidence?: string;
@@ -244,6 +376,8 @@ export interface AIAnalysisResult {
     phase_3_optimization: string[];
   };
   data_gaps?: DataGap[];
+  _llm?: LLMCallMeta;
+  parse_warning?: string;
   error?: string;
   raw_response?: string;
 }
@@ -265,7 +399,7 @@ export interface APIKeyStatus {
 // Work Activities Analysis Types
 
 // Activity Duplication Types
-export interface ActivityDuplication {
+export interface ActivityDuplication extends DimensionTag {
   activity: string;
   affected_roles: string[];
   affected_departments: string[];
@@ -287,7 +421,7 @@ export interface ActivityDuplicationAnalysis {
 }
 
 // Missing Activities Types
-export interface MissingActivity {
+export interface MissingActivity extends DimensionTag {
   activity: string;
   industry_benchmark: string;
   affected_roles: string[];
@@ -307,7 +441,7 @@ export interface MissingActivitiesAnalysis {
 }
 
 // Coordination Gaps Types
-export interface CoordinationGap {
+export interface CoordinationGap extends DimensionTag {
   handoff_point: string;
   from_department: string;
   to_department: string;
@@ -442,6 +576,7 @@ export interface WorkActivitiesAnalysis {
   message?: string;
   _json_repaired?: boolean;
   parse_warning?: string;
+  _llm?: LLMCallMeta;
 }
 
 export interface QuickWorkActivitiesAnalysis {
@@ -461,4 +596,251 @@ export interface QuickWorkActivitiesAnalysis {
     roles: string[];
   }>;
   status: string;
+}
+
+// ---------- Scenario Studio ----------
+
+export type MoveType = 'reassign' | 'remove_role' | 'add_role' | 'merge_teams' | 'change_role' | 'move_department';
+
+export interface DesignMove {
+  type: MoveType;
+  person_id?: string;
+  new_manager_id?: string;
+  reports_to?: string;
+  manager_id?: string;
+  from_manager_id?: string;
+  into_manager_id?: string;
+  remove_from_manager?: boolean;
+  title?: string;
+  grade?: string;
+  salary?: number;
+  department?: string;
+  new_department?: string;
+  name?: string;
+  count?: number;
+  work_type?: string;
+  note?: string; // the designer's reason for the move
+}
+
+export interface ScenarioHeadline {
+  headcount: number;
+  managers: number;
+  manager_ratio_pct: number;
+  average_span: number;
+  median_span: number;
+  layers: number;
+  total_cost: number;
+  spans_within_benchmark: number;
+  spans_below_benchmark: number;
+  spans_above_benchmark: number;
+  single_report_managers: number;
+  health_score: number;
+  ai_capacity_fte?: number; // optional AI-role overlay; 0 when unused
+}
+
+export interface MoveLogEntry {
+  index: number;
+  type: MoveType;
+  status: 'applied' | 'skipped';
+  message: string;
+}
+
+export interface DepartmentDelta {
+  department: string;
+  headcount_before: number;
+  headcount_after: number;
+  managers_before: number;
+  managers_after: number;
+  cost_before: number;
+  cost_after: number;
+  average_span_before: number;
+  average_span_after: number;
+  status: 'new' | 'removed' | 'changed' | 'unchanged';
+}
+
+export interface PersonBrief {
+  employee_id: string;
+  name: string;
+  job_title: string;
+  department: string;
+  salary: number;
+}
+
+export interface ScenarioImpact {
+  roles_removed: PersonBrief[];
+  roles_added: PersonBrief[];
+  new_manager: Array<{ employee_id: string; name: string; job_title: string; from: string; to: string }>;
+  new_department: Array<{ employee_id: string; name: string; from: string; to: string }>;
+  managers_with_changed_span: Array<{ employee_id: string; name: string; span_before: number; span_after: number }>;
+  people_affected: number;
+  people_affected_pct: number;
+}
+
+export interface ScenarioPerson {
+  employee_id: string;
+  name: string;
+  job_title: string;
+  department: string;
+  manager_id: string | null;
+  grade: string;
+  is_new: boolean;
+}
+
+export interface ScenarioEvaluation {
+  move_log: MoveLogEntry[];
+  people: ScenarioPerson[];
+  baseline: ScenarioHeadline;
+  scenario: ScenarioHeadline;
+  delta: ScenarioHeadline;
+  departments: DepartmentDelta[];
+  impact: ScenarioImpact;
+  metrics: OrgMetrics;
+}
+
+export interface ScenarioSummary {
+  id: string;
+  name: string;
+  description?: string;
+  source: string;
+  move_count: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ScenarioDetail extends ScenarioSummary, ScenarioEvaluation {
+  moves: DesignMove[];
+}
+
+export interface ScenarioListItem extends ScenarioSummary {
+  scenario: ScenarioHeadline;
+  delta: ScenarioHeadline;
+  skipped_moves: number;
+}
+
+// ---------- Option comparison ----------
+
+export interface ComparisonCriterion {
+  id: string;
+  name: string;
+  kind: 'measured' | 'judged';
+  weight: number;
+  metric?: string; // measured: a ScenarioHeadline key or people_affected_pct
+  better?: 'higher' | 'lower';
+  description?: string;
+}
+
+export interface Judgment {
+  score: number; // 1-5
+  rationale?: string;
+  source: 'user' | 'ai';
+  evidence_class?: EvidenceClass;
+  confidence?: string;
+}
+
+export interface ComparisonOption {
+  id: string; // "current" or a scenario id
+  name: string;
+  source: string; // "current", "manual", "archetype:<id>"
+  description?: string;
+  move_count: number;
+  figures: ScenarioHeadline & { people_affected_pct: number };
+  moves_summary: string[];
+}
+
+export interface ComparisonResult {
+  cells: Record<string, Record<string, number | null>>;
+  totals: Record<string, number | null>;
+  ranking: string[];
+  missing: Record<string, string[]>;
+  complete: boolean;
+}
+
+export interface ComparisonPayload {
+  criteria: ComparisonCriterion[];
+  measurable: Record<string, { label: string; better: 'higher' | 'lower' }>;
+  options: ComparisonOption[];
+  judgments: Record<string, Record<string, Judgment>>;
+  result: ComparisonResult;
+  ai_available: boolean;
+  suggestions_added?: number;
+}
+
+// ---------- Optional AI-role overlay ----------
+
+export type Disposition = 'automate' | 'augment' | 'keep_human';
+
+export interface RoleTag {
+  disposition: Disposition;
+  capacity_freed_pct: number;
+  rationale?: string;
+  source: 'user' | 'ai';
+  confidence?: string;
+}
+
+export interface DispositionRole {
+  job_title: string;
+  headcount: number;
+  departments: string[];
+  activities: string[];
+  tag?: RoleTag | null;
+}
+
+export interface DispositionPayload {
+  enabled: boolean;
+  dispositions: Record<Disposition, string>;
+  roles: DispositionRole[];
+  summary: {
+    by_disposition: Record<Disposition, { roles: number; people: number }>;
+    tagged_roles: number;
+    total_roles: number;
+    tagged_people_pct: number;
+    capacity_fte: number;
+    capacity_cost: number;
+  };
+  ai_available: boolean;
+  suggestions_added?: number;
+}
+
+// ---------- Implementation ----------
+
+export interface ImplementationRisk {
+  severity: 'High' | 'Medium' | 'Low';
+  area: string;
+  risk: string;
+  mitigation: string;
+}
+
+export interface ImplementationWave {
+  key: 'appoint' | 'move' | 'remove' | 'stabilise';
+  title: string;
+  guidance: string;
+  moves: Array<{ index: number; message: string; note?: string }>;
+}
+
+export interface ImplementationPlan extends ScenarioSummary {
+  baseline: ScenarioHeadline;
+  scenario: ScenarioHeadline;
+  delta: ScenarioHeadline;
+  departments: DepartmentDelta[];
+  summary: {
+    people_affected: number;
+    people_affected_pct: number;
+    new_manager: number;
+    new_department: number;
+    roles_removed: number;
+    roles_added: number;
+    managers_gaining: number;
+    managers_losing: number;
+  };
+  cost: { removed_roles: number; added_roles: number; net_change: number; note: string };
+  change_load: {
+    managers_gaining: ScenarioImpact['managers_with_changed_span'];
+    managers_losing: ScenarioImpact['managers_with_changed_span'];
+    new_manager: ScenarioImpact['new_manager'];
+    new_department: ScenarioImpact['new_department'];
+    roles_removed: PersonBrief[];
+    roles_added: PersonBrief[];
+  };
+  risks: ImplementationRisk[];
+  waves: ImplementationWave[];
 }

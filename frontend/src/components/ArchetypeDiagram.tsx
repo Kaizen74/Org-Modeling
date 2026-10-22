@@ -9,21 +9,21 @@ interface ArchetypeDiagramProps {
 
 // Node colors by type
 const NODE_COLORS: Record<DiagramNodeType, { fill: string; stroke: string; text: string }> = {
-  executive: { fill: '#4F46E5', stroke: '#3730A3', text: '#FFFFFF' },
-  department: { fill: '#0891B2', stroke: '#0E7490', text: '#FFFFFF' },
-  team: { fill: '#059669', stroke: '#047857', text: '#FFFFFF' },
-  role: { fill: '#7C3AED', stroke: '#6D28D9', text: '#FFFFFF' },
-  external: { fill: '#F59E0B', stroke: '#D97706', text: '#1F2937' },
-  shared_service: { fill: '#EC4899', stroke: '#DB2777', text: '#FFFFFF' },
+  executive: { fill: '#1C1F24', stroke: '#1C1F24', text: '#FFFFFF' },
+  department: { fill: '#4A5568', stroke: '#3B4452', text: '#FFFFFF' },
+  team: { fill: '#FFFFFF', stroke: '#4A5568', text: '#1C1F24' },
+  role: { fill: '#9C6B72', stroke: '#87595F', text: '#FFFFFF' },
+  external: { fill: '#FAF7F3', stroke: '#B8B0A6', text: '#575C63' },
+  shared_service: { fill: '#8A6F4E', stroke: '#765E41', text: '#FFFFFF' },
 };
 
 // Connection styles by type
 const CONNECTION_STYLES: Record<DiagramConnectionType, { stroke: string; strokeDasharray?: string; strokeWidth: number }> = {
-  reporting: { stroke: '#374151', strokeWidth: 2 },
-  coordination: { stroke: '#3B82F6', strokeDasharray: '5,5', strokeWidth: 1.5 },
-  advisory: { stroke: '#10B981', strokeDasharray: '2,4', strokeWidth: 1.5 },
-  service: { stroke: '#8B5CF6', strokeDasharray: '8,3', strokeWidth: 1.5 },
-  dotted_line: { stroke: '#6B7280', strokeDasharray: '2,2', strokeWidth: 1 },
+  reporting: { stroke: '#575C63', strokeWidth: 1.6 },
+  coordination: { stroke: '#B97F24', strokeDasharray: '5,5', strokeWidth: 1.5 },
+  advisory: { stroke: '#257A55', strokeDasharray: '2,4', strokeWidth: 1.5 },
+  service: { stroke: '#8A6F4E', strokeDasharray: '8,3', strokeWidth: 1.5 },
+  dotted_line: { stroke: '#8A8F96', strokeDasharray: '2,2', strokeWidth: 1 },
 };
 
 // Calculate dynamic node dimensions based on labels
@@ -31,7 +31,8 @@ function calculateNodeDimensions(nodes: DiagramNode[]): { width: number; height:
   const maxLabelLength = Math.max(...nodes.map(n => n.label.length), 10);
   // Base width on label length, with min 100 and max 180
   const width = Math.min(180, Math.max(100, maxLabelLength * 8 + 20));
-  const height = 45;
+  // Room for a second line when units carry real headcount or are new
+  const height = nodes.some(n => n.headcount != null || n.is_new) ? 56 : 45;
   return { width, height };
 }
 
@@ -310,13 +311,13 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
   const hasDifferentiatingNodes = diagram.nodes.some(n => n.is_differentiating);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 overflow-x-auto">
-      <h4 className="font-semibold text-gray-800 mb-2">{diagram.title}</h4>
+    <div className="card overflow-x-auto p-4">
+      <h4 className="mb-3 font-display text-[18px] font-bold text-ink">{diagram.title}</h4>
 
       <svg
         width={width}
         height={height}
-        className="bg-gray-50 rounded"
+        className="rounded-[2px] bg-paper"
         style={{ minWidth: width, minHeight: height }}
       >
         <defs>
@@ -329,7 +330,7 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#374151" />
+            <polygon points="0 0, 10 3.5, 0 7" fill="#575C63" />
           </marker>
           <marker
             id="arrowhead-blue"
@@ -339,7 +340,7 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#3B82F6" />
+            <polygon points="0 0, 10 3.5, 0 7" fill="#B97F24" />
           </marker>
         </defs>
 
@@ -406,7 +407,7 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
                     rx={10}
                     ry={10}
                     fill="none"
-                    stroke="#F59E0B"
+                    stroke="#C41E3A"
                     strokeWidth={3}
                     opacity={0.7}
                   />
@@ -420,7 +421,7 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
                 rx={6}
                 ry={6}
                 fill={colors.fill}
-                stroke={isDifferentiating ? '#F59E0B' : colors.stroke}
+                stroke={isDifferentiating ? '#C41E3A' : colors.stroke}
                 strokeWidth={isDifferentiating ? 3 : 2}
               />
               {/* Star icon for differentiating nodes - positioned outside */}
@@ -429,28 +430,55 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
                   x={pos.x + nodeWidth / 2 - 2}
                   y={pos.y - nodeHeight / 2 - 2}
                   fontSize={16}
-                  fill="#F59E0B"
+                  fill="#C41E3A"
                   className="pointer-events-none"
                 >
                   ★
                 </text>
               )}
-              {/* Node label */}
-              <text
-                x={pos.x}
-                y={pos.y}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fill={colors.text}
-                fontSize={11}
-                fontWeight="500"
-                className="pointer-events-none"
-              >
-                {truncateLabel(node.label, nodeWidth)}
-              </text>
+              {/* Node label, plus real headcount (or "new unit") underneath */}
+              {(() => {
+                const subline = node.is_new && !node.headcount
+                  ? 'New unit'
+                  : node.headcount != null
+                    ? `${node.headcount} ${node.headcount === 1 ? "person" : "people"}${node.shared_departments?.length ? ' (shared)' : ''}`
+                    : '';
+                return (
+                  <>
+                    <text
+                      x={pos.x}
+                      y={subline ? pos.y - 7 : pos.y}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill={colors.text}
+                      fontSize={11}
+                      fontWeight="500"
+                      className="pointer-events-none"
+                    >
+                      {truncateLabel(node.label, nodeWidth)}
+                    </text>
+                    {subline && (
+                      <text
+                        x={pos.x}
+                        y={pos.y + 10}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill={colors.text}
+                        fontSize={10}
+                        opacity={0.85}
+                        className="pointer-events-none"
+                      >
+                        {subline}
+                      </text>
+                    )}
+                  </>
+                );
+              })()}
               <title>
                 {node.label}
                 {node.description ? `\n${node.description}` : ''}
+                {node.source_departments?.length ? `\nDraws from: ${node.source_departments.join(', ')}` : ''}
+                {node.unknown_departments?.length ? `\nNot found in your data: ${node.unknown_departments.join(', ')}` : ''}
                 {isDifferentiating && node.differentiating_activity ? `\n\n★ Differentiating: ${node.differentiating_activity}` : ''}
               </title>
             </g>
@@ -462,12 +490,12 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
       <div className="mt-3 flex flex-wrap gap-4 text-xs">
         {/* Node types */}
         <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-gray-500 font-medium">Units:</span>
+          <span className="font-medium text-faint">Units:</span>
           {usedNodeTypes.map(type => (
             <span key={type} className="flex items-center gap-1">
               <span
                 className="w-3 h-3 rounded"
-                style={{ backgroundColor: NODE_COLORS[type]?.fill || '#6B7280' }}
+                style={{ backgroundColor: NODE_COLORS[type]?.fill || '#8A8F96', border: `1px solid ${NODE_COLORS[type]?.stroke || '#8A8F96'}` }}
               />
               <span className="capitalize">{type.replace('_', ' ')}</span>
             </span>
@@ -476,7 +504,7 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
 
         {/* Connection types */}
         <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-gray-500 font-medium">Lines:</span>
+          <span className="font-medium text-faint">Lines:</span>
           {usedConnectionTypes.map(type => {
             const style = CONNECTION_STYLES[type];
             return (
@@ -487,7 +515,7 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
                     y1={5}
                     x2={20}
                     y2={5}
-                    stroke={style?.stroke || '#6B7280'}
+                    stroke={style?.stroke || '#8A8F96'}
                     strokeWidth={style?.strokeWidth || 1}
                     strokeDasharray={style?.strokeDasharray}
                   />
@@ -501,17 +529,26 @@ export default function ArchetypeDiagram({ diagram, width: propWidth, height: pr
         {/* Differentiating indicator */}
         {hasDifferentiatingNodes && (
           <div className="flex items-center gap-1">
-            <span className="text-gray-500 font-medium">Differentiating:</span>
+            <span className="font-medium text-faint">Differentiating:</span>
             <span className="flex items-center gap-1">
-              <span className="text-amber-500 text-sm">★</span>
-              <span className="text-amber-600 font-medium">Competitive Advantage</span>
+              <span className="text-sm text-primary-600">★</span>
+              <span className="font-medium text-primary-700">Competitive advantage</span>
             </span>
           </div>
         )}
       </div>
 
       {diagram.legend && (
-        <p className="text-xs text-gray-500 mt-2 italic">{diagram.legend}</p>
+        <p className="mt-2 text-xs italic text-secondary">{diagram.legend}</p>
+      )}
+
+      {diagram.coverage && (
+        <p className="mt-2 text-xs text-faint">
+          Headcounts come from your data. {diagram.coverage.mapped_departments} of {diagram.coverage.total_departments} current departments are placed in this design
+          {diagram.coverage.unmapped_departments.length > 0 && (
+            <> — not yet placed: <span className="text-secondary">{diagram.coverage.unmapped_departments.join(', ')}</span> ({diagram.coverage.unmapped_headcount} people)</>
+          )}.
+        </p>
       )}
     </div>
   );

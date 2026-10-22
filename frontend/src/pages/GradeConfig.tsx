@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Loader2, CheckCircle, Wand2, Edit3 } from 'lucide-react';
+import clsx from 'clsx';
 import { gradesApi, metricsApi } from '../services/api';
 import type { GradeSalary } from '../types';
+import { PageHeader, Section, Callout, Chip, Loading, formatMoney } from '../components/ui';
 
 interface StandardHierarchy {
   hierarchy: Array<{ seniority: string; grade: string; salary: number; order: number }>;
@@ -15,7 +16,7 @@ export default function GradeConfig() {
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<'auto' | 'manual' | null>(null);
   const [newGrade, setNewGrade] = useState({ grade: '', median_salary: '' });
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -23,23 +24,15 @@ export default function GradeConfig() {
 
   const fetchData = async () => {
     try {
-      const [gradesData, hierarchyData] = await Promise.all([
-        gradesApi.list(),
-        gradesApi.getStandardHierarchy()
-      ]);
+      const [gradesData, hierarchyData] = await Promise.all([gradesApi.list(), gradesApi.getStandardHierarchy()]);
       setGrades(gradesData);
       setStandardHierarchy(hierarchyData);
-
-      // Determine current mode based on existing grades
       if (gradesData.length === 0) {
-        setMode(null); // No selection yet
+        setMode(null);
       } else {
-        // Check if it matches standard hierarchy
-        const standardGrades = hierarchyData.hierarchy.map(h => h.grade);
-        const currentGrades = gradesData.map(g => g.grade);
-        const isStandard = standardGrades.every(g => currentGrades.includes(g)) &&
-                          currentGrades.every(g => standardGrades.includes(g));
-        setMode(isStandard ? 'auto' : 'manual');
+        const standard = hierarchyData.hierarchy.map((h) => h.grade);
+        const current = gradesData.map((g) => g.grade);
+        setMode(standard.every((g) => current.includes(g)) && current.every((g) => standard.includes(g)) ? 'auto' : 'manual');
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -50,362 +43,190 @@ export default function GradeConfig() {
 
   const handleImportStandard = async () => {
     setSaving(true);
-    setSuccessMessage(null);
+    setMessage(null);
     try {
       await gradesApi.importStandard();
-      await metricsApi.recalculate();
+      await metricsApi.recalculate().catch(() => undefined);
       await fetchData();
       setMode('auto');
-      setSuccessMessage('Standard grade hierarchy imported successfully! Metrics recalculated.');
-    } catch (error) {
-      console.error('Failed to import standard grades:', error);
+      setMessage('Standard grade hierarchy loaded; costs recalculated.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSwitchToManual = () => {
-    setMode('manual');
-  };
-
   const handleAddGrade = async () => {
     if (!newGrade.grade.trim() || !newGrade.median_salary) return;
-
     setSaving(true);
     try {
       const created = await gradesApi.create({
-        grade: newGrade.grade,
+        grade: newGrade.grade.trim(),
         median_salary: parseFloat(newGrade.median_salary),
         currency: 'SGD',
         display_order: grades.length + 1,
       });
       setGrades([...grades, created]);
       setNewGrade({ grade: '', median_salary: '' });
-      await metricsApi.recalculate();
-    } catch (error) {
-      console.error('Failed to add grade:', error);
+      await metricsApi.recalculate().catch(() => undefined);
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteGrade = async (id: string) => {
-    try {
-      await gradesApi.delete(id);
-      setGrades(grades.filter(g => g.id !== id));
-      await metricsApi.recalculate();
-    } catch (error) {
-      console.error('Failed to delete grade:', error);
-    }
+    await gradesApi.delete(id);
+    setGrades(grades.filter((g) => g.id !== id));
+    await metricsApi.recalculate().catch(() => undefined);
   };
 
-  const handleUpdateSalary = async (id: string, salary: number) => {
-    try {
-      const grade = grades.find(g => g.id === id);
-      if (!grade) return;
-
-      await gradesApi.update(id, { ...grade, median_salary: salary });
-      setGrades(grades.map(g =>
-        g.id === id ? { ...g, median_salary: salary } : g
-      ));
-    } catch (error) {
-      console.error('Failed to update grade:', error);
-    }
+  // Saved when the field is left, not on every keystroke
+  const handleUpdateSalary = async (id: string, value: string) => {
+    const salary = parseFloat(value);
+    const grade = grades.find((g) => g.id === id);
+    if (!grade || Number.isNaN(salary) || salary === grade.median_salary) return;
+    await gradesApi.update(id, { ...grade, median_salary: salary });
+    setGrades(grades.map((g) => (g.id === id ? { ...g, median_salary: salary } : g)));
+    await metricsApi.recalculate().catch(() => undefined);
+    setMessage(`${grade.grade} salary saved; costs recalculated.`);
   };
 
   const handleClearAll = async () => {
-    if (!confirm('Are you sure you want to clear all grades?')) return;
-
+    if (!confirm('Clear every grade? Costs will fall back to the salaries in the CSV.')) return;
     setSaving(true);
     try {
       await gradesApi.clearAll();
       setGrades([]);
       setMode(null);
-    } catch (error) {
-      console.error('Failed to clear grades:', error);
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
-      </div>
-    );
-  }
+  if (loading) return <Loading label="Loading grades" />;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Grade & Salary Configuration</h1>
-        <div className="flex gap-3">
-          {grades.length > 0 && (
+    <>
+      <PageHeader
+        eyebrow="Setup — grades and salaries"
+        title="Grades and median salaries"
+        lede="Grade order drives the grade-gap check between managers and their reports; median salaries fill in costs for anyone without a salary in the CSV. Grades in your upload are added automatically."
+        actions={grades.length > 0 ? <button onClick={handleClearAll} disabled={saving} className="btn btn-quiet">Clear all grades</button> : undefined}
+      />
+      {message && <div className="mb-8"><Callout label="Saved" tone="healthy">{message}</Callout></div>}
+
+      <Section eyebrow="01 · Choose a starting point">
+        <div className="grid gap-px overflow-hidden border border-hairline bg-hairline md:grid-cols-2">
+          {[
+            {
+              key: 'auto' as const,
+              title: 'Standard hierarchy',
+              body: 'Load the standard corporate grade structure with its median salaries (SVP to AO).',
+              onClick: handleImportStandard,
+            },
+            {
+              key: 'manual' as const,
+              title: 'Your own grades',
+              body: 'Add and edit grades and salaries yourself — for non-standard structures.',
+              onClick: () => setMode('manual'),
+            },
+          ].map((opt) => (
             <button
-              onClick={handleClearAll}
+              key={opt.key}
+              onClick={opt.onClick}
               disabled={saving}
-              className="btn btn-danger text-sm"
+              className={clsx('bg-white p-6 text-left transition-colors hover:bg-wash', mode === opt.key && 'bg-primary-50 hover:bg-primary-50')}
             >
-              Clear All Grades
+              <p className={clsx('eyebrow mb-2', mode !== opt.key && 'eyebrow-faint')}>{mode === opt.key ? 'In use' : 'Option'}</p>
+              <h3 className="text-[20px]">{opt.title}</h3>
+              <p className="mt-1 text-sm text-secondary">{opt.body}</p>
             </button>
-          )}
+          ))}
         </div>
-      </div>
+      </Section>
 
-      {successMessage && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
-          <CheckCircle className="w-5 h-5" />
-          {successMessage}
-        </div>
-      )}
-
-      {/* Mode Selection - Always show to allow switching */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {/* Auto-Populate Option */}
-        <div
-          onClick={handleImportStandard}
-          className={`card cursor-pointer border-2 transition-all hover:border-primary-500 hover:shadow-lg ${
-            mode === 'auto' ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
-          } ${saving ? 'opacity-50 pointer-events-none' : ''}`}
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className={`p-2 rounded-lg ${mode === 'auto' ? 'bg-primary-200' : 'bg-primary-100'}`}>
-              <Wand2 className="w-6 h-6 text-primary-600" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">Auto-Populate Standard Hierarchy</h2>
-              <p className="text-sm text-gray-500">Use pre-defined grade structure with salaries</p>
-            </div>
-            {mode === 'auto' && (
-              <CheckCircle className="w-5 h-5 text-primary-600 ml-auto" />
-            )}
-          </div>
-          <p className="text-sm text-gray-600 mb-4">
-            Automatically populate with the standard corporate grade hierarchy including SVP ($698k), VP ($432k), AVP ($296k), Senior Manager ($213k), Manager ($173k), and AO ($107k) levels.
-          </p>
-          {saving && <Loader2 className="w-5 h-5 animate-spin text-primary-600" />}
-        </div>
-
-        {/* Manual Option */}
-        <div
-          onClick={handleSwitchToManual}
-          className={`card cursor-pointer border-2 transition-all hover:border-primary-500 hover:shadow-lg ${
-            mode === 'manual' ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
-          }`}
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className={`p-2 rounded-lg ${mode === 'manual' ? 'bg-primary-200' : 'bg-gray-100'}`}>
-              <Edit3 className="w-6 h-6 text-gray-600" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">Manual Configuration</h2>
-              <p className="text-sm text-gray-500">Define your own grade structure</p>
-            </div>
-            {mode === 'manual' && (
-              <CheckCircle className="w-5 h-5 text-primary-600 ml-auto" />
-            )}
-          </div>
-          <p className="text-sm text-gray-600">
-            Manually add and configure grades with custom names and salaries. Useful for organizations with non-standard grade structures.
-          </p>
-        </div>
-      </div>
-
-      {/* Standard Hierarchy Preview - Show when no mode selected yet */}
       {mode === null && standardHierarchy && (
-        <div className="card mb-8">
-          <h3 className="font-semibold mb-4">Standard Grade Hierarchy Preview</h3>
-          <div className="overflow-x-auto">
+        <Section eyebrow="Preview" title="The standard hierarchy">
+          <div className="card overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="text-left py-2 px-4">Seniority</th>
-                  <th className="text-left py-2 px-4">Available Job Grades</th>
-                  <th className="text-right py-2 px-4">Salary ($)</th>
+                <tr className="hairline-b text-left text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">
+                  <th className="px-5 py-3">Seniority</th>
+                  <th className="px-4 py-3">Grades</th>
+                  <th className="px-5 py-3 text-right">Median salary</th>
                 </tr>
               </thead>
               <tbody>
                 {standardHierarchy.seniority_levels.map((level) => (
-                  <tr key={level.name} className="border-b">
-                    <td className="py-2 px-4 font-medium">{level.name}</td>
-                    <td className="py-2 px-4">
-                      <div className="flex gap-2 flex-wrap">
-                        {level.grades.map(g => (
-                          <span key={g} className="px-2 py-0.5 bg-primary-100 text-primary-700 rounded text-xs">
-                            {g}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-2 px-4 text-right font-mono">
-                      ${level.salary.toLocaleString()}
-                    </td>
+                  <tr key={level.name} className="hairline-b last:border-0">
+                    <td className="px-5 py-2.5 font-medium text-ink">{level.name}</td>
+                    <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1.5">{level.grades.map((g) => <Chip key={g}>{g}</Chip>)}</div></td>
+                    <td className="tabular px-5 py-2.5 text-right text-ink">{formatMoney(level.salary)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </Section>
       )}
 
-      {/* Current Grades Display */}
-      {grades.length > 0 && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold">
-              {mode === 'auto' ? 'Standard Grade Hierarchy' : 'Custom Grade Configuration'}
-            </h3>
-            {mode === 'auto' && (
-              <button
-                onClick={handleSwitchToManual}
-                className="text-sm text-primary-600 hover:underline"
-              >
-                Switch to Manual Mode
-              </button>
-            )}
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
+      {(grades.length > 0 || mode === 'manual') && (
+        <Section eyebrow="02 · Grades in use" title={mode === 'auto' ? 'Standard hierarchy' : 'Your grade structure'} lede="Highest grade first; the order sets the grade-gap check.">
+          <div className="card overflow-x-auto p-0">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 px-4">Order</th>
-                  <th className="text-left py-2 px-4">Grade</th>
-                  <th className="text-left py-2 px-4">Median Salary</th>
-                  <th className="text-left py-2 px-4">Currency</th>
-                  {mode === 'manual' && <th className="text-right py-2 px-4">Actions</th>}
+                <tr className="hairline-b text-left text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">
+                  <th className="px-5 py-3">Order</th>
+                  <th className="px-4 py-3">Grade</th>
+                  <th className="px-4 py-3">Median salary</th>
+                  <th className="px-4 py-3">Currency</th>
+                  {mode === 'manual' && <th className="px-5 py-3" />}
                 </tr>
               </thead>
               <tbody>
-                {grades.map((grade) => (
-                  <tr key={grade.id} className="border-b hover:bg-gray-50">
-                    <td className="py-2 px-4 text-gray-500">{grade.display_order}</td>
-                    <td className="py-2 px-4 font-medium">{grade.grade}</td>
-                    <td className="py-2 px-4">
+                {grades.map((g) => (
+                  <tr key={g.id} className="hairline-b">
+                    <td className="tabular px-5 py-2.5 text-faint">{g.display_order}</td>
+                    <td className="px-4 py-2.5 font-medium text-ink">{g.grade}</td>
+                    <td className="px-4 py-2.5">
                       {mode === 'manual' ? (
-                        <input
-                          type="number"
-                          value={grade.median_salary}
-                          onChange={(e) => handleUpdateSalary(grade.id, parseFloat(e.target.value))}
-                          className="w-32 px-2 py-1 border rounded"
-                        />
+                        <input type="number" defaultValue={g.median_salary} onBlur={(e) => handleUpdateSalary(g.id, e.target.value)} className="input w-36 py-1.5" aria-label={`Median salary for ${g.grade}`} />
                       ) : (
-                        <span className="font-mono">${grade.median_salary.toLocaleString()}</span>
+                        <span className="tabular text-ink">{g.median_salary.toLocaleString()}</span>
                       )}
                     </td>
-                    <td className="py-2 px-4 text-gray-500">{grade.currency}</td>
+                    <td className="px-4 py-2.5 text-faint">{g.currency}</td>
                     {mode === 'manual' && (
-                      <td className="py-2 px-4 text-right">
-                        <button
-                          onClick={() => handleDeleteGrade(grade.id)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <td className="px-5 py-2.5 text-right">
+                        <button onClick={() => handleDeleteGrade(g.id)} className="text-xs font-semibold text-primary-600 hover:text-primary-700">Remove</button>
                       </td>
                     )}
                   </tr>
                 ))}
-
-                {/* Add new grade row - only in manual mode */}
                 {mode === 'manual' && (
-                  <tr className="bg-gray-50">
-                    <td className="py-2 px-4 text-gray-400">{grades.length + 1}</td>
-                    <td className="py-2 px-4">
-                      <input
-                        type="text"
-                        value={newGrade.grade}
-                        onChange={(e) => setNewGrade({ ...newGrade, grade: e.target.value })}
-                        placeholder="Grade name"
-                        className="w-full px-2 py-1 border rounded"
-                      />
+                  <tr className="bg-wash">
+                    <td className="tabular px-5 py-2.5 text-faint">{grades.length + 1}</td>
+                    <td className="px-4 py-2.5">
+                      <input value={newGrade.grade} onChange={(e) => setNewGrade({ ...newGrade, grade: e.target.value })} placeholder="e.g. H8" className="input py-1.5" aria-label="New grade name" />
                     </td>
-                    <td className="py-2 px-4">
-                      <input
-                        type="number"
-                        value={newGrade.median_salary}
-                        onChange={(e) => setNewGrade({ ...newGrade, median_salary: e.target.value })}
-                        placeholder="Salary"
-                        className="w-32 px-2 py-1 border rounded"
-                      />
+                    <td className="px-4 py-2.5">
+                      <input type="number" value={newGrade.median_salary} onChange={(e) => setNewGrade({ ...newGrade, median_salary: e.target.value })} placeholder="e.g. 250000" className="input w-36 py-1.5" aria-label="New grade median salary" />
                     </td>
-                    <td className="py-2 px-4 text-gray-500">SGD</td>
-                    <td className="py-2 px-4 text-right">
-                      <button
-                        onClick={handleAddGrade}
-                        disabled={!newGrade.grade.trim() || !newGrade.median_salary || saving}
-                        className="btn btn-primary text-sm flex items-center gap-1 disabled:opacity-50"
-                      >
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                        Add
-                      </button>
+                    <td className="px-4 py-2.5 text-faint">SGD</td>
+                    <td className="px-5 py-2.5 text-right">
+                      <button onClick={handleAddGrade} disabled={!newGrade.grade.trim() || !newGrade.median_salary || saving} className="btn btn-primary py-1.5">Add</button>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-
           {mode === 'auto' && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
-              Using standard grade hierarchy. Grade gap calculations will be based on this order.
-              To customize salaries or add custom grades, switch to Manual Mode.
-            </div>
+            <p className="mt-3 text-sm text-secondary">
+              To change salaries or add grades, <button onClick={() => setMode('manual')} className="font-semibold text-primary-600">switch to your own grades</button>.
+            </p>
           )}
-        </div>
+        </Section>
       )}
-
-      {/* Manual mode with no grades */}
-      {mode === 'manual' && grades.length === 0 && (
-        <div className="card">
-          <h3 className="font-semibold mb-4">Manual Grade Configuration</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Add grades in order from highest (e.g., SVP) to lowest (e.g., AO).
-            The order determines the grade gap calculations.
-          </p>
-
-          <div className="flex gap-4 items-end">
-            <div>
-              <label className="label">Grade Name</label>
-              <input
-                type="text"
-                value={newGrade.grade}
-                onChange={(e) => setNewGrade({ ...newGrade, grade: e.target.value })}
-                placeholder="e.g., SVP, H8, TL"
-                className="input"
-              />
-            </div>
-            <div>
-              <label className="label">Median Salary</label>
-              <input
-                type="number"
-                value={newGrade.median_salary}
-                onChange={(e) => setNewGrade({ ...newGrade, median_salary: e.target.value })}
-                placeholder="e.g., 350000"
-                className="input"
-              />
-            </div>
-            <button
-              onClick={handleAddGrade}
-              disabled={!newGrade.grade.trim() || !newGrade.median_salary || saving}
-              className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Add Grade
-            </button>
-          </div>
-
-          <div className="mt-4">
-            <button
-              onClick={() => setMode(null)}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              ← Back to selection
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
