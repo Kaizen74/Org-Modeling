@@ -5,7 +5,7 @@
 An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-Owner approved the 5-phase plan on 2026-10-22. Phase 1 complete; P2.0 done (61/61 tests). Overview page rebuilt in the Playbook style. P2.3 done (work activities consolidated; done before P2.1 because the Work Activities page lacked the duplication/missing/hand-off sections). P3.1–P3.4 done (85/85 tests + 7/7 smoke). Next: P3.5 optional AI disposition tagging.
+Owner approved the 5-phase plan on 2026-10-22. Phase 1 complete; P2.0 done (61/61 tests). Overview page rebuilt in the Playbook style. P2.3 done (work activities consolidated; done before P2.1 because the Work Activities page lacked the duplication/missing/hand-off sections). Phase 3 complete (91/91 tests + 7/7 smoke). Next: P4 implementation implications + export.
 
 ## This session (2026-10-22) — approved plan, in order
 Phase 1 — Accuracy fixes
@@ -24,7 +24,7 @@ Phase 3 — Scenario Studio
 - [x] P3.2 Scenario Studio screen
 - [x] P3.3 Option comparison matrix vs weighted design criteria
 - [x] P3.4 Archetype diagrams using the organization's real units
-- [ ] P3.5 Optional AI-disposition tagging (automate / augment / keep human) — never blocks the workflow
+- [x] P3.5 Optional AI-disposition tagging (automate / augment / keep human) — never blocks the workflow
 Phase 4
 - [ ] P4 Implementation implications view + board-ready export pack
 Phase 5

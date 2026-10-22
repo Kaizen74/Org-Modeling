@@ -24,6 +24,7 @@ const ROWS: Array<{ key: keyof ScenarioHeadline; label: string; better?: 'up' | 
   { key: 'manager_ratio_pct', label: 'Manager ratio %' },
   { key: 'median_span', label: 'Median span' },
   { key: 'total_cost', label: 'People cost', money: true },
+  { key: 'ai_capacity_fte', label: 'Capacity AI could free (FTE)', better: 'up' },
 ];
 
 const MOVE_LABELS: Record<MoveType, { label: string; hint: string }> = {
@@ -396,14 +397,14 @@ export default function Scenarios() {
                         </tr>
                       </thead>
                       <tbody>
-                        {ROWS.map((r) => {
-                          const d = active.delta[r.key] as number;
+                        {ROWS.filter((r) => r.key !== 'ai_capacity_fte' || active.baseline.ai_capacity_fte || active.scenario.ai_capacity_fte).map((r) => {
+                          const d = (active.delta[r.key] as number) ?? 0;
                           const fmt = (v: number) => (r.money ? formatMoney(v) : v.toLocaleString(undefined, { maximumFractionDigits: 2 }));
                           return (
                             <tr key={r.key} className="hairline-b last:border-0">
                               <td className="whitespace-nowrap px-5 py-2.5 text-ink">{r.label}</td>
-                              <td className="tabular px-4 py-2.5 text-right text-secondary">{fmt(active.baseline[r.key] as number)}</td>
-                              <td className="tabular px-4 py-2.5 text-right font-semibold text-ink">{fmt(active.scenario[r.key] as number)}</td>
+                              <td className="tabular px-4 py-2.5 text-right text-secondary">{fmt((active.baseline[r.key] as number) ?? 0)}</td>
+                              <td className="tabular px-4 py-2.5 text-right font-semibold text-ink">{fmt((active.scenario[r.key] as number) ?? 0)}</td>
                               <td className="tabular px-5 py-2.5 text-right font-semibold" style={{ color: changeColor(d, r.better) }}>{signed(d, r.money)}</td>
                             </tr>
                           );

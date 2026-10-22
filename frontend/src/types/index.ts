@@ -635,6 +635,7 @@ export interface ScenarioHeadline {
   spans_above_benchmark: number;
   single_report_managers: number;
   health_score: number;
+  ai_capacity_fte?: number; // optional AI-role overlay; 0 when unused
 }
 
 export interface MoveLogEntry {
@@ -760,6 +761,42 @@ export interface ComparisonPayload {
   options: ComparisonOption[];
   judgments: Record<string, Record<string, Judgment>>;
   result: ComparisonResult;
+  ai_available: boolean;
+  suggestions_added?: number;
+}
+
+// ---------- Optional AI-role overlay ----------
+
+export type Disposition = 'automate' | 'augment' | 'keep_human';
+
+export interface RoleTag {
+  disposition: Disposition;
+  capacity_freed_pct: number;
+  rationale?: string;
+  source: 'user' | 'ai';
+  confidence?: string;
+}
+
+export interface DispositionRole {
+  job_title: string;
+  headcount: number;
+  departments: string[];
+  activities: string[];
+  tag?: RoleTag | null;
+}
+
+export interface DispositionPayload {
+  enabled: boolean;
+  dispositions: Record<Disposition, string>;
+  roles: DispositionRole[];
+  summary: {
+    by_disposition: Record<Disposition, { roles: number; people: number }>;
+    tagged_roles: number;
+    total_roles: number;
+    tagged_people_pct: number;
+    capacity_fte: number;
+    capacity_cost: number;
+  };
   ai_available: boolean;
   suggestions_added?: number;
 }

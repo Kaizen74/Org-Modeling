@@ -24,6 +24,7 @@ MEASURABLE = {
     "manager_ratio_pct": {"label": "Manager ratio %", "better": "lower"},
     "headcount": {"label": "People", "better": "lower"},
     "people_affected_pct": {"label": "Share of people affected", "better": "lower"},
+    "ai_capacity_fte": {"label": "Capacity freed by AI (FTE, optional overlay)", "better": "higher"},
 }
 
 DEFAULT_CRITERIA = [

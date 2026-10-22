@@ -87,6 +87,13 @@ Scoring (backend `comparison_service.score_options`): measured → 0-100 between
 Scenario `source` may be `archetype:<archetype_id>` to tie a scenario to a recommended archetype.
 Used by: Compare page (`frontend/src/pages/Compare.tsx`).
 
+## Optional AI-role overlay
+Per job title: `disposition` automate | augment | keep_human, `capacity_freed_pct` 0-100, `rationale`, `source` user|ai. Fully optional: with no tags (or `enabled` off) every other endpoint behaves exactly as before and `ai_capacity_fte` is 0.
+- `GET /ai-disposition` → `{ enabled, dispositions{}, roles[{job_title, headcount, departments[], activities[], tag?}], summary{by_disposition, tagged_roles, total_roles, tagged_people_pct, capacity_fte, capacity_cost}, ai_available }`
+- `PUT /ai-disposition/role` `{job_title, disposition|null, capacity_freed_pct?, rationale?}` · `PUT /ai-disposition/enabled` `{enabled}`
+- `POST /ai-disposition/suggest` `{industry?}` → AI tags for untagged roles (never overwrites user tags; titles and activities only)
+Scenario headlines gain `ai_capacity_fte` (FTE freed; never changes headcount); comparison measure `ai_capacity_fte` (higher is better) is available but not in the default criteria.
+
 ## Grades
 ### GET/POST /grades, POST /grades/bulk-import
 Returns/accepts `GradeSalary { id, grade, median_salary, currency, display_order }`

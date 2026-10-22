@@ -85,6 +85,18 @@ class Comparison(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class AIDisposition(Base):
+    """Optional overlay: role of AI per job title for one upload."""
+    __tablename__ = "ai_dispositions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    analysis_id = Column(String(36), ForeignKey("org_analyses.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    enabled = Column(Integer, default=1)  # 0 = hidden everywhere, tags kept
+    roles = Column(JSON, default=dict)  # {job_title: {disposition, capacity_freed_pct, rationale, source, confidence}}
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Setting(Base):
     """Application settings key-value store."""
     __tablename__ = "settings"

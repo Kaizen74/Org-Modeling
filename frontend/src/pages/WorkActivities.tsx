@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { aiAnalysisApi, settingsApi } from '../services/api';
+import AIRoleOverlay from '../components/AIRoleOverlay';
 import { FIVE_DIMENSIONS } from '../types';
 import type {
   WorkActivitiesAnalysis,
@@ -235,6 +236,8 @@ export default function WorkActivities() {
           )}
         </Section>
       )}
+
+      {!noActivities && <AIRoleOverlay />}
 
       {result && (
         <>

@@ -15,7 +15,9 @@ import type {
   ScenarioHeadline,
   ScenarioListItem,
   ComparisonCriterion,
-  ComparisonPayload
+  ComparisonPayload,
+  Disposition,
+  DispositionPayload
 } from '../types';
 
 /** Whole organization when department is empty, otherwise one department. */
@@ -309,4 +311,13 @@ export const comparisonApi = {
   judge: async (optionId: string, criterionId: string, score: number | null, rationale?: string): Promise<ComparisonPayload> =>
     (await api.put('/comparison/judgments', { option_id: optionId, criterion_id: criterionId, score, rationale })).data,
   suggest: async (): Promise<ComparisonPayload> => (await api.post('/comparison/suggest')).data,
+};
+
+// Optional AI-role overlay API
+export const aiDispositionApi = {
+  get: async (): Promise<DispositionPayload> => (await api.get('/ai-disposition')).data,
+  setEnabled: async (enabled: boolean): Promise<DispositionPayload> => (await api.put('/ai-disposition/enabled', { enabled })).data,
+  tag: async (jobTitle: string, disposition: Disposition | null, capacityFreedPct?: number, rationale?: string): Promise<DispositionPayload> =>
+    (await api.put('/ai-disposition/role', { job_title: jobTitle, disposition, capacity_freed_pct: capacityFreedPct, rationale })).data,
+  suggest: async (industry?: string): Promise<DispositionPayload> => (await api.post('/ai-disposition/suggest', { industry })).data,
 };

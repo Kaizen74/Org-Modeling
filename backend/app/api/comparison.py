@@ -15,8 +15,6 @@ from ..services.comparison_service import DEFAULT_CRITERIA, MEASURABLE, score_op
 from ..services.claude_service import claude_service
 from ..services.ai_analysis_service import AIAnalysisService
 from ..services.llm_client import run_analysis, AnalysisRefused
-from ..services.metrics_store import ensure_metrics
-from ..services.scenario_engine import headline
 from .scenarios import evaluate
 
 router = APIRouter(prefix="/api/v1/comparison", tags=["comparison"])
@@ -48,7 +46,7 @@ async def _context(db: AsyncSession):
 
 
 async def _options(analysis: OrgAnalysis, db: AsyncSession) -> List[Dict]:
-    base = headline(await ensure_metrics(analysis, db))
+    base = (await evaluate(analysis, [], db))["baseline"]
     options = [{
         "id": "current", "name": "Current state", "source": "current", "description": "The organization as uploaded",
         "move_count": 0, "figures": {**base, "people_affected_pct": 0.0}, "moves_summary": [],

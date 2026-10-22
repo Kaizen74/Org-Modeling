@@ -11,6 +11,8 @@ from ..models.database import get_session
 from ..models.models import OrgAnalysis, Scenario
 from ..services.metrics_service import MetricsCalculator
 from ..services.metrics_store import ensure_metrics, load_grades, enrich_employees_with_grade_salary
+from ..services.ai_disposition_service import capacity_freed
+from .ai_disposition import active_roles
 from ..services.scenario_engine import (
     MOVE_TYPES,
     apply_moves,
@@ -68,6 +70,10 @@ async def evaluate(analysis: OrgAnalysis, moves: List[Dict], db: AsyncSession) -
     scenario_metrics = MetricsCalculator(employees=employees, grade_order=grade_order).calculate_all_metrics()
 
     base_head, scen_head = headline(baseline_metrics), headline(scenario_metrics)
+    # Optional AI-role overlay: capacity freed, never a headcount change
+    roles = await active_roles(analysis, db)
+    base_head["ai_capacity_fte"], _ = capacity_freed(baseline, roles)
+    scen_head["ai_capacity_fte"], _ = capacity_freed(employees, roles)
     return {
         "move_log": log,
         "baseline": base_head,
@@ -116,7 +122,7 @@ async def list_scenarios(db: AsyncSession = Depends(get_session)):
         result = await evaluate(analysis, s.moves or [], db)
         out.append({**_summary(s), "scenario": result["scenario"], "delta": result["delta"],
                     "skipped_moves": sum(1 for m in result["move_log"] if m["status"] == "skipped")})
-    baseline = headline(await ensure_metrics(analysis, db))
+    baseline = (await evaluate(analysis, [], db))["baseline"]
     return {"analysis_id": analysis.id, "baseline": baseline, "scenarios": out}
 
 
