@@ -76,6 +76,13 @@ async def evaluate(analysis: OrgAnalysis, moves: List[Dict], db: AsyncSession) -
         "departments": department_deltas(baseline_metrics, scenario_metrics),
         "impact": people_impact(baseline, employees),
         "metrics": scenario_metrics,
+        # Compact roster of the scenario's people, for the move pickers (includes new roles)
+        "people": [
+            {"employee_id": e["employee_id"], "name": e.get("name"), "job_title": e.get("job_title"),
+             "department": e.get("department"), "manager_id": e.get("manager_id"), "grade": e.get("grade"),
+             "is_new": bool(e.get("is_new"))}
+            for e in employees
+        ],
     }
 
 

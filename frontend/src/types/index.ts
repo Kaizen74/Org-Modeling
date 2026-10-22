@@ -662,8 +662,19 @@ export interface ScenarioImpact {
   people_affected_pct: number;
 }
 
+export interface ScenarioPerson {
+  employee_id: string;
+  name: string;
+  job_title: string;
+  department: string;
+  manager_id: string | null;
+  grade: string;
+  is_new: boolean;
+}
+
 export interface ScenarioEvaluation {
   move_log: MoveLogEntry[];
+  people: ScenarioPerson[];
   baseline: ScenarioHeadline;
   scenario: ScenarioHeadline;
   delta: ScenarioHeadline;

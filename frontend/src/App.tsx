@@ -8,6 +8,7 @@ import Metrics from './pages/Metrics'
 import AIAnalysis from './pages/AIAnalysis'
 import OrgChart from './pages/OrgChart'
 import WorkActivities from './pages/WorkActivities'
+import Scenarios from './pages/Scenarios'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
         <Route path="/analysis" element={<AIAnalysis />} />
         <Route path="/work-activities" element={<WorkActivities />} />
         <Route path="/org-chart" element={<OrgChart />} />
+        <Route path="/scenarios" element={<Scenarios />} />
       </Routes>
     </Layout>
   )

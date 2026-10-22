@@ -145,6 +145,7 @@ async def test_scenario_api_round_trip(client: AsyncClient, sample_csv_path):
     assert after["delta"]["headcount"] == -1
     assert after["delta"]["single_report_managers"] <= 0
     assert after["impact"]["roles_removed"][0]["name"] == "Rachel Goh"
+    assert len(after["people"]) == 63 and all("employee_id" in p for p in after["people"])
 
     listing = (await client.get("/api/v1/scenarios")).json()
     assert listing["scenarios"][0]["name"] == "Delayer CX"

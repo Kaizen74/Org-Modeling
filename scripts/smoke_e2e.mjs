@@ -10,6 +10,7 @@ const checks = [
   { path: '/org-chart', expect: /managers have a single direct report|managers across/ },
   { path: '/work-activities', expect: /Data coverage|What the work is/ },
   { path: '/analysis', expect: /AI|Analysis/ },
+  { path: '/scenarios', expect: /Build structural options and see what each one changes/ },
 ];
 
 const browser = await chromium.launch();
