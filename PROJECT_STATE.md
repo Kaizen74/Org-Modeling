@@ -5,7 +5,7 @@
 An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-Owner approved the 5-phase plan on 2026-10-22. Phase 1 complete; P2.0 done (61/61 tests). Overview page rebuilt in the Playbook style. P2.3 done (work activities consolidated; done before P2.1 because the Work Activities page lacked the duplication/missing/hand-off sections). All five approved phases complete (94/94 tests + 11/11 browser smoke checks). Awaiting owner review.
+Owner approved the 5-phase plan on 2026-10-22. Phase 1 complete; P2.0 done (61/61 tests). Overview page rebuilt in the Playbook style. P2.3 done (work activities consolidated; done before P2.1 because the Work Activities page lacked the duplication/missing/hand-off sections). All five approved phases complete. Comprehensive mock test run 2026-10-22 (fake Claude, 141-person Windows-1252 org with shared names, unresolved manager, Level mismatch, blank salaries): 73/73 API-journey checks, 18/18 browser-journey checks; it found and fixed 5 defects (lost work-activities re-run, Archetype page hiding its run form, unresolved-manager layer mismatch, new-project dialog not mentioning scenarios, clipped Scenario effect table). 96/96 tests + 11/11 smoke checks. Awaiting owner review.
 
 ## This session (2026-10-22) — approved plan, in order
 Phase 1 — Accuracy fixes
@@ -43,6 +43,7 @@ Phase 5
 4. Run `./run_checks.sh` first — all should pass (step 4 is a browser smoke test; it is skipped automatically where Playwright isn't installed)
 
 ## Known issues
+- Open question for the owner: the Work Type column is read from a manager's direct reports. If a whole function is tagged "Operational", managers of managers in it are judged against 15–25 instead of the manager-of-managers rule (5–10). Not changed — methodology choice
 - Backend deprecation warnings (Pydantic class-based config; pandas select_dtypes) — cosmetic, not failures
 - Frontend bundle ~507 kB (was 848 kB) — just over Vite's 500 kB warning; code-splitting would clear it
 - AI features verified with a faked Claude client and sample (fictional) outputs only — no live API key in the build environment

@@ -156,6 +156,7 @@ export default function Layout({ children }: LayoutProps) {
               <li><span className="text-primary-600 mr-2">·</span>Uploaded org structure</li>
               <li><span className="text-primary-600 mr-2">·</span>Calculated metrics</li>
               <li><span className="text-primary-600 mr-2">·</span>AI and work activities analyses</li>
+              <li><span className="text-primary-600 mr-2">·</span>Scenarios, comparison scores and AI-role tags</li>
             </ul>
             <p className="mb-7 text-sm text-faint">Your Claude API key and grade configuration are kept.</p>
             <div className="flex gap-3">

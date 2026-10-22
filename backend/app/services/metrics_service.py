@@ -24,7 +24,7 @@ import math
 
 # Bump when the shape or meaning of calculated metrics changes, so cached
 # metrics from older uploads are recalculated instead of shown stale
-METRICS_VERSION = 3
+METRICS_VERSION = 4
 
 
 class MetricsCalculator:

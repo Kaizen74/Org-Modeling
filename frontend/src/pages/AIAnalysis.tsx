@@ -206,7 +206,8 @@ export default function AIAnalysis() {
   const allScores = cat4 && !Array.isArray(cat4) ? [...(cat4.all_archetype_scores ?? [])].sort((a, b) => b.overall_score - a.overall_score) : [];
   const alignment = analysis?.category_3_strategy_alignment;
   const diagnosis = analysis?.category_2_health_diagnosis;
-  const ok = analysis && !analysis.error;
+  // The stored record also holds the work-activities analysis; only archetype results count here
+  const ok = analysis && !analysis.error && Boolean(analysis.executive_summary || analysis.category_4_recommended_archetypes);
   const lead = recs[0];
 
   return (

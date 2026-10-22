@@ -303,7 +303,7 @@ export default function Metrics() {
         </div>
         {layers.level_mismatches && layers.level_mismatches.count > 0 && (
           <div className="mt-4">
-            <Callout label={`${layers.level_mismatches.count} Level values disagree with the reporting chain`} tone="developing">
+            <Callout label={`${layers.level_mismatches.count} Level ${layers.level_mismatches.count === 1 ? 'value disagrees' : 'values disagree'} with the reporting chain`} tone="developing">
               Layers above are counted from who reports to whom. Examples:{' '}
               {layers.level_mismatches.examples.slice(0, 5).map((m) => `${m.name} (Level ${m.declared_level}, actually layer ${m.actual_layer})`).join('; ')}.
             </Callout>

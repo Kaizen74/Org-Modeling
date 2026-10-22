@@ -9,6 +9,8 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.services import llm_client
@@ -143,3 +145,38 @@ def test_prompts_request_five_dimension_tags(sample_employees):
     metrics = MetricsCalculator(employees=sample_employees).calculate_all_metrics()
     archetype_prompt = AIAnalysisService(api_key=None)._build_prompt(metrics, sample_employees, None, None)
     assert '"dimension": "One of: Structure & Accountabilities' in archetype_prompt
+
+
+@pytest.mark.asyncio
+async def test_work_activities_rerun_after_archetype_analysis_is_saved(client, monkeypatch):
+    # The work-activities result shares the stored record with the archetype result;
+    # a re-run after an archetype analysis used to be lost on reload
+    from app.services import ai_analysis_service, work_activities_service
+    from app.api import ai_analysis as api
+    summaries = iter(["first", "second"])
+    meta = {"model_requested": "m", "model_served": "m", "effort": "high", "stop_reason": "end_turn", "truncated": False}
+
+    def fake_run(_client, prompt, max_tokens=None):
+        if "work activity analysis and job design" in prompt:
+            return json.dumps({"executive_summary": next(summaries)}), meta
+        return json.dumps({"executive_summary": "archetypes", "category_4_recommended_archetypes": {"all_archetype_scores": []}}), meta
+
+    monkeypatch.setattr(ai_analysis_service, "run_analysis", fake_run)
+    monkeypatch.setattr(work_activities_service, "run_analysis", fake_run)
+    monkeypatch.setattr(api.claude_service, "is_configured", lambda: True)
+    monkeypatch.setattr(api.claude_service, "api_key", "k", raising=False)
+    csv = (
+        "Name,Job Title,Grade,Level,Line Manager,Employee ID,Work Activities\n"
+        "Ana Lee,CEO,SVP,1,Top of Org,E1,Sets strategy\n"
+        "Bo Lim,Analyst,AO,2,Ana Lee,E2,Reporting\n"
+    )
+    await client.post("/api/v1/org-data/upload-csv", files={"file": ("org.csv", csv.encode(), "text/csv")})
+
+    assert (await client.post("/api/v1/ai-analysis/work-activities", json={})).status_code == 200
+    assert (await client.post("/api/v1/ai-analysis/analyze", json={})).status_code == 200
+    assert (await client.post("/api/v1/ai-analysis/work-activities", json={})).status_code == 200
+
+    wa = (await client.get("/api/v1/ai-analysis/work-activities/latest")).json()["work_activities_analysis"]
+    assert wa["executive_summary"] == "second"
+    stored = (await client.get("/api/v1/ai-analysis/latest")).json()["ai_analysis"]
+    assert stored["executive_summary"] == "archetypes"  # archetype result kept alongside

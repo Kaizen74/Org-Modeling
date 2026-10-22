@@ -338,11 +338,9 @@ async def analyze_work_activities(
         industry=request.industry
     )
 
-    # Store results in the analysis
-    if not analysis.ai_analysis:
-        analysis.ai_analysis = {}
-
-    analysis.ai_analysis["work_activities_analysis"] = work_activities_result
+    # Store results in the analysis. Assign a new dict: an in-place change to a
+    # JSON column is not detected, so re-runs after an archetype analysis were lost
+    analysis.ai_analysis = {**(analysis.ai_analysis or {}), "work_activities_analysis": work_activities_result}
     await db.commit()
 
     return {

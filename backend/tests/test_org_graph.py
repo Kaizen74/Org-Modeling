@@ -122,3 +122,27 @@ def test_fixture_level_column_matches_chain(sample_csv_path):
     metrics = MetricsCalculator(employees=result["employees"]).calculate_all_metrics()
     assert metrics["layer_analysis"]["total_layers"] == 6
     assert metrics["layer_analysis"]["level_mismatches"]["count"] == 0
+
+
+def test_people_under_unresolved_manager_get_no_layer():
+    # Two "Kim Ho"s at the same level: the analyst's manager can't be resolved.
+    # The analyst is not really at the top, so they must not be reported as
+    # "Level 4, actually layer 1" — the unresolved manager is reported instead.
+    csv = HEADER + (
+        "Ana Lee,CEO,SVP,1,Top of Org,E1,Exec,1\n"
+        "Kim Ho,Manager,H6,2,Ana Lee,E2,Fin,1\n"
+        "Kim Ho,Analyst,AO,2,Ana Lee,E3,Fin,1\n"
+        "Bo Lim,Exec,AO,3,Kim Ho,E4,Fin,1\n"
+        "Cy Ong,Clerk,AO,4,Bo Lim,E5,Fin,1\n"
+    )
+    result = _parse(csv)
+    assert any("could not be resolved" in i for i in result["validation_errors"])
+    assert not any("Level doesn't match" in i for i in result["validation_errors"])
+
+    metrics = MetricsCalculator(employees=result["employees"]).calculate_all_metrics()
+    layers = metrics["layer_analysis"]
+    assert layers["level_mismatches"]["count"] == 0
+    assert layers["total_layers"] == 2
+    # Without a chain position they are counted at their typed Level
+    assert metrics["cost_analysis"]["by_level"][3]["count"] == 1
+    assert metrics["cost_analysis"]["by_level"][4]["count"] == 1

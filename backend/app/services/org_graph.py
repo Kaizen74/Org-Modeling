@@ -69,7 +69,10 @@ def normalize_employees(employees: List[Dict]) -> Tuple[List[Dict], List[str]]:
     # Pass 2: resolve managers; shared-name matches are reported once per manager name
     ambiguous: Dict[Tuple[str, str], List[str]] = {}
     for r in normalized:
+        given = r.get("manager_id") if r.get("manager_id") is not None else r.get("manager_name")
         r["manager_id"] = _resolve_manager(r, ids, by_name, issues, ambiguous)
+        # A manager was named but not matched: this person's place in the chain is unknown
+        r["manager_unresolved"] = r["manager_id"] is None and not _is_root_marker(given)
 
     for (mgr_value, outcome), reports in ambiguous.items():
         count = len(by_name.get(mgr_value, []))
@@ -145,10 +148,12 @@ def reporting_layers(G: nx.DiGraph) -> Dict[str, int]:
     """
     Layer of each person in the actual reporting chain: the top of each tree
     is layer 1, their direct reports layer 2, and so on. People caught in a
-    reporting loop (never reachable from a top) get no layer.
+    reporting loop (never reachable from a top) get no layer, and neither do
+    people under a Line Manager that could not be matched — they are not
+    really at the top, so counting them from 1 would misstate their layer.
     """
     layers: Dict[str, int] = {}
-    frontier = [n for n in G.nodes() if G.in_degree(n) == 0]
+    frontier = [n for n in G.nodes() if G.in_degree(n) == 0 and not G.nodes[n].get("manager_unresolved")]
     for n in frontier:
         layers[n] = 1
     while frontier:

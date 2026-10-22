@@ -384,7 +384,8 @@ export default function Scenarios() {
               </div>
 
               <Section eyebrow="01 · Effect on the organization">
-                <div className="grid items-start gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+                {/* Stacked: beside the health card the table had ~470px and clipped its Scenario and Change columns */}
+                <div className="grid gap-6">
                   <HealthDumbbell before={active.baseline.health_score} after={active.scenario.health_score} />
                   <div className="card overflow-x-auto p-0">
                     <table className="w-full text-sm">
