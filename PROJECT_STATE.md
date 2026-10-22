@@ -40,7 +40,7 @@ Phase 5
 1. The next task is: whatever the owner asks next — nothing is half-done. Suggested: a live run with a real API key to review AI output quality; code-splitting the bundle
 2. The relevant files are: backend/app/parsers/csv_parser.py, backend/app/services/metrics_service.py, backend/app/services/ai_analysis_service.py, frontend/src/pages/*.tsx, frontend/src/types/index.ts
 3. Watch out for: in this container `pip` installs into a different Python than the app uses — always install with `python -m pip install -r backend/requirements.txt`; run `npm install` in frontend/ if node_modules is missing
-4. Run `./run_checks.sh` first — all should pass (step 4 is a browser smoke test; it is skipped automatically where Playwright isn't installed)
+4. Run `./run_checks.sh` first — all should pass (step 4 is a browser smoke test; step 5 is the mock journey in `scripts/mock_journey/` — the whole workflow with a fake Claude, 73 backend checks + 18 browser checks; browser parts are skipped automatically where Playwright isn't installed)
 
 ## Known issues
 - Span benchmark (owner's rule, 2026-10-22): managers tagged Operational in the Work Type column → 10-20 direct reports; all others → 5-10. Files without a Work Type column judge every manager against 5-10

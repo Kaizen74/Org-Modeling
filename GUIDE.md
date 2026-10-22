@@ -27,7 +27,7 @@ You upload a spreadsheet (CSV) of your organization — names, job titles, grade
 10. **What the Data Can't Tell Us** — at the bottom of the AI analysis; lists what to measure next to firm up the findings
 
 ## How to check everything still works
-Type `./run_checks.sh` and press Enter. You want to see "ALL CHECKS PASSED ✅". It runs the automated tests, checks and builds the screens, then opens the app in a hidden browser and confirms the main pages load with a sample org. If anything is red, stop and fix before trusting new changes.
+Type `./run_checks.sh` and press Enter. You want to see "ALL CHECKS PASSED ✅". It runs the automated tests, checks and builds the screens, then opens the app in a hidden browser and confirms the main pages load with a sample org. Last, it runs the whole workflow twice — once through the backend, once by clicking through the screens — on a fictional 141-person org with messy data (shared names, a manager who can't be identified, blank salaries, an Excel-saved file), with a stand-in for Claude so it costs nothing and needs no key. It takes about a minute and a half. If anything is red, stop and fix before trusting new changes.
 
 ## What changed recently
 - 2026-10-22: New look matching the OrgDesign Playbook, with the menu laid out as the engagement flow (01 Diagnose, 02 Design). The Overview leads with the health score and what drives it. Structure lists every manager against the right benchmark and compares departments side by side. The org chart opens two layers deep, colours by department / span / cost / grade, and flags managers with a single report. Work Activities now holds the whole current-state analysis, with each finding tagged by your five dimensions
