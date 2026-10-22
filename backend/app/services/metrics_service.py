@@ -18,6 +18,8 @@ import networkx as nx
 from typing import Dict, List, Optional
 import statistics
 
+from .org_graph import normalize_employees, build_org_graph, display_name
+
 
 class MetricsCalculator:
     """
@@ -34,28 +36,11 @@ class MetricsCalculator:
             employees: List of employee dictionaries
             grade_order: Map of grade -> numeric order (1 = highest)
         """
-        self.employees = employees
+        # Keyed by Employee ID; records saved before IDs were resolved are
+        # resolved here by name, so older uploads still work
+        self.employees, self.data_issues = normalize_employees(employees)
         self.grade_order = grade_order or {}
-        self.graph = self._build_graph()
-
-    def _build_graph(self) -> nx.DiGraph:
-        """Build directed graph from employee data."""
-        G = nx.DiGraph()
-
-        # Add all employees as nodes
-        for emp in self.employees:
-            G.add_node(emp["name"], **emp)
-
-        # Build name lookup
-        all_names = {emp["name"] for emp in self.employees}
-
-        # Add edges (manager -> direct report)
-        for emp in self.employees:
-            mgr = emp.get("manager_name", "")
-            if mgr and mgr not in ["Top of Org", "N/A", "", "nan"] and mgr in all_names:
-                G.add_edge(mgr, emp["name"])
-
-        return G
+        self.graph = build_org_graph(self.employees)
 
     def calculate_all_metrics(self) -> Dict:
         """Calculate all organizational metrics."""
@@ -66,7 +51,8 @@ class MetricsCalculator:
             "cost_analysis": self._cost_analysis(),
             "grade_gap_analysis": self._grade_gap_analysis(),
             "layer_analysis": self._layer_analysis(),
-            "health_indicators": self._health_indicators()
+            "health_indicators": self._health_indicators(),
+            "data_quality": {"issues": self.data_issues[:20]}
         }
 
     def _total_employees(self) -> int:
@@ -212,9 +198,9 @@ class MetricsCalculator:
                     gap = self.grade_order[sub_grade] - self.grade_order[mgr_grade]
                     gaps.append(gap)
                     gap_details.append({
-                        "manager": mgr,
+                        "manager": display_name(self.graph, mgr),
                         "manager_grade": mgr_grade,
-                        "subordinate": sub,
+                        "subordinate": display_name(self.graph, sub),
                         "subordinate_grade": sub_grade,
                         "gap": gap
                     })

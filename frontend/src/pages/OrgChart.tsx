@@ -14,6 +14,7 @@ import { orgDataApi } from '../services/api';
 import type { Employee } from '../types';
 
 interface HierarchyNode {
+  id?: string;
   name: string;
   data: Employee;
   children: HierarchyNode[];
@@ -82,7 +83,7 @@ export default function OrgChart() {
     const levelCounters: number[] = new Array(levelWidths.length).fill(0);
 
     const processNode = (node: HierarchyNode, level: number, parentId?: string) => {
-      const nodeId = node.name;
+      const nodeId = node.id ?? node.name;
 
       // Calculate x position based on level width
       const levelWidth = levelWidths[level] * NODE_X_SPACING;

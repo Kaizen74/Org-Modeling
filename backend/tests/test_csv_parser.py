@@ -69,8 +69,10 @@ def test_graph_structure(sample_csv_path):
     graph = result["graph"]
     assert graph is not None
 
-    # Vincent should have 3 direct reports (the VPs)
-    vincent_reports = list(graph.successors("Vincent Chan"))
+    # Graph is keyed by Employee ID; Vincent should have 3 direct reports (the VPs)
+    vincent_id = next(e["employee_id"] for e in result["employees"] if e["name"] == "Vincent Chan")
+    assert vincent_id == "E001"
+    vincent_reports = list(graph.successors(vincent_id))
     assert len(vincent_reports) == 3
 
 

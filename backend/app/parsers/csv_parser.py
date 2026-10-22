@@ -11,6 +11,8 @@ from typing import Dict, List, Optional, Any
 from pathlib import Path
 import io
 
+from ..services.org_graph import normalize_employees, build_org_graph, display_name
+
 
 class OrgCSVParser:
     """
@@ -21,7 +23,7 @@ class OrgCSVParser:
     """
 
     REQUIRED_COLUMNS = ["Name", "Job Title", "Grade", "Level", "Line Manager"]
-    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Salary", "Work Activities", "Job Description"]
+    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Line Manager ID", "Salary", "Work Activities", "Job Description"]
 
     def __init__(self, csv_source):
         """
@@ -73,14 +75,15 @@ class OrgCSVParser:
         # Clean data
         self.df = self._clean_data()
 
-        # Build employee records
-        employees = self._build_employee_records()
+        # Build employee records, then give everyone a unique ID and resolve
+        # each Line Manager to an ID (shared with the metrics engine)
+        employees, resolution_issues = normalize_employees(self._build_employee_records())
 
-        # Build graph
-        self.graph = self._build_graph(employees)
+        # Build graph keyed by Employee ID
+        self.graph = build_org_graph(employees)
 
         # Detect structural issues
-        structural_errors = self._detect_issues()
+        structural_errors = (resolution_issues + self._detect_issues())[:10]
 
         # Calculate metadata
         metadata = self._calculate_metadata(employees)
@@ -212,30 +215,14 @@ class OrgCSVParser:
                 "manager_name": str(row["Line Manager"]).strip() if pd.notna(row["Line Manager"]) else "",
                 "salary": float(row["Salary"]) if pd.notna(row["Salary"]) else 0.0,
                 "employee_id": str(row.get("Employee ID", row["Name"])).strip(),
+                "manager_id": str(row["Line Manager ID"]).strip() if "Line Manager ID" in row and pd.notna(row["Line Manager ID"]) else None,
                 "work_activities": str(row.get("Work Activities", "")).strip() if pd.notna(row.get("Work Activities", "")) else "",
                 "job_description": str(row.get("Job Description", "")).strip() if pd.notna(row.get("Job Description", "")) else ""
             })
         return employees
 
-    def _build_graph(self, employees: List[Dict]) -> nx.DiGraph:
-        """Build directed graph of reporting relationships."""
-        G = nx.DiGraph()
-
-        # Add all employees as nodes
-        for emp in employees:
-            G.add_node(emp["name"], **emp)
-
-        # Add edges (manager -> direct report)
-        for emp in employees:
-            mgr = emp["manager_name"]
-            # Skip if no manager or is top of org
-            if mgr and mgr not in ["Top of Org", "N/A", "", "nan"] and mgr in G.nodes:
-                G.add_edge(mgr, emp["name"])
-
-        return G
-
     def _detect_issues(self) -> List[str]:
-        """Detect structural issues in the org."""
+        """Detect structural issues in the org (unresolved managers are reported during normalization)."""
         errors = []
 
         if not self.graph:
@@ -245,7 +232,7 @@ class OrgCSVParser:
         try:
             cycles = list(nx.simple_cycles(self.graph))
             if cycles:
-                cycle_strs = [" -> ".join(c) for c in cycles[:3]]  # Show first 3
+                cycle_strs = [" -> ".join(display_name(self.graph, n) for n in c) for c in cycles[:3]]
                 errors.append(f"Circular reporting detected: {'; '.join(cycle_strs)}")
         except Exception:
             pass
@@ -253,16 +240,10 @@ class OrgCSVParser:
         # Check for multiple roots (people with no manager)
         roots = [n for n in self.graph.nodes() if self.graph.in_degree(n) == 0]
         if len(roots) > 1:
-            errors.append(f"Multiple root nodes found ({len(roots)}): {', '.join(roots[:5])}")
+            root_names = [display_name(self.graph, n) for n in roots[:5]]
+            errors.append(f"Multiple root nodes found ({len(roots)}): {', '.join(root_names)}")
 
-        # Check for orphans (manager not in list)
-        all_names = set(self.graph.nodes())
-        for emp in self.graph.nodes():
-            mgr = self.graph.nodes[emp].get("manager_name", "")
-            if mgr and mgr not in ["Top of Org", "N/A", "", "nan"] and mgr not in all_names:
-                errors.append(f"Manager not found for {emp}: '{mgr}'")
-
-        return errors[:10]  # Limit to first 10 errors
+        return errors
 
     def _calculate_metadata(self, employees: List[Dict]) -> Dict:
         """Calculate summary metadata."""
@@ -326,7 +307,8 @@ class OrgCSVParser:
             children = list(self.graph.successors(node))
             node_data = dict(self.graph.nodes[node])
             return {
-                "name": node,
+                "id": node,
+                "name": display_name(self.graph, node),
                 "data": node_data,
                 "children": [build_tree(child) for child in children]
             }
@@ -335,6 +317,7 @@ class OrgCSVParser:
             return build_tree(roots[0])
         else:
             return {
+                "id": "__org_root__",
                 "name": "Organization",
                 "data": {},
                 "children": [build_tree(root) for root in roots]
