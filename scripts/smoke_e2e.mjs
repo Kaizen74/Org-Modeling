@@ -13,6 +13,9 @@ const checks = [
   { path: '/scenarios', expect: /Build structural options and see what each one changes/ },
   { path: '/compare', expect: /Create a scenario to compare it with today|highest against your criteria/ },
   { path: '/implementation', expect: /Build an option first|people affected/ },
+  { path: '/upload', expect: /Start from the organization as it is/ },
+  { path: '/grades', expect: /Grades and median salaries/ },
+  { path: '/settings', expect: /Claude API key/ },
 ];
 
 const browser = await chromium.launch();
