@@ -5,7 +5,7 @@
 An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-Owner approved the 5-phase plan on 2026-10-22. Phase 1 complete; P2.0 done (61/61 tests). Overview page rebuilt in the Playbook style. P2.3 done (work activities consolidated; done before P2.1 because the Work Activities page lacked the duplication/missing/hand-off sections). P2.1 done (64/64 tests). Next: P2.2 org chart.
+Owner approved the 5-phase plan on 2026-10-22. Phase 1 complete; P2.0 done (61/61 tests). Overview page rebuilt in the Playbook style. P2.3 done (work activities consolidated; done before P2.1 because the Work Activities page lacked the duplication/missing/hand-off sections). Phase 2 complete (64/64 tests + 5/5 browser smoke checks). Next: P3.1 scenario engine.
 
 ## This session (2026-10-22) — approved plan, in order
 Phase 1 — Accuracy fixes
@@ -17,7 +17,7 @@ Phase 1 — Accuracy fixes
 Phase 2 — Current-state depth (visual foundation first so new screens are built in the Playbook style)
 - [x] P2.0 Playbook visual foundation: tokens, fonts, app shell, shared UI pieces
 - [x] P2.1 Department-level metrics + department scope in AI analysis
-- [ ] P2.2 Org chart with span/cost/department overlays and layer-removal flags
+- [x] P2.2 Org chart with span/cost/department overlays and layer-removal flags
 - [x] P2.3 One Work Activities page + findings tagged by the five dimensions
 Phase 3 — Scenario Studio
 - [ ] P3.1 Scenario engine (design moves → metric deltas)
@@ -39,7 +39,7 @@ Phase 5
 1. The next task is: the first unchecked item above
 2. The relevant files are: backend/app/parsers/csv_parser.py, backend/app/services/metrics_service.py, backend/app/services/ai_analysis_service.py, frontend/src/pages/*.tsx, frontend/src/types/index.ts
 3. Watch out for: in this container `pip` installs into a different Python than the app uses — always install with `python -m pip install -r backend/requirements.txt`; run `npm install` in frontend/ if node_modules is missing
-4. Run `./run_checks.sh` first — all should pass
+4. Run `./run_checks.sh` first — all should pass (step 4 is a browser smoke test; it is skipped automatically where Playwright isn't installed)
 
 ## Known issues
 - Backend deprecation warnings (Pydantic class-based config; pandas select_dtypes) — cosmetic, not failures

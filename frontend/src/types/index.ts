@@ -9,8 +9,18 @@ export interface Employee {
   manager_name: string;
   salary: number;
   employee_id: string;
+  manager_id?: string | null; // resolved from Line Manager / Line Manager ID
+  work_type?: string;
   work_activities?: string;
   job_description?: string;
+}
+
+/** Reporting tree as stored at upload (id = Employee ID; older uploads may lack it). */
+export interface HierarchyNode {
+  id?: string;
+  name: string;
+  data: Partial<Employee>;
+  children: HierarchyNode[];
 }
 
 export interface GradeSalary {
