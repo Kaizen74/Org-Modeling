@@ -16,7 +16,7 @@ from ..resources.benchmarks_reference import (
     SPAN_TARGETS,
     MANAGER_RATIO_RANGE,
     LAYER_PLANNING_SPAN,
-    OPERATIONAL_TITLE_KEYWORDS,
+    OPERATIONAL_WORK_TYPES,
     MANAGER_RATIO_BENCHMARKS,
     LAYERS_BENCHMARKS,
 )
@@ -24,7 +24,7 @@ import math
 
 # Bump when the shape or meaning of calculated metrics changes, so cached
 # metrics from older uploads are recalculated instead of shown stale
-METRICS_VERSION = 4
+METRICS_VERSION = 5
 
 
 class MetricsCalculator:
@@ -159,41 +159,28 @@ class MetricsCalculator:
                 for k, v in distribution.items()
             },
             "by_manager": by_manager,
-            # Each manager judged against the benchmark for the kind of work their team does
+            # Each manager judged against their benchmark: frontline operational or all other
             "manager_assessments": sorted(assessments, key=lambda a: (a["status"] != "below", a["span"])),
             "distribution_vs_benchmark": vs_benchmark,
             "single_report_managers": sum(1 for s in spans if s == 1),
         }
 
-    def _team_work_type(self, manager: str) -> Dict:
+    def _manager_work_type(self, manager: str) -> Dict:
         """
-        Decide which span benchmark applies to a manager's team, and say why.
-        Order: explicit Work Type column on the reports, then managers-of-managers,
-        then operational domain words in the reports' job titles, else knowledge work.
+        Decide which span benchmark applies to a manager, and say why: a manager
+        tagged Operational in the Work Type column (frontline operational function)
+        gets the operational range; every other manager the 5-10 range.
         """
-        reports = list(self.graph.successors(manager))
-        declared = [self.graph.nodes[r].get("work_type", "") for r in reports]
-        declared = [d for d in declared if d in SPAN_TARGETS]
+        declared = str(self.graph.nodes[manager].get("work_type") or "").strip().lower()
+        if declared in OPERATIONAL_WORK_TYPES:
+            return {"work_type": "operational", "basis": "tagged Operational in the Work Type column"}
         if declared:
-            kind = max(set(declared), key=declared.count)
-            return {"work_type": kind, "basis": "Work Type column"}
-
-        reports_who_manage = sum(1 for r in reports if self.graph.out_degree(r) > 0)
-        if reports_who_manage * 2 > len(reports):
-            return {"work_type": "knowledge", "basis": "team is mostly managers (manager of managers)"}
-
-        matched = []
-        for r in reports:
-            title = str(self.graph.nodes[r].get("job_title", "")).lower()
-            if any(k in title for k in OPERATIONAL_TITLE_KEYWORDS):
-                matched.append(self.graph.nodes[r].get("job_title", ""))
-        if matched and len(matched) * 2 >= len(reports):
-            return {"work_type": "operational", "basis": f"direct reports' job titles (e.g. '{matched[0]}')"}
-        return {"work_type": "knowledge", "basis": "no operational job titles among direct reports (default)"}
+            return {"work_type": "knowledge", "basis": f"Work Type column says '{declared}'"}
+        return {"work_type": "knowledge", "basis": "not tagged Operational in the Work Type column"}
 
     def _assess_manager_span(self, manager: str) -> Dict:
         span = self.graph.out_degree(manager)
-        kind = self._team_work_type(manager)
+        kind = self._manager_work_type(manager)
         low, high = SPAN_TARGETS[kind["work_type"]]["range"]
         status = "below" if span < low else "above" if span > high else "within"
         return {
@@ -413,7 +400,7 @@ class MetricsCalculator:
         managers = mgr["total_managers"]
         components = []
 
-        # 1. Span fit: share of managers within the benchmark for their team's kind of work
+        # 1. Span fit: share of managers within their benchmark
         within = span.get("distribution_vs_benchmark", {}).get("Within benchmark", 0)
         span_fit = round(within / managers * 100) if managers else 100
         below = span.get("distribution_vs_benchmark", {}).get("Below benchmark", 0)
@@ -422,8 +409,9 @@ class MetricsCalculator:
             "key": "span_fit", "label": "Spans fit the work",
             "score": span_fit, "weight": self.HEALTH_WEIGHTS["span_fit"],
             "value": f"{within} of {managers} managers within benchmark ({below} below, {above} above)",
-            "benchmark": "Knowledge work 5-10, operational work 15-25 direct reports",
-            "rule": "Score = % of managers whose span is within the benchmark for their team's kind of work",
+            "benchmark": (f"Frontline operational managers {SPAN_TARGETS['operational']['range'][0]}-{SPAN_TARGETS['operational']['range'][1]}, "
+                          f"all other managers {SPAN_TARGETS['knowledge']['range'][0]}-{SPAN_TARGETS['knowledge']['range'][1]} direct reports"),
+            "rule": "Score = % of managers whose span is within their benchmark (Operational in the Work Type column → frontline range)",
             "source": f"{SPAN_TARGETS['knowledge']['source']}; {SPAN_TARGETS['operational']['source']}",
         })
 
@@ -473,10 +461,10 @@ class MetricsCalculator:
         warnings, recommendations = [], []
         if span_fit < 70:
             if below >= above:
-                warnings.append(f"{below} of {managers} managers have spans below the benchmark for their kind of work")
+                warnings.append(f"{below} of {managers} managers have spans below their benchmark")
                 recommendations.append("Review the narrowest teams for consolidation — the Structure view lists every manager against their benchmark")
             else:
-                warnings.append(f"{above} of {managers} managers have spans above the benchmark for their kind of work")
+                warnings.append(f"{above} of {managers} managers have spans above their benchmark")
                 recommendations.append("Consider team leads or splitting the widest teams to protect manager capacity")
         if excess > 0:
             warnings.append(f"{actual_layers} layers where about {needed} would suffice for {total} people")

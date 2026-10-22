@@ -120,7 +120,7 @@ def build_pack(
 <p class="reg fact">Fact</p><div class="grid">{kpi_html}</div>
 <h3>How the health score is made up</h3>{_table(['Check', 'Score', 'Value', 'Benchmark'], comp_rows, [1])}
 <h3>Departments</h3>{_table(['Department', 'People', 'Managers', 'Avg span', 'Spans vs benchmark', 'Layers', 'Cost share'], dept_rows, [1, 2, 3, 6])}
-<p class="faint">Spans are judged against the benchmark for each team's kind of work (knowledge 5–10, operational 15–25). Layers are counted from the reporting chain.</p></section>""")
+<p class="faint">Spans are judged against 10–20 direct reports for managers tagged as frontline operational, and 5–10 for all other managers. Layers are counted from the reporting chain.</p></section>""")
 
     # 3. Interpretation
     interp: List[str] = []

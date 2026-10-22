@@ -430,7 +430,7 @@ function OrgChartInner() {
               <div className="flex items-center gap-2">
                 <BenchmarkPill status={selected.assessment.status} />
                 <span className="text-secondary">
-                  benchmark {selected.assessment.benchmark_range[0]}–{selected.assessment.benchmark_range[1]} for {selected.assessment.work_type} work
+                  benchmark {selected.assessment.benchmark_range[0]}–{selected.assessment.benchmark_range[1]} {selected.assessment.work_type === 'operational' ? 'for frontline operational managers' : 'for managers not tagged Operational'}
                 </span>
               </div>
               <p className="mt-1 text-xs text-faint">Why: {selected.assessment.work_type_basis}</p>

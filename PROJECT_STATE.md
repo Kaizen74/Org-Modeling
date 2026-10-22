@@ -43,7 +43,7 @@ Phase 5
 4. Run `./run_checks.sh` first — all should pass (step 4 is a browser smoke test; it is skipped automatically where Playwright isn't installed)
 
 ## Known issues
-- Open question for the owner: the Work Type column is read from a manager's direct reports. If a whole function is tagged "Operational", managers of managers in it are judged against 15–25 instead of the manager-of-managers rule (5–10). Not changed — methodology choice
+- Span benchmark (owner's rule, 2026-10-22): managers tagged Operational in the Work Type column → 10-20 direct reports; all others → 5-10. Files without a Work Type column judge every manager against 5-10
 - Backend deprecation warnings (Pydantic class-based config; pandas select_dtypes) — cosmetic, not failures
 - Frontend bundle ~507 kB (was 848 kB) — just over Vite's 500 kB warning; code-splitting would clear it
 - AI features verified with a faked Claude client and sample (fictional) outputs only — no live API key in the build environment

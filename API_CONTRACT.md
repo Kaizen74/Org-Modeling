@@ -16,7 +16,7 @@ Returns: `{ analysis_id, analysis_name, metrics: OrgMetrics, cached }`
 `OrgMetrics` — `{ metrics_version, total_employees, manager_stats{}, span_of_control{}, cost_analysis{}, grade_gap_analysis{}, layer_analysis{}, health_indicators{}, department_analysis[], data_quality{issues[]} }`
 - People are keyed by Employee ID (`employee_id`, resolved `manager_id`); names are display only
 - `layer_analysis.total_layers` comes from the actual reporting chain; `declared_layers`, `level_mismatches`, `longest_chain` alongside
-- `span_of_control.manager_assessments[]` judges each manager against the benchmark for their team's work type (`work_type`, `work_type_basis`, `benchmark_range`, `status`); plus `distribution_vs_benchmark`, `single_report_managers`
+- `span_of_control.manager_assessments[]` judges each manager against their benchmark — `work_type` is `operational` (10–20) when the manager's own Work Type is Operational/Frontline, else `knowledge` (5–10); with `work_type_basis`, `benchmark_range`, `status`; plus `distribution_vs_benchmark`, `single_report_managers`
 - `health_indicators.components[]` — four weighted parts (`key, label, score, weight, value, benchmark, rule, source`); `health_score` is their weighted average
 - `department_analysis[]` — per department: headcount, managers, spans vs benchmark, layers, cost share, top titles, reports from other departments
 - Every endpoint goes through `metrics_store.ensure_metrics`: missing salaries filled from the grade table; caches with an older `metrics_version` are recalculated

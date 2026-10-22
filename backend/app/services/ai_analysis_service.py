@@ -21,7 +21,7 @@ from ..resources.archetypes_reference import (
     get_all_archetypes_summary,
     get_department_recommendation
 )
-from ..resources.benchmarks_reference import get_benchmarks_prompt_section
+from ..resources.benchmarks_reference import get_benchmarks_prompt_section, SPAN_TARGETS
 from .archetype_scoring import reconcile_archetype_scores
 from .archetype_grounding import ground_diagrams
 from .llm_client import run_analysis, AnalysisRefused
@@ -211,7 +211,8 @@ class AIAnalysisService:
         vs = span.get("distribution_vs_benchmark")
         if vs:
             lines.append(
-                f"Manager spans vs the benchmark for their team's work: {vs.get('Below benchmark', 0)} below, "
+                f"Manager spans vs their benchmark (frontline operational {'-'.join(map(str, SPAN_TARGETS['operational']['range']))}, "
+                f"others {'-'.join(map(str, SPAN_TARGETS['knowledge']['range']))}): {vs.get('Below benchmark', 0)} below, "
                 f"{vs.get('Within benchmark', 0)} within, {vs.get('Above benchmark', 0)} above; "
                 f"{span.get('single_report_managers', 0)} managers have one direct report"
             )

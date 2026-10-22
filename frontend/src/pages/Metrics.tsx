@@ -115,7 +115,7 @@ export default function Metrics() {
       <PageHeader
         eyebrow="01 · Diagnose — structure"
         title={headline}
-        lede={`Spans are judged against the benchmark for each team's kind of work: knowledge work 5–10 direct reports, operational work 15–25. Average span ${span.average_span.toFixed(1)}, median ${span.median_span}.`}
+        lede={`Managers tagged Operational in the Work Type column are judged against 10–20 direct reports; all other managers against 5–10. Average span ${span.average_span.toFixed(1)}, median ${span.median_span}.`}
         actions={
           <>
             <button onClick={handleRecalculate} disabled={recalculating} className="btn btn-quiet">
@@ -182,7 +182,7 @@ export default function Metrics() {
               <tr className="hairline-b text-left text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">
                 <th className="px-6 py-3">Manager</th>
                 <th className="px-4 py-3">Department</th>
-                <th className="px-4 py-3">Team's work</th>
+                <th className="px-4 py-3">Manager type</th>
                 <th className="px-4 py-3 text-right">Span</th>
                 <th className="px-4 py-3 text-right">Benchmark</th>
                 <th className="px-6 py-3">Position</th>
@@ -197,8 +197,9 @@ export default function Metrics() {
                   </td>
                   <td className="px-4 py-3 text-secondary">{a.department}</td>
                   <td className="px-4 py-3 text-secondary" title={`Why: ${a.work_type_basis}`}>
-                    {a.work_type === 'operational' ? 'Operational' : 'Knowledge'}
-                    <span className="block text-xs text-faint">{a.work_type_basis}</span>
+                    {a.work_type === 'operational' ? 'Frontline operational' : 'Other'}
+                    {/* The default is explained under the table; show the basis only where a tag set it */}
+                    {!a.work_type_basis.startsWith('not tagged') && <span className="block text-xs text-faint">{a.work_type_basis}</span>}
                   </td>
                   <td className="tabular px-4 py-3 text-right font-semibold text-ink">{a.span}</td>
                   <td className="tabular px-4 py-3 text-right text-secondary">{a.benchmark_range[0]}–{a.benchmark_range[1]}</td>
@@ -217,7 +218,7 @@ export default function Metrics() {
           </button>
         )}
         <p className="mt-3 text-xs text-faint">
-          A team's work is read from an optional Work Type column, else from its members: mostly managers → knowledge range; operational job titles → operational range.
+          Tag frontline operational managers “Operational” in the Work Type column of your CSV to judge them against 10–20; untagged managers are judged against 5–10.
         </p>
       </Section>
 
