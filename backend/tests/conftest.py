@@ -97,8 +97,8 @@ def sample_grade_order():
 # Expected metrics for PAX CSV validation
 EXPECTED_PAX_METRICS = {
     'total_employees': 64,
-    'total_managers': 16,
-    'manager_ratio_pct': 25.0,
-    'total_cost': 5770000,
+    'total_managers': 34,
+    'manager_ratio_pct': 53.1,
+    'total_cost': 6620000,
     'organizational_layers': 6
 }

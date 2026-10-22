@@ -5,13 +5,13 @@
 An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-Owner approved the 5-phase plan on 2026-10-22. Phase 1 in progress — P1.1–P1.2 done (38/38 tests).
+Owner approved the 5-phase plan on 2026-10-22. Phase 1 in progress — P1.1–P1.3 done (48/48 tests).
 
 ## This session (2026-10-22) — approved plan, in order
 Phase 1 — Accuracy fixes
 - [x] P1.1 Key people by Employee ID, not name (duplicate names no longer merge)
 - [x] P1.2 Compute layers from the actual reporting chain; flag Level-column mismatches
-- [ ] P1.3 Role-aware span benchmarks + transparent health score
+- [x] P1.3 Role-aware span benchmarks + transparent health score
 - [ ] P1.4 Deterministic weighted archetype scoring (code applies the 30/15/20/25/10 weights)
 - [ ] P1.5 Org composition in AI prompts; remove employee names from AI calls; one model setting
 Phase 2 — Current-state depth (visual foundation first so new screens are built in the Playbook style)

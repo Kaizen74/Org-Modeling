@@ -2,16 +2,9 @@
 Metrics Calculator Service.
 
 Calculate org metrics with VALIDATED formulas.
-TESTED: Returns accurate metrics for 64-employee PAX org
-
-Expected results for PAX CSV:
-- total_employees: 64
-- total_managers: 16
-- manager_ratio_pct: 25.0
-- average_span: 3.94
-- total_cost: 5770000
-- average_grade_gap: 2.98
-- organizational_layers: 6
+Reference results for the PAX test fixture (a deliberately bottom-heavy org):
+64 employees, 34 managers (53.1%), average span 1.85, 6 layers from the
+reporting chain, total cost = sum of the fixture's Salary column.
 """
 
 import networkx as nx
@@ -19,6 +12,19 @@ from typing import Dict, List, Optional
 import statistics
 
 from .org_graph import normalize_employees, build_org_graph, display_name, reporting_layers
+from ..resources.benchmarks_reference import (
+    SPAN_TARGETS,
+    MANAGER_RATIO_RANGE,
+    LAYER_PLANNING_SPAN,
+    OPERATIONAL_TITLE_KEYWORDS,
+    MANAGER_RATIO_BENCHMARKS,
+    LAYERS_BENCHMARKS,
+)
+import math
+
+# Bump when the shape or meaning of calculated metrics changes, so cached
+# metrics from older uploads are recalculated instead of shown stale
+METRICS_VERSION = 2
 
 
 class MetricsCalculator:
@@ -51,6 +57,7 @@ class MetricsCalculator:
     def calculate_all_metrics(self) -> Dict:
         """Calculate all organizational metrics."""
         return {
+            "metrics_version": METRICS_VERSION,
             "total_employees": self._total_employees(),
             "manager_stats": self._manager_statistics(),
             "span_of_control": self._span_of_control(),
@@ -123,10 +130,18 @@ class MetricsCalculator:
                 "max_span": 0,
                 "distribution": distribution,
                 "distribution_pct": {},
-                "by_manager": {}
+                "by_manager": {},
+                "manager_assessments": [],
+                "distribution_vs_benchmark": {"Below benchmark": 0, "Within benchmark": 0, "Above benchmark": 0},
+                "single_report_managers": 0,
             }
 
         total_managers = len(spans)
+        assessments = [self._assess_manager_span(m) for m in by_manager]
+        vs_benchmark = {"Below benchmark": 0, "Within benchmark": 0, "Above benchmark": 0}
+        for a in assessments:
+            vs_benchmark[{"below": "Below benchmark", "within": "Within benchmark", "above": "Above benchmark"}[a["status"]]] += 1
+
         return {
             "average_span": round(statistics.mean(spans), 2),
             "median_span": round(statistics.median(spans), 2),
@@ -137,7 +152,54 @@ class MetricsCalculator:
                 k: round(v / total_managers * 100, 1)
                 for k, v in distribution.items()
             },
-            "by_manager": by_manager
+            "by_manager": by_manager,
+            # Each manager judged against the benchmark for the kind of work their team does
+            "manager_assessments": sorted(assessments, key=lambda a: (a["status"] != "below", a["span"])),
+            "distribution_vs_benchmark": vs_benchmark,
+            "single_report_managers": sum(1 for s in spans if s == 1),
+        }
+
+    def _team_work_type(self, manager: str) -> Dict:
+        """
+        Decide which span benchmark applies to a manager's team, and say why.
+        Order: explicit Work Type column on the reports, then managers-of-managers,
+        then operational domain words in the reports' job titles, else knowledge work.
+        """
+        reports = list(self.graph.successors(manager))
+        declared = [self.graph.nodes[r].get("work_type", "") for r in reports]
+        declared = [d for d in declared if d in SPAN_TARGETS]
+        if declared:
+            kind = max(set(declared), key=declared.count)
+            return {"work_type": kind, "basis": "Work Type column"}
+
+        reports_who_manage = sum(1 for r in reports if self.graph.out_degree(r) > 0)
+        if reports_who_manage * 2 > len(reports):
+            return {"work_type": "knowledge", "basis": "team is mostly managers (manager of managers)"}
+
+        matched = []
+        for r in reports:
+            title = str(self.graph.nodes[r].get("job_title", "")).lower()
+            if any(k in title for k in OPERATIONAL_TITLE_KEYWORDS):
+                matched.append(self.graph.nodes[r].get("job_title", ""))
+        if matched and len(matched) * 2 >= len(reports):
+            return {"work_type": "operational", "basis": f"direct reports' job titles (e.g. '{matched[0]}')"}
+        return {"work_type": "knowledge", "basis": "no operational job titles among direct reports (default)"}
+
+    def _assess_manager_span(self, manager: str) -> Dict:
+        span = self.graph.out_degree(manager)
+        kind = self._team_work_type(manager)
+        low, high = SPAN_TARGETS[kind["work_type"]]["range"]
+        status = "below" if span < low else "above" if span > high else "within"
+        return {
+            "manager_id": manager,
+            "manager": display_name(self.graph, manager),
+            "job_title": self.graph.nodes[manager].get("job_title", ""),
+            "department": self.graph.nodes[manager].get("department", ""),
+            "span": span,
+            "work_type": kind["work_type"],
+            "work_type_basis": kind["basis"],
+            "benchmark_range": [low, high],
+            "status": status,
         }
 
     def _cost_analysis(self) -> Dict:
@@ -266,60 +328,103 @@ class MetricsCalculator:
             "longest_chain": longest_chain,
         }
 
+    # Weights of the health score components (must sum to 100)
+    HEALTH_WEIGHTS = {"span_fit": 35, "layers": 25, "manager_ratio": 20, "single_report": 20}
+
     def _health_indicators(self) -> Dict:
-        """Flag organizational health issues."""
+        """
+        Structural health as four visible components, each scored 0-100 with
+        the value, the benchmark and the rule used, then weighted together.
+        """
         span = self._span_of_control()
         mgr = self._manager_statistics()
+        layers = self._layer_analysis()
+        total = self._total_employees()
+        managers = mgr["total_managers"]
+        components = []
 
-        warnings = []
-        recommendations = []
+        # 1. Span fit: share of managers within the benchmark for their team's kind of work
+        within = span.get("distribution_vs_benchmark", {}).get("Within benchmark", 0)
+        span_fit = round(within / managers * 100) if managers else 100
+        below = span.get("distribution_vs_benchmark", {}).get("Below benchmark", 0)
+        above = span.get("distribution_vs_benchmark", {}).get("Above benchmark", 0)
+        components.append({
+            "key": "span_fit", "label": "Spans fit the work",
+            "score": span_fit, "weight": self.HEALTH_WEIGHTS["span_fit"],
+            "value": f"{within} of {managers} managers within benchmark ({below} below, {above} above)",
+            "benchmark": "Knowledge work 5-10, operational work 15-25 direct reports",
+            "rule": "Score = % of managers whose span is within the benchmark for their team's kind of work",
+            "source": f"{SPAN_TARGETS['knowledge']['source']}; {SPAN_TARGETS['operational']['source']}",
+        })
 
-        # Check average span
-        if span["average_span"] < 5:
-            warnings.append(
-                f"Low avg span ({span['average_span']}) - consider consolidation"
-            )
-            recommendations.append(
-                "Increase span of control by combining teams or reducing management layers"
-            )
+        # 2. Layers vs the minimum this headcount needs at a planning span
+        actual_layers = layers["total_layers"]
+        needed = max(1, math.ceil(math.log(total, LAYER_PLANNING_SPAN)) + 1) if total > 1 else 1
+        excess = max(0, actual_layers - needed)
+        layer_score = max(0, 100 - excess * 20)
+        components.append({
+            "key": "layers", "label": "Layers for this size",
+            "score": layer_score, "weight": self.HEALTH_WEIGHTS["layers"],
+            "value": f"{actual_layers} layers; about {needed} needed for {total} people at a span of {LAYER_PLANNING_SPAN}",
+            "benchmark": LAYERS_BENCHMARKS["typical_guidance"]["range"],
+            "rule": f"Minimum layers = ceil(log_{LAYER_PLANNING_SPAN}(headcount)) + 1; minus 20 points per extra layer",
+            "source": LAYERS_BENCHMARKS["typical_guidance"]["source"],
+        })
 
-        # Check span distribution
-        narrow_pct = span["distribution_pct"].get("Narrow (<5)", 0)
-        if narrow_pct > 60:
-            warnings.append(
-                f"{narrow_pct}% managers have narrow spans (<5 reports)"
-            )
-            recommendations.append(
-                "Review managers with 1-2 direct reports for potential consolidation"
-            )
+        # 3. Manager ratio vs the typical range
+        ratio = mgr["manager_ratio_pct"]
+        lo, hi = MANAGER_RATIO_RANGE
+        distance = lo - ratio if ratio < lo else ratio - hi if ratio > hi else 0
+        ratio_score = max(0, round(100 - distance * 4))
+        components.append({
+            "key": "manager_ratio", "label": "Manager ratio",
+            "score": ratio_score, "weight": self.HEALTH_WEIGHTS["manager_ratio"],
+            "value": f"{ratio}% of people manage others",
+            "benchmark": f"{lo}-{hi}% of the workforce",
+            "rule": "Minus 4 points per percentage point outside the range",
+            "source": MANAGER_RATIO_BENCHMARKS["typical_range"]["source"],
+        })
 
-        # Check manager ratio
-        if mgr["manager_ratio_pct"] > 30:
-            warnings.append(
-                f"High manager ratio ({mgr['manager_ratio_pct']}%) - potential overhead"
-            )
-            recommendations.append(
-                "Benchmark against industry standards (typically 15-25% managers)"
-            )
+        # 4. Managers with a single direct report (classic layer-compression signal)
+        singles = span.get("single_report_managers", 0)
+        single_pct = round(singles / managers * 100, 1) if managers else 0
+        single_score = max(0, round(100 - single_pct * 3))
+        components.append({
+            "key": "single_report", "label": "Single-report managers",
+            "score": single_score, "weight": self.HEALTH_WEIGHTS["single_report"],
+            "value": f"{singles} of {managers} managers ({single_pct}%) have one direct report",
+            "benchmark": "As few as possible — each is a candidate for removing a layer",
+            "rule": "Minus 3 points per percentage point of managers with one direct report",
+            "source": "Spans-and-layers practice",
+        })
 
-        # Check for very wide spans
-        if span["max_span"] > 15:
-            warnings.append(
-                f"Some managers have very wide spans (max: {span['max_span']})"
-            )
-            recommendations.append(
-                "Consider adding team leads or splitting large teams"
-            )
+        health_score = round(sum(c["score"] * c["weight"] for c in components) / 100)
 
-        # Calculate health score
-        health_score = max(0, 100 - len(warnings) * 15)
+        warnings, recommendations = [], []
+        if span_fit < 70:
+            if below >= above:
+                warnings.append(f"{below} of {managers} managers have spans below the benchmark for their kind of work")
+                recommendations.append("Review the narrowest teams for consolidation, starting with the manager list below")
+            else:
+                warnings.append(f"{above} of {managers} managers have spans above the benchmark for their kind of work")
+                recommendations.append("Consider team leads or splitting the widest teams to protect manager capacity")
+        if excess > 0:
+            warnings.append(f"{actual_layers} layers where about {needed} would suffice for {total} people")
+            recommendations.append("Examine the longest reporting chain for layers that can be removed")
+        if ratio_score < 70:
+            warnings.append(f"Manager ratio of {ratio}% is outside the typical {lo}-{hi}% range")
+            recommendations.append("Check whether manager roles are justified by span and complexity")
+        if single_score < 70:
+            warnings.append(f"{singles} managers have only one direct report")
+            recommendations.append("Single-report managers are the first candidates for layer compression")
 
         return {
             "health_score": health_score,
             "health_grade": self._score_to_grade(health_score),
+            "components": components,
             "warnings": warnings,
             "recommendations": recommendations,
-            "is_healthy": len(warnings) <= 2
+            "is_healthy": health_score >= 70,
         }
 
     def _score_to_grade(self, score: int) -> str:

@@ -1,8 +1,7 @@
 """
 CSV Parser for organizational structure data.
 
-TESTED WITH: org_structure_PAX.csv
-EXPECTED: 64 employees, 16 managers, avg span 3.94
+TESTED WITH: org_structure_PAX.csv (64 employees, 34 managers, 6 layers)
 """
 
 import pandas as pd
@@ -18,12 +17,11 @@ class OrgCSVParser:
     """
     Parse CSV org structure with validated metrics.
 
-    TESTED WITH: org_structure_PAX.csv
-    EXPECTED: 64 employees, 16 managers, avg span 3.94
+    TESTED WITH: org_structure_PAX.csv (64 employees, 34 managers, 6 layers)
     """
 
     REQUIRED_COLUMNS = ["Name", "Job Title", "Grade", "Level", "Line Manager"]
-    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Line Manager ID", "Salary", "Work Activities", "Job Description"]
+    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Line Manager ID", "Salary", "Work Activities", "Job Description", "Work Type"]
 
     def __init__(self, csv_source):
         """
@@ -216,6 +214,7 @@ class OrgCSVParser:
                 "salary": float(row["Salary"]) if pd.notna(row["Salary"]) else 0.0,
                 "employee_id": str(row.get("Employee ID", row["Name"])).strip(),
                 "manager_id": str(row["Line Manager ID"]).strip() if "Line Manager ID" in row and pd.notna(row["Line Manager ID"]) else None,
+                "work_type": str(row["Work Type"]).strip().lower() if "Work Type" in row and pd.notna(row["Work Type"]) and str(row["Work Type"]).strip().lower() not in ("", "nan") else "",
                 "work_activities": str(row.get("Work Activities", "")).strip() if pd.notna(row.get("Work Activities", "")) else "",
                 "job_description": str(row.get("Job Description", "")).strip() if pd.notna(row.get("Job Description", "")) else ""
             })

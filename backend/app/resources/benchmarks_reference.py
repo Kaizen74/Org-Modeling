@@ -63,6 +63,34 @@ MANAGER_RATIO_BENCHMARKS = {
     }
 }
 
+# Numeric ranges used by the metrics engine — kept here, next to their
+# sources, so the code and the AI prompts quote the same figures.
+SPAN_TARGETS = {
+    "knowledge": {
+        "range": (5, 10),
+        "label": "Knowledge / professional work",
+        "source": "Gartner span-of-control benchmarking (5-10 general target; 6-8 for knowledge work)",
+    },
+    "operational": {
+        "range": (15, 25),
+        "label": "Operational / frontline work",
+        "source": "Industry benchmarking of standardized operational roles (15-25)",
+    },
+}
+MANAGER_RATIO_RANGE = (15, 25)  # % of workforce in people-manager roles
+LAYER_PLANNING_SPAN = 7  # span used to estimate the minimum layers a given headcount needs
+
+# Words in a job title that mark operational / frontline work. Deliberately
+# domain-based: "Associate" alone is used for both ramp and analytics roles.
+OPERATIONAL_TITLE_KEYWORDS = [
+    "ramp", "ground services", "ground ops", "lounge", "equipment", "baggage", "cargo",
+    "check-in", "checkin", "gate", "loading", "loader", "warehouse", "catering", "kitchen",
+    "cleaning", "cleaner", "security", "driver", "crew", "technician", "mechanic", "operator",
+    "handler", "handling", "porter", "attendant", "counter", "frontline", "front line",
+    "customer service", "call centre", "call center", "contact centre", "contact center",
+    "premium services", "station", "apron", "fleet",
+]
+
 ORG_DESIGN_TRENDS_2026 = [
     {
         "trend": "Skills-based organization",

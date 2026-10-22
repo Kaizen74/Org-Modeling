@@ -28,6 +28,18 @@ export interface ManagerStats {
   ic_ratio_pct: number;
 }
 
+export interface ManagerSpanAssessment {
+  manager_id: string;
+  manager: string;
+  job_title: string;
+  department: string;
+  span: number;
+  work_type: 'knowledge' | 'operational';
+  work_type_basis: string;
+  benchmark_range: [number, number];
+  status: 'below' | 'within' | 'above';
+}
+
 export interface SpanOfControl {
   average_span: number;
   median_span: number;
@@ -35,6 +47,9 @@ export interface SpanOfControl {
   max_span: number;
   distribution: Record<string, number>;
   distribution_pct: Record<string, number>;
+  manager_assessments?: ManagerSpanAssessment[];
+  distribution_vs_benchmark?: Record<'Below benchmark' | 'Within benchmark' | 'Above benchmark', number>;
+  single_report_managers?: number;
 }
 
 export interface CostAnalysis {
@@ -62,9 +77,21 @@ export interface LayerAnalysis {
   longest_chain?: string[];
 }
 
+export interface HealthComponent {
+  key: 'span_fit' | 'layers' | 'manager_ratio' | 'single_report';
+  label: string;
+  score: number;
+  weight: number;
+  value: string;
+  benchmark: string;
+  rule: string;
+  source: string;
+}
+
 export interface HealthIndicators {
   health_score: number;
   health_grade: string;
+  components?: HealthComponent[];
   warnings: string[];
   recommendations: string[];
   is_healthy: boolean;
@@ -78,6 +105,7 @@ export interface OrgMetrics {
   grade_gap_analysis: GradeGapAnalysis;
   layer_analysis: LayerAnalysis;
   health_indicators: HealthIndicators;
+  data_quality?: { issues: string[] };
 }
 
 // Key gap can be a string or an object with detailed info
