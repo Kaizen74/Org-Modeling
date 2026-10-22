@@ -231,5 +231,46 @@ export function Loading({ label = 'Loading' }: { label?: string }) {
   );
 }
 
+/** Map an AI severity word onto the shared status scale (High/Critical → attention, …). */
+export function severityStatus(severity?: string): Status {
+  const s = (severity || '').toLowerCase();
+  if (['high', 'critical'].includes(s)) return 'attention';
+  if (['medium', 'moderate', 'important'].includes(s)) return 'developing';
+  if (['low', 'minor', 'nice-to-have'].includes(s)) return 'healthy';
+  return 'neutral';
+}
+
+/** Expandable section using native <details> — keyboard accessible, no state needed. */
+export function Disclosure({
+  title,
+  eyebrow,
+  meta,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  eyebrow?: string;
+  meta?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details className="card group mb-6 p-0" open={defaultOpen}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-5 [&::-webkit-details-marker]:hidden">
+        <span>
+          {eyebrow && <span className="eyebrow mb-1 block">{eyebrow}</span>}
+          <span className="font-display text-[22px] font-bold text-ink">{title}</span>
+        </span>
+        <span className="flex items-center gap-4">
+          {meta}
+          <span className="font-display text-2xl leading-none text-primary-600 group-open:hidden" aria-hidden>+</span>
+          <span className="hidden font-display text-2xl leading-none text-primary-600 group-open:inline" aria-hidden>–</span>
+        </span>
+      </summary>
+      <div className="hairline-t px-6 py-6">{children}</div>
+    </details>
+  );
+}
+
 export const formatMoney = (value: number) =>
   value >= 1_000_000 ? `$${(value / 1_000_000).toFixed(2)}M` : value >= 1_000 ? `$${Math.round(value / 1_000)}k` : `$${Math.round(value)}`;

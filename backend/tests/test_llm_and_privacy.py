@@ -132,3 +132,14 @@ def test_department_analysis_in_metrics(sample_employees):
     # VP1 (Sales) reports to the CEO in Executive
     assert depts["Sales"]["reports_from_other_departments"] == 1
     assert sum(d["headcount"] for d in depts.values()) == 8
+
+
+def test_prompts_request_five_dimension_tags(sample_employees):
+    from app.resources.benchmarks_reference import FIVE_DIMENSIONS
+    employees = [dict(e, work_activities="planning") for e in sample_employees]
+    wa_prompt = WorkActivitiesAnalysisService()._build_prompt(employees, industry=None)
+    assert all(d in wa_prompt for d in FIVE_DIMENSIONS)
+    assert '"indicator_type": "Leading/Lagging"' in wa_prompt
+    metrics = MetricsCalculator(employees=sample_employees).calculate_all_metrics()
+    archetype_prompt = AIAnalysisService(api_key=None)._build_prompt(metrics, sample_employees, None, None)
+    assert '"dimension": "One of: Structure & Accountabilities' in archetype_prompt

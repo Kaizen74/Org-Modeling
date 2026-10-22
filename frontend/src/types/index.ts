@@ -166,6 +166,20 @@ export type KeyGap = string | {
 // Evidence discipline types (facts vs interpretation, provenance, confidence)
 export type EvidenceClass = 'OBSERVABLE' | 'PERCEPTUAL' | 'MODEL-INFERRED';
 
+// The five diagnostic dimensions findings are tagged with
+export const FIVE_DIMENSIONS = [
+  'Structure & Accountabilities',
+  'People & Skills',
+  'Process & Systems',
+  'Mindset & Behaviors',
+  'Leadership',
+] as const;
+
+export interface DimensionTag {
+  dimension?: string;
+  indicator_type?: 'Leading' | 'Lagging' | string;
+}
+
 export interface DataGap {
   gap: string;
   why_it_matters?: string;
@@ -308,6 +322,7 @@ export interface AIAnalysisResult {
       description: string;
       impact: string;
       severity: string;
+      dimension?: string;
       evidence_class?: EvidenceClass;
       supporting_evidence?: string;
       disconfirming_evidence?: string;
@@ -359,7 +374,7 @@ export interface APIKeyStatus {
 // Work Activities Analysis Types
 
 // Activity Duplication Types
-export interface ActivityDuplication {
+export interface ActivityDuplication extends DimensionTag {
   activity: string;
   affected_roles: string[];
   affected_departments: string[];
@@ -381,7 +396,7 @@ export interface ActivityDuplicationAnalysis {
 }
 
 // Missing Activities Types
-export interface MissingActivity {
+export interface MissingActivity extends DimensionTag {
   activity: string;
   industry_benchmark: string;
   affected_roles: string[];
@@ -401,7 +416,7 @@ export interface MissingActivitiesAnalysis {
 }
 
 // Coordination Gaps Types
-export interface CoordinationGap {
+export interface CoordinationGap extends DimensionTag {
   handoff_point: string;
   from_department: string;
   to_department: string;
@@ -536,6 +551,7 @@ export interface WorkActivitiesAnalysis {
   message?: string;
   _json_repaired?: boolean;
   parse_warning?: string;
+  _llm?: LLMCallMeta;
 }
 
 export interface QuickWorkActivitiesAnalysis {

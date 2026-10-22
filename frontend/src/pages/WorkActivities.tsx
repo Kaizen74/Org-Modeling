@@ -1,563 +1,558 @@
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Briefcase, Loader2, AlertTriangle, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { aiAnalysisApi, settingsApi } from '../services/api';
-import type { WorkActivitiesAnalysis, QuickWorkActivitiesAnalysis } from '../types';
+import { FIVE_DIMENSIONS } from '../types';
+import type {
+  WorkActivitiesAnalysis,
+  QuickWorkActivitiesAnalysis,
+  DimensionTag,
+  StructuralRecommendation,
+} from '../types';
+import {
+  PageHeader,
+  Section,
+  StatTile,
+  StatusPill,
+  ScoreBar,
+  Callout,
+  Chip,
+  Disclosure,
+  EmptyState,
+  severityStatus,
+} from '../components/ui';
 
-export default function WorkActivities() {
-  const [analysis, setAnalysis] = useState<WorkActivitiesAnalysis | null>(null);
-  const [quickAnalysis, setQuickAnalysis] = useState<QuickWorkActivitiesAnalysis | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [apiConfigured, setApiConfigured] = useState(false);
-  const [industry, setIndustry] = useState('');
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    coherence: true,
-    themes: true,
-    industry: true,
-    recommendations: true,
-  });
+function plural(n: number, singular: string, pluralForm = `${singular}s`) {
+  return `${n} ${n === 1 ? singular : pluralForm}`;
+}
 
-  useEffect(() => {
-    checkApiStatus();
-    loadQuickAnalysis();
-    loadExistingAnalysis();
-  }, []);
-
-  const checkApiStatus = async () => {
-    try {
-      const status = await settingsApi.getStatus();
-      setApiConfigured(status.configured);
-    } catch (err) {
-      console.error('Failed to check API status:', err);
-    }
-  };
-
-  const loadQuickAnalysis = async () => {
-    try {
-      const result = await aiAnalysisApi.getQuickWorkActivities();
-      setQuickAnalysis(result);
-    } catch (err) {
-      // No quick analysis available
-    }
-  };
-
-  const loadExistingAnalysis = async () => {
-    try {
-      const result = await aiAnalysisApi.getLatestWorkActivities();
-      setAnalysis(result.work_activities_analysis);
-    } catch (err) {
-      // No existing analysis
-    }
-  };
-
-  const handleRunAnalysis = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await aiAnalysisApi.analyzeWorkActivities(industry || undefined);
-      setAnalysis(result.work_activities_analysis);
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string } } };
-      setError(error.response?.data?.detail || 'Failed to run work activities analysis');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleSection = (key: string) => {
-    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  // Show quick analysis stats
-  const QuickStats = () => {
-    if (!quickAnalysis) return null;
-
-    return (
-      <div className="card mb-6">
-        <h2 className="text-lg font-semibold mb-4">Work Activities Coverage</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-          <div className="p-4 bg-gray-50 rounded-lg text-center">
-            <p className="text-2xl font-bold text-primary-600">{quickAnalysis.total_employees}</p>
-            <p className="text-sm text-gray-600">Total Employees</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg text-center">
-            <p className="text-2xl font-bold text-green-600">{quickAnalysis.employees_with_work_activities}</p>
-            <p className="text-sm text-gray-600">With Activities</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg text-center">
-            <p className="text-2xl font-bold text-blue-600">{quickAnalysis.coverage_percentage}%</p>
-            <p className="text-sm text-gray-600">Coverage</p>
-          </div>
-          <div className="p-4 bg-gray-50 rounded-lg text-center">
-            <p className="text-2xl font-bold text-purple-600">{quickAnalysis.departments_with_activities}</p>
-            <p className="text-sm text-gray-600">Departments</p>
-          </div>
-        </div>
-
-        {quickAnalysis.status !== 'complete' && (
-          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-sm text-yellow-700">
-              <AlertTriangle className="w-4 h-4 inline mr-1" />
-              {quickAnalysis.status === 'minimal'
-                ? 'Limited work activities data available. Consider adding more activities to the CSV for better analysis.'
-                : 'Some positions are missing work activities. Full coverage is recommended for comprehensive analysis.'}
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  if (!apiConfigured) {
-    return (
-      <div>
-        <h1 className="text-2xl font-bold mb-6">Work Activities Analysis</h1>
-        <QuickStats />
-        <div className="card text-center py-8">
-          <Briefcase className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h2 className="text-lg font-medium text-gray-600 mb-2">Claude API Not Configured</h2>
-          <p className="text-gray-500 mb-4">
-            Configure your Anthropic API key to enable AI-powered work activities analysis.
-          </p>
-          <Link to="/settings" className="btn btn-primary inline-flex items-center gap-2">
-            Configure API Key <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
+/** Tag row shown on every finding: dimension, indicator type, confidence. */
+function FindingTags({ item, confidence, rationale }: { item: DimensionTag; confidence?: string; rationale?: string }) {
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Work Activities Analysis</h1>
-
-      {/* Quick Stats */}
-      <QuickStats />
-
-      {/* Input Section */}
-      <div className="card mb-6">
-        <h2 className="text-lg font-semibold mb-4">Analysis Configuration</h2>
-
-        <div className="space-y-4">
-          <div>
-            <label className="label">Industry Context (Optional)</label>
-            <input
-              type="text"
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-              className="input"
-              placeholder="E.g., Airlines, Technology, Financial Services, Healthcare..."
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Providing industry context improves benchmark comparisons
-            </p>
-          </div>
-
-          <button
-            onClick={handleRunAnalysis}
-            disabled={loading || (quickAnalysis !== null && quickAnalysis.employees_with_work_activities === 0)}
-            className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Analyzing (this may take 30-60 seconds)...
-              </>
-            ) : (
-              <>
-                <Briefcase className="w-5 h-5" />
-                Run Work Activities Analysis
-              </>
-            )}
-          </button>
-
-          {quickAnalysis && quickAnalysis.employees_with_work_activities === 0 && (
-            <p className="text-sm text-red-600">
-              No work activities found. Please upload a CSV with a "Work Activities" column.
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="card bg-red-50 border-red-200 mb-6">
-          <div className="flex items-center gap-2 text-red-700">
-            <AlertTriangle className="w-5 h-5" />
-            <span className="font-medium">{error}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Results */}
-      {analysis && !analysis.error && (
-        <div className="space-y-6">
-          {/* Executive Summary */}
-          {analysis.executive_summary && (
-            <div className="card">
-              <h2 className="text-lg font-semibold mb-3">Executive Summary</h2>
-              <div className="prose prose-sm max-w-none text-gray-600">
-                {analysis.executive_summary}
-              </div>
-            </div>
-          )}
-
-          {/* Departmental Coherence */}
-          {analysis.departmental_coherence && analysis.departmental_coherence.length > 0 && (
-            <CollapsibleSection
-              title="Departmental Coherence & Synergy"
-              isOpen={expandedSections.coherence}
-              onToggle={() => toggleSection('coherence')}
-            >
-              {/* Overall Coherence Score */}
-              {analysis.overall_coherence && (
-                <div className="mb-6 p-4 bg-primary-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-primary-800">Organization Coherence Score</span>
-                    <span className="text-3xl font-bold text-primary-600">
-                      {analysis.overall_coherence.organization_coherence_score}/100
-                    </span>
-                  </div>
-                  <p className="text-sm text-primary-700">{analysis.overall_coherence.integration_assessment}</p>
-
-                  {analysis.overall_coherence.cross_department_synergies?.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-sm font-medium text-green-700">Cross-Department Synergies:</p>
-                      <ul className="text-sm text-green-600">
-                        {analysis.overall_coherence.cross_department_synergies.map((s, i) => (
-                          <li key={i}>&#10003; {s}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {analysis.overall_coherence.cross_department_gaps?.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-sm font-medium text-red-700">Cross-Department Gaps:</p>
-                      <ul className="text-sm text-red-600">
-                        {analysis.overall_coherence.cross_department_gaps.map((g, i) => (
-                          <li key={i}>&#10007; {g}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Department Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {analysis.departmental_coherence.map((dept, i) => (
-                  <div key={i} className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold">{dept.department}</h4>
-                      <span className={`text-xl font-bold ${
-                        dept.coherence_score >= 70 ? 'text-green-600' :
-                        dept.coherence_score >= 50 ? 'text-yellow-600' :
-                        'text-red-600'
-                      }`}>
-                        {dept.coherence_score}/100
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-2">{dept.position_count} positions</p>
-                    <p className="text-sm text-gray-600 mb-3">{dept.coherence_rationale}</p>
-
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-                        {dept.value_chain_position}
-                      </span>
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
-                        Dependencies: {dept.internal_dependencies}
-                      </span>
-                    </div>
-
-                    {dept.synergy_assessment?.strengths?.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium text-green-700">Strengths:</p>
-                        <ul className="text-xs text-green-600">
-                          {dept.synergy_assessment.strengths.slice(0, 2).map((s, j) => (
-                            <li key={j}>&#10003; {s}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {dept.synergy_assessment?.gaps?.length > 0 && (
-                      <div className="mt-1">
-                        <p className="text-xs font-medium text-red-700">Gaps:</p>
-                        <ul className="text-xs text-red-600">
-                          {dept.synergy_assessment.gaps.slice(0, 2).map((g, j) => (
-                            <li key={j}>&#10007; {g}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CollapsibleSection>
-          )}
-
-          {/* Work Themes */}
-          {analysis.work_themes && (
-            <CollapsibleSection
-              title="Work Theme Synthesis"
-              isOpen={expandedSections.themes}
-              onToggle={() => toggleSection('themes')}
-            >
-              {/* Strategic Alignment Score */}
-              <div className="mb-4 p-3 bg-blue-50 rounded-lg flex items-center justify-between">
-                <span className="font-medium text-blue-800">Strategic Alignment Score</span>
-                <span className="text-2xl font-bold text-blue-600">
-                  {analysis.work_themes.strategic_alignment_score}/100
-                </span>
-              </div>
-
-              <p className="text-sm text-gray-600 mb-4">
-                {analysis.work_themes.theme_distribution_assessment}
-              </p>
-
-              {/* Theme Cards */}
-              {analysis.work_themes.primary_themes && (
-                <div className="space-y-3">
-                  {analysis.work_themes.primary_themes.map((theme, i) => (
-                    <div key={i} className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold">{theme.theme}</h4>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-500">
-                            {theme.percentage_of_org}% of org
-                          </span>
-                          <span className={`px-2 py-1 text-xs rounded ${
-                            theme.strategic_importance === 'High' ? 'bg-green-100 text-green-700' :
-                            theme.strategic_importance === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>
-                            {theme.strategic_importance} Importance
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-sm text-gray-600">{theme.description}</p>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Departments: {theme.departments_involved?.join(', ')}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Missing Capabilities */}
-              {analysis.work_themes.missing_capabilities && analysis.work_themes.missing_capabilities.length > 0 && (
-                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-                  <p className="font-medium text-yellow-800 mb-2">Missing Capabilities</p>
-                  <ul className="text-sm text-yellow-700">
-                    {analysis.work_themes.missing_capabilities.map((cap, i) => (
-                      <li key={i}>&#9888; {cap}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </CollapsibleSection>
-          )}
-
-          {/* Industry Comparison */}
-          {analysis.industry_comparison && (
-            <CollapsibleSection
-              title="Industry Benchmark Comparison"
-              isOpen={expandedSections.industry}
-              onToggle={() => toggleSection('industry')}
-            >
-              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-700">
-                  <span className="font-medium">Industry Identified:</span>{' '}
-                  {analysis.industry_comparison.industry_identified}
-                </p>
-              </div>
-
-              {/* Activity Mix */}
-              {analysis.industry_comparison.activity_mix_assessment && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium">Activity Mix Alignment</span>
-                      <span className="text-xl font-bold text-primary-600">
-                        {analysis.industry_comparison.activity_mix_assessment.alignment_score}/100
-                      </span>
-                    </div>
-
-                    {analysis.industry_comparison.activity_mix_assessment.unique_strengths?.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium text-green-700">Unique Strengths:</p>
-                        <ul className="text-xs text-green-600">
-                          {analysis.industry_comparison.activity_mix_assessment.unique_strengths.map((s, i) => (
-                            <li key={i}>&#10003; {s}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-4 border rounded-lg">
-                    <span className="font-medium">Role Specialization</span>
-                    <p className={`text-lg font-semibold mt-1 ${
-                      analysis.industry_comparison.role_specialization?.assessment === 'Well balanced'
-                        ? 'text-green-600' : 'text-yellow-600'
-                    }`}>
-                      {analysis.industry_comparison.role_specialization?.assessment}
-                    </p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {analysis.industry_comparison.role_specialization?.rationale}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Competitive Positioning */}
-              {analysis.industry_comparison.competitive_positioning && (
-                <div className="p-4 bg-indigo-50 rounded-lg">
-                  <h4 className="font-medium text-indigo-800 mb-3">Competitive Positioning</h4>
-                  <p className="text-sm text-indigo-700 mb-3">
-                    {analysis.industry_comparison.competitive_positioning.overall_assessment}
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs font-medium text-green-700">Potential Advantages:</p>
-                      <ul className="text-xs text-green-600">
-                        {analysis.industry_comparison.competitive_positioning.potential_advantages?.map((a, i) => (
-                          <li key={i}>&#10003; {a}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-red-700">Potential Disadvantages:</p>
-                      <ul className="text-xs text-red-600">
-                        {analysis.industry_comparison.competitive_positioning.potential_disadvantages?.map((d, i) => (
-                          <li key={i}>&#10007; {d}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CollapsibleSection>
-          )}
-
-          {/* Recommendations */}
-          {analysis.recommendations && (
-            <CollapsibleSection
-              title="Recommendations"
-              isOpen={expandedSections.recommendations}
-              onToggle={() => toggleSection('recommendations')}
-            >
-              {/* Quick Wins */}
-              {analysis.recommendations.quick_wins && analysis.recommendations.quick_wins.length > 0 && (
-                <div className="mb-4 p-4 bg-green-50 rounded-lg">
-                  <h4 className="font-medium text-green-800 mb-2">Quick Wins</h4>
-                  <ul className="space-y-1">
-                    {analysis.recommendations.quick_wins.map((win, i) => (
-                      <li key={i} className="text-sm text-green-700">&#10003; {win}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Structural Recommendations */}
-              {analysis.recommendations.structural && analysis.recommendations.structural.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="font-medium mb-3">Structural Recommendations</h4>
-                  <div className="space-y-3">
-                    {analysis.recommendations.structural.map((rec, i) => (
-                      <div key={i} className="p-3 border rounded-lg">
-                        <p className="font-medium">{rec.recommendation}</p>
-                        <p className="text-sm text-gray-600 mt-1">{rec.rationale}</p>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          <span className={`px-2 py-1 text-xs rounded ${
-                            rec.impact === 'High' ? 'bg-green-100 text-green-700' :
-                            rec.impact === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>
-                            Impact: {rec.impact}
-                          </span>
-                          <span className={`px-2 py-1 text-xs rounded ${
-                            rec.effort === 'Low' ? 'bg-green-100 text-green-700' :
-                            rec.effort === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>
-                            Effort: {rec.effort}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Capability Development */}
-              {analysis.recommendations.capability_development && analysis.recommendations.capability_development.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="font-medium mb-3">Capability Development</h4>
-                  <div className="space-y-3">
-                    {analysis.recommendations.capability_development.map((cap, i) => (
-                      <div key={i} className="p-3 bg-blue-50 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium text-blue-800">{cap.capability}</p>
-                          <span className={`px-2 py-1 text-xs rounded ${
-                            cap.priority === 'High' ? 'bg-red-100 text-red-700' :
-                            cap.priority === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>
-                            Priority: {cap.priority}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 mt-2 text-sm">
-                          <div>
-                            <p className="text-xs text-gray-500">Current State:</p>
-                            <p className="text-blue-700">{cap.current_state}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Target State:</p>
-                            <p className="text-blue-700">{cap.target_state}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CollapsibleSection>
-          )}
-        </div>
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {item.dimension && <Chip>{item.dimension}</Chip>}
+      {item.indicator_type && <Chip>{item.indicator_type} indicator</Chip>}
+      {confidence && (
+        <span className="text-xs text-faint" title={rationale || ''}>
+          Confidence: <span className="font-semibold text-secondary">{confidence}</span>
+          {rationale && <span className="ml-1">— {rationale}</span>}
+        </span>
       )}
     </div>
   );
 }
 
-function CollapsibleSection({
+function FindingRow({
+  n,
   title,
-  isOpen,
-  onToggle,
+  meta,
+  severity,
   children,
 }: {
+  n: number;
   title: string;
-  isOpen: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
+  meta?: ReactNode;
+  severity?: string;
+  children?: ReactNode;
 }) {
   return (
-    <div className="card">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between text-left"
-      >
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {isOpen ? (
-          <ChevronUp className="w-5 h-5 text-gray-500" />
-        ) : (
-          <ChevronDown className="w-5 h-5 text-gray-500" />
-        )}
-      </button>
-      {isOpen && <div className="mt-4">{children}</div>}
+    <li className="grid grid-cols-[48px_1fr] gap-4 px-6 py-5">
+      <span className="display-number text-[26px] text-placeholder">{String(n).padStart(2, '0')}</span>
+      <div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="font-medium text-ink">{title}</p>
+          {severity && <StatusPill status={severityStatus(severity)} label={severity} />}
+        </div>
+        {meta && <p className="mt-1 text-sm text-faint">{meta}</p>}
+        {children}
+      </div>
+    </li>
+  );
+}
+
+function RecommendationList({ title, items }: { title: string; items?: StructuralRecommendation[] }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="mb-8">
+      <p className="label">{title}</p>
+      <ul className="divide-y divide-hairline border-y border-hairline">
+        {items.map((rec, i) => (
+          <li key={i} className="py-3">
+            <p className="font-medium text-ink">{rec.recommendation}</p>
+            {(rec.rationale || rec.addresses) && (
+              <p className="mt-1 text-sm text-secondary">{rec.rationale || `Addresses: ${rec.addresses}`}</p>
+            )}
+            <p className="mt-1 text-xs text-faint">
+              {[rec.priority && `Priority ${rec.priority}`, rec.impact && `Impact ${rec.impact}`, rec.effort && `Effort ${rec.effort}`]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
+  );
+}
+
+export default function WorkActivities() {
+  const [analysis, setAnalysis] = useState<WorkActivitiesAnalysis | null>(null);
+  const [quick, setQuick] = useState<QuickWorkActivitiesAnalysis | null>(null);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [apiConfigured, setApiConfigured] = useState(false);
+  const [industry, setIndustry] = useState('');
+
+  useEffect(() => {
+    settingsApi.getStatus().then((s) => setApiConfigured(s.configured)).catch(() => undefined);
+    aiAnalysisApi.getQuickWorkActivities().then(setQuick).catch(() => undefined);
+    aiAnalysisApi.getLatestWorkActivities().then((r) => setAnalysis(r.work_activities_analysis)).catch(() => undefined);
+  }, []);
+
+  const handleRun = async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      const result = await aiAnalysisApi.analyzeWorkActivities(industry || undefined);
+      setAnalysis(result.work_activities_analysis);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      setError(e.response?.data?.detail || 'The work activities analysis could not be completed.');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const noActivities = quick !== null && quick.employees_with_work_activities === 0;
+  const result = analysis && !analysis.error ? analysis : null;
+  const duplications = result?.activity_duplication?.duplications ?? [];
+  const missing = result?.missing_activities?.gaps ?? [];
+  const handoffs = result?.coordination_gaps?.gaps ?? [];
+
+  // Findings by dimension: rows = five dimensions, columns = the three core analyses
+  const byDimension = FIVE_DIMENSIONS.map((dim) => ({
+    dim,
+    duplication: duplications.filter((d) => d.dimension === dim).length,
+    missing: missing.filter((g) => g.dimension === dim).length,
+    handoffs: handoffs.filter((g) => g.dimension === dim).length,
+  }));
+  const untagged = [...duplications, ...missing, ...handoffs].filter(
+    (f) => !f.dimension || !(FIVE_DIMENSIONS as readonly string[]).includes(f.dimension)
+  ).length;
+  const maxCell = Math.max(1, ...byDimension.flatMap((r) => [r.duplication, r.missing, r.handoffs]));
+
+  const title = result
+    ? `${plural(duplications.length, 'duplication')}, ${plural(missing.length, 'missing activity', 'missing activities')}, ${plural(handoffs.length, 'weak hand-off')}`
+    : 'What the work is, role by role';
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="01 · Diagnose — work activities"
+        title={title}
+        lede={
+          result
+            ? 'Where work overlaps between roles, what is missing against industry practice, and where hand-offs between departments need strengthening.'
+            : 'Analyze the work activities in your CSV for duplication across roles, gaps against industry practice, and weak hand-offs between departments.'
+        }
+      />
+
+      {/* Coverage */}
+      {quick && (
+        <Section eyebrow="Data coverage">
+          <div className="grid gap-4 md:grid-cols-3">
+            <StatTile
+              label="Positions described"
+              value={`${quick.employees_with_work_activities} / ${quick.total_employees}`}
+              sub="have work activities in the CSV"
+            />
+            <StatTile
+              label="Coverage"
+              value={`${quick.coverage_percentage}%`}
+              status={quick.coverage_percentage >= 80 ? 'healthy' : quick.coverage_percentage >= 20 ? 'developing' : 'attention'}
+            />
+            <StatTile label="Departments covered" value={quick.departments_with_activities} />
+          </div>
+          {quick.status !== 'complete' && !noActivities && (
+            <div className="mt-4">
+              <Callout label="Partial coverage" tone="developing">
+                {quick.status === 'minimal'
+                  ? 'Few positions describe their work, so findings will be indicative only.'
+                  : 'Some positions have no work activities; findings cover only the described roles.'}
+              </Callout>
+            </div>
+          )}
+          {quick.potential_duplications && quick.potential_duplications.length > 0 && (
+            <div className="card mt-4">
+              <p className="label">Early signals — shared words across roles (no AI)</p>
+              <div className="flex flex-wrap gap-2">
+                {quick.potential_duplications.map((d) => (
+                  <span key={d.keyword} title={d.roles.join(', ')}>
+                    <Chip>{d.keyword} · {d.roles_count} roles</Chip>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Section>
+      )}
+
+      {noActivities ? (
+        <EmptyState
+          title="No work activities in this upload"
+          body='Add a "Work Activities" column to your CSV describing what each role does, then upload it again.'
+          action={<Link to="/upload" className="btn btn-primary">Upload data →</Link>}
+        />
+      ) : (
+        <Section eyebrow={result ? 'Re-run the analysis' : 'Run the analysis'}>
+          {apiConfigured ? (
+            <div className="card flex flex-col gap-4 md:flex-row md:items-end">
+              <div className="flex-1">
+                <label className="label" htmlFor="industry">Industry context (optional)</label>
+                <input
+                  id="industry"
+                  value={industry}
+                  onChange={(e) => setIndustry(e.target.value)}
+                  className="input"
+                  placeholder="e.g. Aviation ground services, Airlines, Healthcare"
+                />
+                <p className="mt-1.5 text-xs text-faint">Sharpens the industry comparison. Only job titles and activities are sent — never names.</p>
+              </div>
+              <button onClick={handleRun} disabled={running} className="btn btn-primary whitespace-nowrap">
+                {running ? 'Analyzing — about a minute…' : result ? 'Re-run analysis' : 'Run current-state analysis'}
+              </button>
+            </div>
+          ) : (
+            <Callout label="AI analysis is off" tone="accent">
+              Add your Claude API key in <Link to="/settings" className="text-primary-600 underline">Settings</Link> to run this analysis.
+            </Callout>
+          )}
+          {error && <div className="mt-4"><Callout label="Analysis failed" tone="attention">{error}</Callout></div>}
+          {analysis?.error && !error && (
+            <div className="mt-4"><Callout label="Last analysis failed" tone="attention">{analysis.error}</Callout></div>
+          )}
+          {result?.parse_warning && (
+            <div className="mt-4"><Callout label="Incomplete response" tone="developing">{result.parse_warning}</Callout></div>
+          )}
+        </Section>
+      )}
+
+      {result && (
+        <>
+          {result.executive_summary && (
+            <Section eyebrow="Interpretation · AI">
+              <p className="max-w-[760px] whitespace-pre-line font-display text-[20px] leading-relaxed text-ink">
+                {result.executive_summary}
+              </p>
+            </Section>
+          )}
+
+          {/* The three core findings at a glance */}
+          <Section eyebrow="02 · Core findings">
+            <div className="grid gap-px overflow-hidden border border-hairline bg-hairline md:grid-cols-3">
+              {[
+                { label: 'Duplicated work', count: duplications.length, severity: result.activity_duplication?.severity_assessment, summary: result.activity_duplication?.summary, anchor: '#duplication' },
+                { label: 'Missing activities', count: missing.length, severity: result.missing_activities?.severity_assessment, summary: result.missing_activities?.summary, anchor: '#missing' },
+                { label: 'Weak hand-offs', count: handoffs.length, severity: result.coordination_gaps?.severity_assessment, summary: result.coordination_gaps?.summary, anchor: '#handoffs' },
+              ].map((c) => (
+                <a key={c.label} href={c.anchor} className="bg-white p-6 transition-colors hover:bg-wash">
+                  <p className="eyebrow eyebrow-faint">{c.label}</p>
+                  <p className="display-number mt-3 text-[48px] text-ink">{c.count}</p>
+                  {c.severity && <div className="mt-2"><StatusPill status={severityStatus(c.severity)} label={`${c.severity} overall`} /></div>}
+                  {c.summary && <p className="mt-3 line-clamp-3 text-sm text-secondary">{c.summary}</p>}
+                </a>
+              ))}
+            </div>
+          </Section>
+
+          {/* Findings by dimension */}
+          <Section
+            eyebrow="03 · By dimension"
+            title="Where the findings sit across the five dimensions"
+            lede="Each finding is tagged with one dimension. Darker cells hold more findings."
+          >
+            <div className="card overflow-x-auto p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="hairline-b text-left">
+                    <th className="px-6 py-3 text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">Dimension</th>
+                    <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">Duplication</th>
+                    <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">Missing</th>
+                    <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">Hand-offs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byDimension.map((row) => (
+                    <tr key={row.dim} className="hairline-b last:border-0">
+                      <td className="px-6 py-3 font-medium text-ink">{row.dim}</td>
+                      {[row.duplication, row.missing, row.handoffs].map((n, i) => (
+                        <td key={i} className="px-4 py-2 text-center">
+                          <span
+                            className="tabular inline-flex h-9 w-12 items-center justify-center rounded font-semibold"
+                            style={{
+                              background: n ? `rgba(28,31,36,${0.08 + 0.5 * (n / maxCell)})` : 'transparent',
+                              color: n / maxCell > 0.6 ? '#fff' : n ? 'var(--color-ink)' : 'var(--color-placeholder)',
+                            }}
+                          >
+                            {n || '–'}
+                          </span>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {untagged > 0 && (
+              <p className="mt-2 text-xs text-faint">
+                {plural(untagged, 'finding')} not tagged with a dimension (analyses run before dimension tagging) — re-run to tag them.
+              </p>
+            )}
+          </Section>
+
+          {/* Detail: duplication */}
+          {duplications.length > 0 && (
+            <div id="duplication" className="scroll-mt-8">
+              <Disclosure eyebrow="Duplication" title="Work done in more than one place" meta={<span className="text-sm text-faint">{plural(duplications.length, 'finding')}</span>}>
+                <ol className="-mx-6 -my-6 divide-y divide-hairline">
+                  {duplications.map((d, i) => (
+                    <FindingRow
+                      key={i}
+                      n={i + 1}
+                      title={d.activity}
+                      severity={d.severity}
+                      meta={[d.duplication_type, d.affected_roles?.join(', ')].filter(Boolean).join(' · ')}
+                    >
+                      {d.evidence && <p className="mt-2 text-sm text-secondary"><span className="font-semibold text-ink">Evidence:</span> {d.evidence}</p>}
+                      {d.business_impact && <p className="mt-1 text-sm text-secondary"><span className="font-semibold text-ink">Impact:</span> {d.business_impact}</p>}
+                      {d.recommended_action && <p className="mt-1 text-sm text-secondary"><span className="font-semibold text-primary-600">Action:</span> {d.recommended_action}</p>}
+                      <FindingTags item={d} confidence={d.confidence} rationale={d.confidence_rationale} />
+                    </FindingRow>
+                  ))}
+                </ol>
+              </Disclosure>
+            </div>
+          )}
+
+          {/* Detail: missing activities */}
+          {missing.length > 0 && (
+            <div id="missing" className="scroll-mt-8">
+              <Disclosure eyebrow="Gaps vs industry practice" title="Activities the organization may be missing" meta={<span className="text-sm text-faint">{plural(missing.length, 'finding')}</span>}>
+                <ol className="-mx-6 -my-6 divide-y divide-hairline">
+                  {missing.map((g, i) => (
+                    <FindingRow
+                      key={i}
+                      n={i + 1}
+                      title={g.activity}
+                      severity={g.severity}
+                      meta={[g.affected_departments?.join(', '), g.affected_roles?.join(', ')].filter(Boolean).join(' · ')}
+                    >
+                      {g.industry_benchmark && <p className="mt-2 text-sm text-secondary"><span className="font-semibold text-ink">Industry practice (inferred):</span> {g.industry_benchmark}</p>}
+                      {g.business_risk && <p className="mt-1 text-sm text-secondary"><span className="font-semibold text-ink">Risk:</span> {g.business_risk}</p>}
+                      {g.recommendation && <p className="mt-1 text-sm text-secondary"><span className="font-semibold text-primary-600">Action:</span> {g.recommendation}</p>}
+                      <FindingTags item={g} confidence={g.confidence} rationale={g.confidence_rationale} />
+                    </FindingRow>
+                  ))}
+                </ol>
+              </Disclosure>
+            </div>
+          )}
+
+          {/* Detail: coordination */}
+          {handoffs.length > 0 && (
+            <div id="handoffs" className="scroll-mt-8">
+              <Disclosure eyebrow="Coordination" title="Hand-offs that need strengthening" meta={<span className="text-sm text-faint">{plural(handoffs.length, 'finding')}</span>}>
+                <ol className="-mx-6 -my-6 divide-y divide-hairline">
+                  {handoffs.map((g, i) => (
+                    <FindingRow
+                      key={i}
+                      n={i + 1}
+                      title={g.handoff_point}
+                      severity={g.severity}
+                      meta={`${g.from_department} → ${g.to_department}${g.gap_type ? ` · ${g.gap_type}` : ''}`}
+                    >
+                      {g.current_state && <p className="mt-2 text-sm text-secondary"><span className="font-semibold text-ink">Today:</span> {g.current_state}</p>}
+                      {g.industry_practice && <p className="mt-1 text-sm text-secondary"><span className="font-semibold text-ink">Leading practice (inferred):</span> {g.industry_practice}</p>}
+                      {g.recommended_interface && <p className="mt-1 text-sm text-secondary"><span className="font-semibold text-primary-600">Add:</span> {g.recommended_interface}</p>}
+                      <FindingTags item={g} confidence={g.confidence} rationale={g.confidence_rationale} />
+                    </FindingRow>
+                  ))}
+                </ol>
+              </Disclosure>
+            </div>
+          )}
+
+          {/* Coherence */}
+          {result.departmental_coherence && result.departmental_coherence.length > 0 && (
+            <Disclosure eyebrow="Coherence" title="How well the work fits together within each department" defaultOpen={false}>
+              {result.overall_coherence && (
+                <div className="mb-8">
+                  <ScoreBar score={result.overall_coherence.organization_coherence_score} label="Organization coherence" detail={result.overall_coherence.integration_assessment} />
+                  <div className="mt-5 grid gap-6 md:grid-cols-2 text-sm">
+                    {result.overall_coherence.cross_department_synergies?.length > 0 && (
+                      <div>
+                        <p className="label" style={{ color: 'var(--color-score-green)' }}>Synergies across departments</p>
+                        <ul className="space-y-1 text-secondary">{result.overall_coherence.cross_department_synergies.map((s, i) => <li key={i}><span className="text-score-green">✓</span> {s}</li>)}</ul>
+                      </div>
+                    )}
+                    {result.overall_coherence.cross_department_gaps?.length > 0 && (
+                      <div>
+                        <p className="label" style={{ color: 'var(--color-score-red)' }}>Gaps across departments</p>
+                        <ul className="space-y-1 text-secondary">{result.overall_coherence.cross_department_gaps.map((g, i) => <li key={i}><span className="text-score-red">×</span> {g}</li>)}</ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="grid gap-x-10 gap-y-8 md:grid-cols-2">
+                {result.departmental_coherence.map((d, i) => (
+                  <div key={i}>
+                    <ScoreBar score={d.coherence_score} label={`${d.department} · ${d.position_count} positions`} />
+                    <p className="mt-2 text-sm text-secondary">{d.coherence_rationale}</p>
+                    <p className="mt-1 text-xs text-faint">{[d.value_chain_position, d.internal_dependencies && `Dependencies: ${d.internal_dependencies}`].filter(Boolean).join(' · ')}</p>
+                    {d.synergy_assessment?.strengths?.slice(0, 2).map((s, j) => <p key={`s${j}`} className="mt-1 text-sm text-secondary"><span className="text-score-green">✓</span> {s}</p>)}
+                    {d.synergy_assessment?.gaps?.slice(0, 2).map((g, j) => <p key={`g${j}`} className="mt-1 text-sm text-secondary"><span className="text-score-red">×</span> {g}</p>)}
+                    {d.synergy_assessment?.overlaps?.slice(0, 2).map((o, j) => <p key={`o${j}`} className="mt-1 text-sm text-secondary"><span className="text-score-amber">≈</span> {o}</p>)}
+                  </div>
+                ))}
+              </div>
+            </Disclosure>
+          )}
+
+          {/* Themes */}
+          {result.work_themes && (
+            <Disclosure eyebrow="Themes" title="The main kinds of work in the organization" defaultOpen={false}>
+              <ScoreBar score={result.work_themes.strategic_alignment_score} label="Alignment of work themes with priorities" detail={result.work_themes.theme_distribution_assessment} />
+              <ul className="mt-6 divide-y divide-hairline border-y border-hairline">
+                {result.work_themes.primary_themes?.map((t, i) => (
+                  <li key={i} className="grid gap-2 py-4 md:grid-cols-[1fr_auto]">
+                    <div>
+                      <p className="font-medium text-ink">{t.theme}</p>
+                      <p className="text-sm text-secondary">{t.description}</p>
+                      <p className="mt-1 text-xs text-faint">{t.departments_involved?.join(', ')}</p>
+                    </div>
+                    <div className="text-right text-sm">
+                      <p className="tabular font-semibold text-ink">{t.percentage_of_org}% of org</p>
+                      <p className="text-xs text-faint">{t.strategic_importance} importance</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {result.work_themes.missing_capabilities?.length > 0 && (
+                <div className="mt-6">
+                  <p className="label">Capabilities not found in the work</p>
+                  <div className="flex flex-wrap gap-2">{result.work_themes.missing_capabilities.map((c, i) => <Chip key={i}>{c}</Chip>)}</div>
+                </div>
+              )}
+            </Disclosure>
+          )}
+
+          {/* Industry comparison */}
+          {result.industry_comparison && (
+            <Disclosure eyebrow="Industry comparison (inferred)" title={`Against ${result.industry_comparison.industry_identified || 'industry'} practice`} defaultOpen={false}>
+              {result.industry_comparison.activity_mix_assessment && (
+                <div className="grid gap-8 md:grid-cols-2">
+                  <div>
+                    <ScoreBar score={result.industry_comparison.activity_mix_assessment.alignment_score} label="Activity mix alignment" />
+                    {result.industry_comparison.activity_mix_assessment.unique_strengths?.length > 0 && (
+                      <div className="mt-4">
+                        <p className="label">Distinctive strengths</p>
+                        <ul className="space-y-1 text-sm text-secondary">{result.industry_comparison.activity_mix_assessment.unique_strengths.map((s, i) => <li key={i}><span className="text-score-green">✓</span> {s}</li>)}</ul>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-sm">
+                    {result.industry_comparison.activity_mix_assessment.over_represented?.length > 0 && (
+                      <p className="mb-2 text-secondary"><span className="font-semibold text-ink">Over-represented:</span> {result.industry_comparison.activity_mix_assessment.over_represented.join(', ')}</p>
+                    )}
+                    {result.industry_comparison.activity_mix_assessment.under_represented?.length > 0 && (
+                      <p className="mb-2 text-secondary"><span className="font-semibold text-ink">Under-represented:</span> {result.industry_comparison.activity_mix_assessment.under_represented.join(', ')}</p>
+                    )}
+                    {result.industry_comparison.role_specialization && (
+                      <p className="text-secondary"><span className="font-semibold text-ink">Role specialization:</span> {result.industry_comparison.role_specialization.assessment} — {result.industry_comparison.role_specialization.rationale}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {result.industry_comparison.competitive_positioning && (
+                <div className="mt-8 hairline-t pt-6">
+                  <p className="font-display text-[18px] italic text-ink">{result.industry_comparison.competitive_positioning.overall_assessment}</p>
+                  <div className="mt-4 grid gap-6 text-sm md:grid-cols-2">
+                    <ul className="space-y-1 text-secondary">{result.industry_comparison.competitive_positioning.potential_advantages?.map((a, i) => <li key={i}><span className="text-score-green">✓</span> {a}</li>)}</ul>
+                    <ul className="space-y-1 text-secondary">{result.industry_comparison.competitive_positioning.potential_disadvantages?.map((d, i) => <li key={i}><span className="text-score-red">×</span> {d}</li>)}</ul>
+                  </div>
+                </div>
+              )}
+            </Disclosure>
+          )}
+
+          {/* Recommendations */}
+          {result.recommendations && (
+            <Disclosure eyebrow="04 · What to do" title="Recommendations">
+              {result.recommendations.quick_wins && result.recommendations.quick_wins.length > 0 && (
+                <div className="mb-8">
+                  <p className="label">Quick wins</p>
+                  <ul className="space-y-1.5 text-secondary">{result.recommendations.quick_wins.map((w, i) => <li key={i}><span className="mr-2 text-primary-600">·</span>{w}</li>)}</ul>
+                </div>
+              )}
+              <RecommendationList title="Resolve duplication" items={result.recommendations.duplication_resolution} />
+              <RecommendationList title="Add missing activities" items={result.recommendations.missing_activity_additions} />
+              <RecommendationList title="Strengthen coordination" items={result.recommendations.coordination_improvements} />
+              <RecommendationList title="Structural" items={result.recommendations.structural} />
+              {result.recommendations.role_optimization && result.recommendations.role_optimization.length > 0 && (
+                <div className="mb-8">
+                  <p className="label">Role changes</p>
+                  <ul className="divide-y divide-hairline border-y border-hairline">
+                    {result.recommendations.role_optimization.map((r, i) => (
+                      <li key={i} className="py-3">
+                        <p className="font-medium text-ink">{r.current_role}: {r.recommendation}</p>
+                        <p className="mt-1 text-sm text-secondary">{r.rationale}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {result.recommendations.capability_development && result.recommendations.capability_development.length > 0 && (
+                <div>
+                  <p className="label">Capability development</p>
+                  <ul className="divide-y divide-hairline border-y border-hairline">
+                    {result.recommendations.capability_development.map((c, i) => (
+                      <li key={i} className="grid gap-2 py-3 md:grid-cols-[1fr_1fr_1fr_auto] text-sm">
+                        <p className="font-medium text-ink">{c.capability}</p>
+                        <p className="text-secondary"><span className="text-faint">Now:</span> {c.current_state}</p>
+                        <p className="text-secondary"><span className="text-faint">Target:</span> {c.target_state}</p>
+                        <StatusPill status={severityStatus(c.priority)} label={`${c.priority} priority`} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Disclosure>
+          )}
+
+          {/* Data gaps */}
+          {result.data_gaps && result.data_gaps.length > 0 && (
+            <Section eyebrow="Limits of this analysis" title="What the data can't tell us">
+              <ul className="card divide-y divide-hairline p-0">
+                {result.data_gaps.map((g, i) => (
+                  <li key={i} className="px-6 py-4">
+                    <p className="font-medium text-ink">{g.gap}</p>
+                    {g.why_it_matters && <p className="mt-1 text-sm text-secondary">{g.why_it_matters}</p>}
+                    {g.observable_indicator_to_close && (
+                      <p className="mt-1 text-sm text-secondary"><span className="font-semibold text-primary-600">Measure next:</span> {g.observable_indicator_to_close}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          <p className="text-xs text-faint">
+            Findings are AI interpretations of job titles and activity text; industry comparisons are inferred, not measured.
+            {result._llm && ` Produced by ${result._llm.model_served}.`}
+            {' '}<Link to="/analysis" className="text-primary-600">Use these findings in archetype options →</Link>
+          </p>
+        </>
+      )}
+    </>
   );
 }

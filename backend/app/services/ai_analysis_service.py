@@ -496,6 +496,7 @@ The application recomputes every overall score from your five criterion scores u
         "description": "What it means",
         "impact": "Business impact",
         "severity": "High/Medium/Low",
+        "dimension": "One of: Structure & Accountabilities, People & Skills, Process & Systems, Mindset & Behaviors, Leadership",
         "evidence_class": "OBSERVABLE/PERCEPTUAL/MODEL-INFERRED",
         "supporting_evidence": "The specific data points that fit this pattern (cite actual metrics)",
         "disconfirming_evidence": "What in the data does NOT fit this pattern, or 'None identified'",

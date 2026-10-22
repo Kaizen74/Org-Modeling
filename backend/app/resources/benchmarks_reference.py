@@ -91,6 +91,15 @@ OPERATIONAL_TITLE_KEYWORDS = [
     "premium services", "station", "apron", "fleet",
 ]
 
+# The five diagnostic dimensions every finding is tagged with (owner's framework)
+FIVE_DIMENSIONS = [
+    "Structure & Accountabilities",
+    "People & Skills",
+    "Process & Systems",
+    "Mindset & Behaviors",
+    "Leadership",
+]
+
 ORG_DESIGN_TRENDS_2026 = [
     {
         "trend": "Skills-based organization",
