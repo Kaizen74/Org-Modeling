@@ -18,7 +18,7 @@ import networkx as nx
 from typing import Dict, List, Optional
 import statistics
 
-from .org_graph import normalize_employees, build_org_graph, display_name
+from .org_graph import normalize_employees, build_org_graph, display_name, reporting_layers
 
 
 class MetricsCalculator:
@@ -41,6 +41,12 @@ class MetricsCalculator:
         self.employees, self.data_issues = normalize_employees(employees)
         self.grade_order = grade_order or {}
         self.graph = build_org_graph(self.employees)
+        # Layer = position in the actual reporting chain (top = 1), not the typed Level column
+        self.layers = reporting_layers(self.graph)
+
+    def _layer_of(self, node: str) -> int:
+        """Actual reporting layer, falling back to the declared Level for people in a reporting loop."""
+        return self.layers.get(node) or self.graph.nodes[node].get("level", 0)
 
     def calculate_all_metrics(self) -> Dict:
         """Calculate all organizational metrics."""
@@ -143,10 +149,10 @@ class MetricsCalculator:
 
         total_emp = len(self.graph.nodes())
 
-        # Cost by level
+        # Cost by reporting layer
         by_level = {}
         for node in self.graph.nodes():
-            level = self.graph.nodes[node].get("level", 0)
+            level = self._layer_of(node)
             salary = self.graph.nodes[node].get("salary", 0)
             if level not in by_level:
                 by_level[level] = {"count": 0, "total_cost": 0}
@@ -217,27 +223,47 @@ class MetricsCalculator:
         }
 
     def _layer_analysis(self) -> Dict:
-        """Count and analyze organizational layers."""
-        levels = [
-            self.graph.nodes[n].get("level", 0)
+        """
+        Count layers from the actual reporting chain and check the typed Level
+        column against it.
+        """
+        if not self.graph.nodes():
+            return {"total_layers": 0, "declared_layers": 0, "by_level": {},
+                    "level_mismatches": {"count": 0, "examples": []}, "longest_chain": []}
+
+        by_level: Dict[int, int] = {}
+        for node in self.graph.nodes():
+            layer = self._layer_of(node)
+            by_level[layer] = by_level.get(layer, 0) + 1
+
+        declared = [self.graph.nodes[n].get("level", 0) for n in self.graph.nodes()]
+        mismatches = [
+            {
+                "name": display_name(self.graph, n),
+                "declared_level": self.graph.nodes[n].get("level", 0),
+                "actual_layer": self.layers[n],
+            }
             for n in self.graph.nodes()
+            if n in self.layers and self.graph.nodes[n].get("level", 0)
+            and self.graph.nodes[n].get("level") != self.layers[n]
         ]
 
-        if not levels:
-            return {"total_layers": 0, "by_level": {}}
-
-        # Count employees per level
-        by_level = {}
-        for node in self.graph.nodes():
-            level = self.graph.nodes[node].get("level", 0)
-            if level not in by_level:
-                by_level[level] = {"count": 0, "employees": []}
-            by_level[level]["count"] += 1
-            by_level[level]["employees"].append(self.graph.nodes[node].get("name"))
+        # Deepest reporting chain, top to bottom — where to look for layer compression
+        longest_chain: List[str] = []
+        if self.layers:
+            node = max(self.layers, key=lambda n: self.layers[n])
+            while node is not None:
+                longest_chain.append(display_name(self.graph, node))
+                preds = list(self.graph.predecessors(node))
+                node = preds[0] if preds else None
+            longest_chain.reverse()
 
         return {
-            "total_layers": max(levels),
-            "by_level": {k: {"count": v["count"]} for k, v in by_level.items()}
+            "total_layers": max(self.layers.values()) if self.layers else max(declared),
+            "declared_layers": max(declared),
+            "by_level": {k: {"count": v} for k, v in sorted(by_level.items())},
+            "level_mismatches": {"count": len(mismatches), "examples": mismatches[:10]},
+            "longest_chain": longest_chain,
         }
 
     def _health_indicators(self) -> Dict:

@@ -92,3 +92,33 @@ def test_hierarchy_carries_id_and_display_name(sample_csv_path):
     tree = parser.get_org_hierarchy()
     assert tree["id"] == "E001"
     assert tree["name"] == "Vincent Chan"
+
+
+def test_layers_come_from_reporting_chain_not_level_column():
+    # Level column claims 3 layers, but the chain is 4 deep (Ana > Bo > Cy > Di)
+    csv = HEADER + (
+        "Ana Lee,CEO,SVP,1,Top of Org,E1,Exec,1\n"
+        "Bo Lim,VP,H8,2,Ana Lee,E2,Ops,1\n"
+        "Cy Ong,Mgr,H6,3,Bo Lim,E3,Ops,1\n"
+        "Di Koh,Lead,TL,3,Cy Ong,E4,Ops,1\n"
+    )
+    result = _parse(csv)
+    assert result["metadata"]["organizational_layers"] == 4
+    assert any("Level doesn't match" in i for i in result["validation_errors"])
+
+    metrics = MetricsCalculator(employees=result["employees"]).calculate_all_metrics()
+    layers = metrics["layer_analysis"]
+    assert layers["total_layers"] == 4
+    assert layers["declared_layers"] == 3
+    assert layers["level_mismatches"]["count"] == 1
+    assert layers["level_mismatches"]["examples"][0] == {"name": "Di Koh", "declared_level": 3, "actual_layer": 4}
+    assert layers["longest_chain"] == ["Ana Lee", "Bo Lim", "Cy Ong", "Di Koh"]
+    # Cost by layer uses the actual layer
+    assert 4 in metrics["cost_analysis"]["by_level"]
+
+
+def test_fixture_level_column_matches_chain(sample_csv_path):
+    result = OrgCSVParser(sample_csv_path).parse()
+    metrics = MetricsCalculator(employees=result["employees"]).calculate_all_metrics()
+    assert metrics["layer_analysis"]["total_layers"] == 6
+    assert metrics["layer_analysis"]["level_mismatches"]["count"] == 0

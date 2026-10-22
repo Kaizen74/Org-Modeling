@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Any
 from pathlib import Path
 import io
 
-from ..services.org_graph import normalize_employees, build_org_graph, display_name
+from ..services.org_graph import normalize_employees, build_org_graph, display_name, reporting_layers
 
 
 class OrgCSVParser:
@@ -243,6 +243,22 @@ class OrgCSVParser:
             root_names = [display_name(self.graph, n) for n in roots[:5]]
             errors.append(f"Multiple root nodes found ({len(roots)}): {', '.join(root_names)}")
 
+        # Typed Level column vs actual position in the reporting chain
+        layers = reporting_layers(self.graph)
+        mismatched = [
+            n for n, layer in layers.items()
+            if self.graph.nodes[n].get("level") and self.graph.nodes[n]["level"] != layer
+        ]
+        if mismatched:
+            examples = ", ".join(
+                f"{display_name(self.graph, n)} (Level {self.graph.nodes[n]['level']}, actually layer {layers[n]})"
+                for n in mismatched[:3]
+            )
+            errors.append(
+                f"{len(mismatched)} people's Level doesn't match their place in the reporting chain "
+                f"— layers are counted from the reporting chain. e.g. {examples}"
+            )
+
         return errors
 
     def _calculate_metadata(self, employees: List[Dict]) -> Dict:
@@ -269,8 +285,9 @@ class OrgCSVParser:
         # Get unique grades
         unique_grades = sorted(list(set(emp["grade"] for emp in employees if emp["grade"])))
 
-        # Get max level
-        max_level = max((emp["level"] for emp in employees), default=0)
+        # Layers from the actual reporting chain; typed Level only as fallback
+        layers = reporting_layers(self.graph) if self.graph else {}
+        max_level = max(layers.values(), default=0) or max((emp["level"] for emp in employees), default=0)
 
         # Calculate total salary
         total_salary = sum(emp["salary"] for emp in employees)

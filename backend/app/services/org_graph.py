@@ -126,6 +126,27 @@ def build_org_graph(employees: List[Dict]) -> nx.DiGraph:
     return G
 
 
+def reporting_layers(G: nx.DiGraph) -> Dict[str, int]:
+    """
+    Layer of each person in the actual reporting chain: the top of each tree
+    is layer 1, their direct reports layer 2, and so on. People caught in a
+    reporting loop (never reachable from a top) get no layer.
+    """
+    layers: Dict[str, int] = {}
+    frontier = [n for n in G.nodes() if G.in_degree(n) == 0]
+    for n in frontier:
+        layers[n] = 1
+    while frontier:
+        nxt = []
+        for n in frontier:
+            for child in G.successors(n):
+                if child not in layers:
+                    layers[child] = layers[n] + 1
+                    nxt.append(child)
+        frontier = nxt
+    return layers
+
+
 def display_name(G: nx.DiGraph, node_id: str) -> str:
     """Human-readable name for a node, falling back to its ID."""
     return G.nodes[node_id].get("name") or node_id

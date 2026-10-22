@@ -52,8 +52,14 @@ export interface GradeGapAnalysis {
 }
 
 export interface LayerAnalysis {
-  total_layers: number;
+  total_layers: number; // from the actual reporting chain
+  declared_layers?: number; // highest value in the CSV Level column
   by_level: Record<string, { count: number }>;
+  level_mismatches?: {
+    count: number;
+    examples: Array<{ name: string; declared_level: number; actual_layer: number }>;
+  };
+  longest_chain?: string[];
 }
 
 export interface HealthIndicators {
