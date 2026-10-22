@@ -584,3 +584,110 @@ export interface QuickWorkActivitiesAnalysis {
   }>;
   status: string;
 }
+
+// ---------- Scenario Studio ----------
+
+export type MoveType = 'reassign' | 'remove_role' | 'add_role' | 'merge_teams' | 'change_role' | 'move_department';
+
+export interface DesignMove {
+  type: MoveType;
+  person_id?: string;
+  new_manager_id?: string;
+  reports_to?: string;
+  manager_id?: string;
+  from_manager_id?: string;
+  into_manager_id?: string;
+  remove_from_manager?: boolean;
+  title?: string;
+  grade?: string;
+  salary?: number;
+  department?: string;
+  new_department?: string;
+  name?: string;
+  count?: number;
+  work_type?: string;
+  note?: string; // the designer's reason for the move
+}
+
+export interface ScenarioHeadline {
+  headcount: number;
+  managers: number;
+  manager_ratio_pct: number;
+  average_span: number;
+  median_span: number;
+  layers: number;
+  total_cost: number;
+  spans_within_benchmark: number;
+  spans_below_benchmark: number;
+  spans_above_benchmark: number;
+  single_report_managers: number;
+  health_score: number;
+}
+
+export interface MoveLogEntry {
+  index: number;
+  type: MoveType;
+  status: 'applied' | 'skipped';
+  message: string;
+}
+
+export interface DepartmentDelta {
+  department: string;
+  headcount_before: number;
+  headcount_after: number;
+  managers_before: number;
+  managers_after: number;
+  cost_before: number;
+  cost_after: number;
+  average_span_before: number;
+  average_span_after: number;
+  status: 'new' | 'removed' | 'changed' | 'unchanged';
+}
+
+export interface PersonBrief {
+  employee_id: string;
+  name: string;
+  job_title: string;
+  department: string;
+  salary: number;
+}
+
+export interface ScenarioImpact {
+  roles_removed: PersonBrief[];
+  roles_added: PersonBrief[];
+  new_manager: Array<{ employee_id: string; name: string; job_title: string; from: string; to: string }>;
+  new_department: Array<{ employee_id: string; name: string; from: string; to: string }>;
+  managers_with_changed_span: Array<{ employee_id: string; name: string; span_before: number; span_after: number }>;
+  people_affected: number;
+  people_affected_pct: number;
+}
+
+export interface ScenarioEvaluation {
+  move_log: MoveLogEntry[];
+  baseline: ScenarioHeadline;
+  scenario: ScenarioHeadline;
+  delta: ScenarioHeadline;
+  departments: DepartmentDelta[];
+  impact: ScenarioImpact;
+  metrics: OrgMetrics;
+}
+
+export interface ScenarioSummary {
+  id: string;
+  name: string;
+  description?: string;
+  source: string;
+  move_count: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ScenarioDetail extends ScenarioSummary, ScenarioEvaluation {
+  moves: DesignMove[];
+}
+
+export interface ScenarioListItem extends ScenarioSummary {
+  scenario: ScenarioHeadline;
+  delta: ScenarioHeadline;
+  skipped_moves: number;
+}

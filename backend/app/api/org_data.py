@@ -2,13 +2,13 @@
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from typing import Optional
 from pydantic import BaseModel
 import io
 
 from ..models.database import get_session
-from ..models.models import OrgAnalysis, GradeSalary
+from ..models.models import OrgAnalysis, GradeSalary, Scenario
 from ..parsers.csv_parser import OrgCSVParser
 
 router = APIRouter(prefix="/api/v1/org-data", tags=["org-data"])
@@ -190,6 +190,7 @@ async def delete_analysis(analysis_id: str, db: AsyncSession = Depends(get_sessi
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
+    await db.execute(delete(Scenario).where(Scenario.analysis_id == analysis_id))
     await db.delete(analysis)
     await db.commit()
     return {"message": f"Analysis '{analysis.name}' deleted"}
@@ -209,6 +210,7 @@ async def clear_all_data(db: AsyncSession = Depends(get_session)):
 
     deleted_count = len(analyses)
 
+    await db.execute(delete(Scenario))
     for analysis in analyses:
         await db.delete(analysis)
 

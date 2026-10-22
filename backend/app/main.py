@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from .models.database import init_db, close_db
-from .api import settings, grades, org_data, metrics, ai_analysis
+from .api import settings, grades, org_data, metrics, ai_analysis, scenarios
 
 # Load environment variables
 load_dotenv()
@@ -55,6 +55,7 @@ app.include_router(grades.router)
 app.include_router(org_data.router)
 app.include_router(metrics.router)
 app.include_router(ai_analysis.router)
+app.include_router(scenarios.router)
 
 
 @app.get("/health")

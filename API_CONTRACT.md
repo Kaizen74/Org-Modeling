@@ -61,6 +61,22 @@ Used by: Metrics page, WorkActivities page.
 
 `WorkActivitiesAnalysis` notable fields: `activity_duplication.duplications[]` (with optional `evidence`, `confidence`, `confidence_rationale`), `missing_activities.gaps[]`, `coordination_gaps.gaps[]` (both with optional `confidence`), `departmental_coherence[]`, `work_themes`, `industry_comparison`, `recommendations`, `data_gaps[]`.
 
+## Scenarios (Scenario Studio)
+A scenario = the current upload's employees + an ordered list of design moves. Moves never change the baseline; invalid moves are skipped with a reason in `move_log`.
+Move types: `reassign {person_id, new_manager_id, department?}` · `remove_role {person_id, reports_to?}` · `add_role {title, manager_id, grade?, department?, salary?, name?, count?}` · `merge_teams {from_manager_id, into_manager_id, remove_from_manager?}` · `change_role {person_id, title?, grade?, salary?, department?}` · `move_department {department, new_department}`
+
+Evaluation shape (`ScenarioEvaluation`): `{ move_log[{index,type,status,message}], baseline{headline}, scenario{headline}, delta{headline}, departments[{department, headcount_before/after, managers_before/after, cost_before/after, average_span_before/after, status}], impact{roles_removed[], roles_added[], new_manager[], new_department[], managers_with_changed_span[], people_affected, people_affected_pct}, metrics: OrgMetrics }`
+Headline keys: `headcount, managers, manager_ratio_pct, average_span, median_span, layers, total_cost, spans_within/below/above_benchmark, single_report_managers, health_score`
+
+- `GET /scenarios` → `{ analysis_id, baseline, scenarios[{id, name, description, source, move_count, scenario, delta, skipped_moves}] }`
+- `POST /scenarios` `{name, description?, moves?, clone_from?, source?}` → summary + moves + ScenarioEvaluation
+- `GET /scenarios/{id}` · `PUT /scenarios/{id}` `{name?, description?, moves?}` · `DELETE /scenarios/{id}`
+- `POST /scenarios/{id}/moves` (one move) · `DELETE /scenarios/{id}/moves/{index}`
+- `POST /scenarios/preview` `{moves}` → ScenarioEvaluation without saving
+- `GET /scenarios/move-types`
+Deleting an upload or starting a new project deletes its scenarios.
+Used by: Scenario Studio page (`frontend/src/pages/Scenarios.tsx`).
+
 ## Grades
 ### GET/POST /grades, POST /grades/bulk-import
 Returns/accepts `GradeSalary { id, grade, median_salary, currency, display_order }`

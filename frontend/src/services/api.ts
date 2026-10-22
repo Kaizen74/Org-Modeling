@@ -8,7 +8,12 @@ import type {
   Employee,
   WorkActivitiesAnalysis,
   QuickWorkActivitiesAnalysis,
-  MetricsSummary
+  MetricsSummary,
+  DesignMove,
+  ScenarioDetail,
+  ScenarioEvaluation,
+  ScenarioHeadline,
+  ScenarioListItem
 } from '../types';
 
 /** Whole organization when department is empty, otherwise one department. */
@@ -277,3 +282,18 @@ export const aiAnalysisApi = {
 };
 
 export default api;
+
+// Scenario Studio API
+export const scenariosApi = {
+  list: async (): Promise<{ analysis_id: string; baseline: ScenarioHeadline; scenarios: ScenarioListItem[] }> =>
+    (await api.get('/scenarios')).data,
+  create: async (name: string, opts: { description?: string; moves?: DesignMove[]; cloneFrom?: string; source?: string } = {}): Promise<ScenarioDetail> =>
+    (await api.post('/scenarios', { name, description: opts.description, moves: opts.moves ?? [], clone_from: opts.cloneFrom, source: opts.source ?? 'manual' })).data,
+  get: async (id: string): Promise<ScenarioDetail> => (await api.get(`/scenarios/${id}`)).data,
+  update: async (id: string, changes: { name?: string; description?: string; moves?: DesignMove[] }): Promise<ScenarioDetail> =>
+    (await api.put(`/scenarios/${id}`, changes)).data,
+  addMove: async (id: string, move: DesignMove): Promise<ScenarioDetail> => (await api.post(`/scenarios/${id}/moves`, move)).data,
+  removeMove: async (id: string, index: number): Promise<ScenarioDetail> => (await api.delete(`/scenarios/${id}/moves/${index}`)).data,
+  remove: async (id: string): Promise<void> => { await api.delete(`/scenarios/${id}`); },
+  preview: async (moves: DesignMove[]): Promise<ScenarioEvaluation> => (await api.post('/scenarios/preview', { moves })).data,
+};
