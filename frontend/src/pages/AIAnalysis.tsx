@@ -458,6 +458,12 @@ export default function AIAnalysis() {
                 analysis.category_4_recommended_archetypes.all_archetype_scores.length > 0 && (
                 <div className="mb-6">
                   <h3 className="text-md font-semibold mb-3">All 7 Archetypes - Fit Score Comparison</h3>
+                  {analysis.category_4_recommended_archetypes.ranking_note && (
+                    <p className="text-sm mb-3 p-3 border border-amber-300 bg-white rounded">
+                      <span className="font-semibold uppercase tracking-wide text-xs text-amber-700 mr-2">Check</span>
+                      {analysis.category_4_recommended_archetypes.ranking_note}
+                    </p>
+                  )}
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -490,6 +496,11 @@ export default function AIAnalysis() {
                               }`}>
                                 {archScore.overall_score}
                               </span>
+                              {!!archScore.score_discrepancy && (
+                                <span className="block text-xs text-gray-400" title="The AI's own overall figure; the score shown is computed from the five criteria with the published weights">
+                                  AI said {archScore.ai_overall_score}
+                                </span>
+                              )}
                             </td>
                             <td className="text-center p-2 hidden md:table-cell">{archScore.score_breakdown?.industry_match || '-'}</td>
                             <td className="text-center p-2 hidden md:table-cell">{archScore.score_breakdown?.size_match || '-'}</td>
@@ -502,7 +513,7 @@ export default function AIAnalysis() {
                     </table>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
-                    * Top 2 archetypes highlighted. Score weights: Industry (30%), Key Indicators (25%), Revenue Model (20%), Size (15%), Metrics (10%)
+                    * Top 2 archetypes highlighted. Overall scores are computed from the criteria with fixed weights: Industry (30%), Key Indicators (25%), Revenue Model (20%), Size (15%), Metrics (10%)
                   </p>
                 </div>
               )}

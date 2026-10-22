@@ -22,6 +22,7 @@ from ..resources.archetypes_reference import (
     get_department_recommendation
 )
 from ..resources.benchmarks_reference import get_benchmarks_prompt_section
+from .archetype_scoring import reconcile_archetype_scores
 
 
 class AIAnalysisService:
@@ -82,6 +83,8 @@ class AIAnalysisService:
 
             # Parse structured response
             result = self._parse_structured_response(response)
+            # Overall archetype scores are computed from the weights, not taken from the AI
+            reconcile_archetype_scores(result)
             return result
 
         except Exception as e:
@@ -362,6 +365,8 @@ Score each archetype (0-100) based on these weighted criteria:
 - Revenue Model Match (20%): Does the business model align with the archetype's value creation logic?
 - Key Indicators Match (25%): Do the org's characteristics match the archetype's key indicators?
 - Metrics Match (10%): Do span, layers, and structure metrics align with the archetype's typical patterns?
+
+The application recomputes every overall score from your five criterion scores using exactly these weights, so score each criterion carefully and make your top 2 recommendations the two highest weighted scores.
 
 **THE 7 ORGANIZATIONAL ARCHETYPES:**
 {archetype_reference}

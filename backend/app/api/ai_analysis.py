@@ -12,6 +12,7 @@ from ..models.database import get_session
 from ..models.models import OrgAnalysis
 from ..services.ai_analysis_service import AIAnalysisService
 from ..services.metrics_store import ensure_metrics
+from ..services.archetype_scoring import reconcile_archetype_scores
 from ..services.claude_service import claude_service
 from ..services.work_activities_service import WorkActivitiesAnalysisService
 
@@ -254,7 +255,8 @@ async def get_latest_ai_analysis(db: AsyncSession = Depends(get_session)):
     return {
         "analysis_id": analysis.id,
         "analysis_name": analysis.name,
-        "ai_analysis": analysis.ai_analysis,
+        # Older saved analyses get the same weighted scoring on read
+        "ai_analysis": reconcile_archetype_scores(analysis.ai_analysis),
         "design_criteria": analysis.design_criteria,
         "created_at": analysis.created_at.isoformat() if analysis.created_at else None
     }

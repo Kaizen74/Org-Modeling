@@ -199,6 +199,11 @@ export interface ArchetypeScoreSummary {
   };
   fit_summary: string;
   digital_first_applicable: boolean;
+  // Set by the backend: overall_score is computed from the breakdown with the published weights
+  ai_overall_score?: number;
+  score_discrepancy?: number;
+  scoring_method?: 'weighted' | 'ai_reported';
+  weighted_rank?: number;
 }
 
 // Archetype recommendation
@@ -221,6 +226,9 @@ export interface ArchetypeRecommendation {
   practical_examples?: PracticalExample[];
   differentiating_activities?: DifferentiatingActivity[];
   structure_diagram?: StructureDiagram;
+  ai_overall_score?: number;
+  score_discrepancy?: number;
+  scoring_method?: 'weighted' | 'ai_reported';
 }
 
 // Category 4 can be an array (old format) or object with recommendations (new format)
@@ -230,6 +238,8 @@ export type Category4Archetypes = ArchetypeRecommendation[] | {
   department_analyzed?: string;
   all_archetype_scores?: ArchetypeScoreSummary[];
   recommendations: ArchetypeRecommendation[];
+  ranking_note?: string;
+  scoring_weights?: Record<string, number>;
 };
 
 export interface AIAnalysisResult {
