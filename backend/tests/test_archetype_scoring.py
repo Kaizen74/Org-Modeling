@@ -81,3 +81,22 @@ def test_legacy_and_empty_results_untouched():
     assert reconcile_archetype_scores({"category_4_recommended_archetypes": [{"archetype": "x"}]}) == \
         {"category_4_recommended_archetypes": [{"archetype": "x"}]}
     assert reconcile_archetype_scores({"error": "no key"}) == {"error": "no key"}
+
+
+def test_real_department_names_map_to_guidance():
+    from app.resources.archetypes_reference import match_department_key
+    assert match_department_key("Ground Operations") == "manufacturing_operations"
+    assert match_department_key("Finance") == "finance"
+    assert match_department_key("Human Resources") == "hr"
+    assert match_department_key("Passenger Services") == "passenger_services"
+    assert match_department_key("Digital & Technology") == "it_digital"
+    assert match_department_key("Customer Experience") == "service_delivery"
+    assert match_department_key("Strategic Communications") == ""  # no guidance: say nothing rather than guess
+
+
+def test_department_scope_prompt_includes_guidance(sample_employees):
+    from app.services.ai_analysis_service import AIAnalysisService
+    from app.services.metrics_service import MetricsCalculator
+    metrics = MetricsCalculator(employees=sample_employees).calculate_all_metrics()
+    prompt = AIAnalysisService(api_key=None)._build_prompt(metrics, sample_employees, None, None, "department", "Sales")
+    assert "DEPARTMENT-SPECIFIC GUIDANCE FOR SALES" in prompt

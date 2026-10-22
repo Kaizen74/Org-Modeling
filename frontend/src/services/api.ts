@@ -11,6 +11,11 @@ import type {
   MetricsSummary
 } from '../types';
 
+/** Whole organization when department is empty, otherwise one department. */
+export interface AnalysisScope {
+  department?: string;
+}
+
 const api = axios.create({
   baseURL: '/api/v1',
   headers: {
@@ -169,7 +174,7 @@ export const metricsApi = {
 
 // AI Analysis API
 export const aiAnalysisApi = {
-  analyze: async (analysisId?: string, designCriteria?: string, strategyText?: string): Promise<{
+  analyze: async (analysisId?: string, designCriteria?: string, strategyText?: string, scope?: AnalysisScope): Promise<{
     analysis_id: string;
     ai_analysis: AIAnalysisResult;
   }> => {
@@ -177,6 +182,8 @@ export const aiAnalysisApi = {
       analysis_id: analysisId,
       design_criteria: designCriteria,
       strategy_text: strategyText,
+      analysis_scope: scope?.department ? 'department' : 'organization',
+      department: scope?.department,
     });
     return response.data;
   },
@@ -184,7 +191,8 @@ export const aiAnalysisApi = {
   analyzeWithDocuments: async (
     files: File[],
     designCriteria?: string,
-    analysisId?: string
+    analysisId?: string,
+    scope?: AnalysisScope
   ): Promise<{
     analysis_id: string;
     ai_analysis: AIAnalysisResult;
@@ -198,6 +206,10 @@ export const aiAnalysisApi = {
     }
     if (analysisId) {
       formData.append('analysis_id', analysisId);
+    }
+    if (scope?.department) {
+      formData.append('analysis_scope', 'department');
+      formData.append('department', scope.department);
     }
     const response = await api.post('/ai-analysis/analyze-with-documents', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

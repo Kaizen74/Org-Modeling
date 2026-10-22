@@ -64,6 +64,8 @@ export interface GradeGapAnalysis {
   min_gap: number;
   max_gap: number;
   total_comparisons: number;
+  unusual_gaps?: Array<{ manager: string; manager_grade: string; subordinate: string; subordinate_grade: string; gap: number }>;
+  note?: string;
 }
 
 export interface LayerAnalysis {

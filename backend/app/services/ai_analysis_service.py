@@ -278,8 +278,7 @@ class AIAnalysisService:
 
         dept_guidance = ""
         if analysis_scope == "department" and department:
-            dept_key = department.lower().replace(" ", "_").replace("/", "_")
-            dept_rec = get_department_recommendation(dept_key)
+            dept_rec = get_department_recommendation(department)
             if dept_rec:
                 primary = ARCHETYPES.get(dept_rec.get("primary", ""), {}).get("name", "")
                 alts = [ARCHETYPES.get(a, {}).get("name", "") for a in dept_rec.get("alternatives", [])]

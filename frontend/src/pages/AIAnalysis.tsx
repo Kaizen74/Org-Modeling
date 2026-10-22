@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Brain, Loader2, AlertTriangle, ArrowRight, ChevronDown, ChevronUp, FileText, Upload, X } from 'lucide-react';
-import { aiAnalysisApi, settingsApi } from '../services/api';
+import { aiAnalysisApi, settingsApi, metricsApi } from '../services/api';
 import type { AIAnalysisResult, ArchetypeScoreSummary } from '../types';
 import ArchetypeDiagram from '../components/ArchetypeDiagram';
 
@@ -14,6 +14,8 @@ export default function AIAnalysis() {
   const [strategyText, setStrategyText] = useState('');
   const [strategyMode, setStrategyMode] = useState<'text' | 'document'>('text');
   const [strategyFiles, setStrategyFiles] = useState<File[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [scopeDepartment, setScopeDepartment] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     trends: true,
@@ -27,6 +29,9 @@ export default function AIAnalysis() {
   useEffect(() => {
     checkApiStatus();
     loadExistingAnalysis();
+    metricsApi.getLatest()
+      .then((r) => setDepartments((r.metrics.department_analysis ?? []).map((d) => d.department)))
+      .catch(() => undefined);
   }, []);
 
   const checkApiStatus = async () => {
@@ -73,13 +78,16 @@ export default function AIAnalysis() {
       if (strategyMode === 'document' && strategyFiles.length > 0) {
         result = await aiAnalysisApi.analyzeWithDocuments(
           strategyFiles,
-          designCriteria || undefined
+          designCriteria || undefined,
+          undefined,
+          { department: scopeDepartment || undefined }
         );
       } else {
         result = await aiAnalysisApi.analyze(
           undefined,
           designCriteria || undefined,
-          strategyText || undefined
+          strategyText || undefined,
+          { department: scopeDepartment || undefined }
         );
       }
       setAnalysis(result.ai_analysis);
@@ -122,6 +130,16 @@ export default function AIAnalysis() {
         <h2 className="text-lg font-semibold mb-4">Analysis Configuration</h2>
 
         <div className="space-y-4">
+          {departments.length > 1 && (
+            <div>
+              <label className="label" htmlFor="scope">What to design</label>
+              <select id="scope" value={scopeDepartment} onChange={(e) => setScopeDepartment(e.target.value)} className="input">
+                <option value="">The whole organization</option>
+                {departments.map((d) => <option key={d} value={d}>One department: {d}</option>)}
+              </select>
+              <p className="mt-1.5 text-xs text-faint">Department scope recommends structures for that unit, using its own roles and department-specific archetype guidance.</p>
+            </div>
+          )}
           <div>
             <label className="label">Design Criteria (Optional)</label>
             <textarea
