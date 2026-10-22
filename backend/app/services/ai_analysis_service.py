@@ -23,6 +23,7 @@ from ..resources.archetypes_reference import (
 )
 from ..resources.benchmarks_reference import get_benchmarks_prompt_section
 from .archetype_scoring import reconcile_archetype_scores
+from .llm_client import run_analysis, AnalysisRefused
 
 
 class AIAnalysisService:
@@ -74,19 +75,17 @@ class AIAnalysisService:
         )
 
         try:
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=16000,
-                temperature=0.3,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            # Parse structured response
-            result = self._parse_structured_response(response)
+            text, call_meta = run_analysis(self.client, prompt)
+            result = self._parse_text(text)
+            result["_llm"] = call_meta
+            if call_meta["truncated"]:
+                result["parse_warning"] = "The AI response hit the output limit; later sections may be incomplete."
             # Overall archetype scores are computed from the weights, not taken from the AI
             reconcile_archetype_scores(result)
             return result
 
+        except AnalysisRefused as e:
+            return {"error": str(e), "message": "The AI declined to analyze this input"}
         except Exception as e:
             return {
                 "error": str(e),
@@ -185,6 +184,72 @@ class AIAnalysisService:
 
         return "\n".join(sections)
 
+    def _format_org_composition(
+        self,
+        metrics: Dict,
+        employees: List[Dict],
+        analysis_scope: str = "organization",
+        department: Optional[str] = None,
+        max_departments: int = 15,
+    ) -> str:
+        """
+        What the organization is actually made of, for grounding archetype fit.
+        Job titles and aggregates only — personal names are never included.
+        """
+        lines = ["**ORGANIZATION COMPOSITION (OBSERVABLE — computed from the uploaded data; no personal names):**"]
+
+        health = metrics.get("health_indicators", {})
+        if health.get("components"):
+            lines.append(f"Structural health {health.get('health_score', 0)}/100:")
+            for c in health["components"]:
+                lines.append(f"- {c['label']}: {c['score']}/100 — {c['value']}")
+
+        span = metrics.get("span_of_control", {})
+        vs = span.get("distribution_vs_benchmark")
+        if vs:
+            lines.append(
+                f"Manager spans vs the benchmark for their team's work: {vs.get('Below benchmark', 0)} below, "
+                f"{vs.get('Within benchmark', 0)} within, {vs.get('Above benchmark', 0)} above; "
+                f"{span.get('single_report_managers', 0)} managers have one direct report"
+            )
+        layers = metrics.get("layer_analysis", {})
+        if layers.get("longest_chain"):
+            lines.append(f"Layers: {layers.get('total_layers')} in the actual reporting chain "
+                         f"(declared Level column: {layers.get('declared_layers')})")
+
+        depts = metrics.get("department_analysis") or []
+        if depts:
+            lines.append("")
+            lines.append(f"Departments ({len(depts)}; largest first):")
+            for d in depts[:max_departments]:
+                roles = ", ".join(f"{t['title']} ({t['count']})" for t in d.get("top_titles", [])[:5])
+                vsb = d.get("spans_vs_benchmark", {})
+                lines.append(
+                    f"- {d['department']}: {d['headcount']} people ({d['headcount_pct']}%), {d['managers']} managers, "
+                    f"avg span {d['average_span']}, layers {'-'.join(str(x) for x in d.get('layers_spanned', []))}, "
+                    f"{d['cost_pct']}% of cost; spans below/within/above benchmark {vsb.get('below', 0)}/"
+                    f"{vsb.get('within', 0)}/{vsb.get('above', 0)}; "
+                    f"{d.get('reports_from_other_departments', 0)} report to a manager in another department. "
+                    f"Common roles: {roles}"
+                )
+            if len(depts) > max_departments:
+                rest = sum(d["headcount"] for d in depts[max_departments:])
+                lines.append(f"- {len(depts) - max_departments} smaller departments with {rest} people in total")
+
+        if analysis_scope == "department" and department:
+            in_dept = [e for e in employees if str(e.get("department", "")).strip().lower() == department.strip().lower()]
+            if in_dept:
+                titles: Dict[str, int] = {}
+                for e in in_dept:
+                    titles[e.get("job_title", "")] = titles.get(e.get("job_title", ""), 0) + 1
+                lines.append("")
+                lines.append(f"All roles in {department} ({len(in_dept)} people):")
+                lines.append(", ".join(f"{t} ({c})" for t, c in sorted(titles.items(), key=lambda kv: -kv[1])))
+
+        lines.append("")
+        lines.append("Ground every archetype judgement in these actual departments and roles, and refer to departments by name.")
+        return "\n".join(lines)
+
     def _build_archetype_reference(self, analysis_scope: str, department: Optional[str]) -> str:
         """Build archetype reference section for the prompt."""
         archetypes_text = []
@@ -275,6 +340,8 @@ class AIAnalysisService:
 
 **Distribution Percentages:**
 {json.dumps(span_stats.get('distribution_pct', {}), indent=2)}
+
+{self._format_org_composition(metrics, employees, analysis_scope, department)}
 
 {"**STRATEGIC CONTEXT (FROM UPLOADED DOCUMENTS):**" if strategy_docs else ""}
 {"USE FOR: Strategy Alignment Score (Category 3) - Assess how well the org structure supports the strategic objectives below." if strategy_docs else ""}
@@ -565,11 +632,11 @@ Be specific and actionable. Ground all recommendations in the data provided. Sco
 """
 
     def _parse_structured_response(self, response) -> Dict:
-        """Extract and parse JSON from Claude's response."""
-        full_text = ""
-        for block in response.content:
-            if block.type == "text":
-                full_text += block.text
+        """Extract and parse JSON from a Claude response object (text blocks only)."""
+        return self._parse_text("".join(b.text for b in response.content if b.type == "text"))
+
+    def _parse_text(self, full_text: str) -> Dict:
+        """Extract and parse JSON from the response text."""
 
         # Try to extract JSON
         try:

@@ -24,7 +24,7 @@ import math
 
 # Bump when the shape or meaning of calculated metrics changes, so cached
 # metrics from older uploads are recalculated instead of shown stale
-METRICS_VERSION = 2
+METRICS_VERSION = 3
 
 
 class MetricsCalculator:
@@ -65,6 +65,7 @@ class MetricsCalculator:
             "grade_gap_analysis": self._grade_gap_analysis(),
             "layer_analysis": self._layer_analysis(),
             "health_indicators": self._health_indicators(),
+            "department_analysis": self._department_analysis(),
             "data_quality": {"issues": self.data_issues[:20]}
         }
 
@@ -100,6 +101,11 @@ class MetricsCalculator:
         }
 
     def _span_of_control(self) -> Dict:
+        if getattr(self, "_span_cache", None) is None:
+            self._span_cache = self._compute_span_of_control()
+        return self._span_cache
+
+    def _compute_span_of_control(self) -> Dict:
         """
         Calculate span of control metrics.
 
@@ -327,6 +333,70 @@ class MetricsCalculator:
             "level_mismatches": {"count": len(mismatches), "examples": mismatches[:10]},
             "longest_chain": longest_chain,
         }
+
+    def _department_analysis(self) -> List[Dict]:
+        """
+        The same structural lenses per department: size, cost, managers, spans
+        against benchmark, layers, the most common roles, and how many people
+        report to a manager in a different department.
+        """
+        assessments = {a["manager_id"]: a for a in self._span_of_control().get("manager_assessments", [])}
+        total_people = self._total_employees() or 1
+        total_cost = sum(self.graph.nodes[n].get("salary", 0) or 0 for n in self.graph.nodes()) or 0
+
+        by_dept: Dict[str, List[str]] = {}
+        for n in self.graph.nodes():
+            dept = str(self.graph.nodes[n].get("department") or "Unknown").strip() or "Unknown"
+            by_dept.setdefault(dept, []).append(n)
+
+        result = []
+        for dept, people in by_dept.items():
+            managers = [n for n in people if self.graph.out_degree(n) > 0]
+            spans = [self.graph.out_degree(n) for n in managers]
+            layers = sorted({self._layer_of(n) for n in people})
+            cost = sum(self.graph.nodes[n].get("salary", 0) or 0 for n in people)
+
+            titles: Dict[str, int] = {}
+            for n in people:
+                t = str(self.graph.nodes[n].get("job_title", "")).strip()
+                if t:
+                    titles[t] = titles.get(t, 0) + 1
+
+            vs = {"below": 0, "within": 0, "above": 0}
+            for m in managers:
+                if m in assessments:
+                    vs[assessments[m]["status"]] += 1
+            operational_teams = sum(1 for m in managers if assessments.get(m, {}).get("work_type") == "operational")
+
+            cross_reports = 0
+            for n in people:
+                mgr = next(iter(self.graph.predecessors(n)), None)
+                if mgr is not None and str(self.graph.nodes[mgr].get("department") or "Unknown").strip() != dept:
+                    cross_reports += 1
+
+            result.append({
+                "department": dept,
+                "headcount": len(people),
+                "headcount_pct": round(len(people) / total_people * 100, 1),
+                "managers": len(managers),
+                "manager_ratio_pct": round(len(managers) / len(people) * 100, 1),
+                "average_span": round(statistics.mean(spans), 2) if spans else 0.0,
+                "median_span": round(statistics.median(spans), 2) if spans else 0.0,
+                "layers_spanned": [layers[0], layers[-1]] if layers else [],
+                "layer_count": len(layers),
+                "total_cost": round(cost, 0),
+                "cost_pct": round(cost / total_cost * 100, 1) if total_cost else 0.0,
+                "average_cost": round(cost / len(people), 0),
+                "spans_vs_benchmark": vs,
+                "operational_teams": operational_teams,
+                "single_report_managers": sum(1 for x in spans if x == 1),
+                "reports_from_other_departments": cross_reports,
+                "top_titles": [
+                    {"title": t, "count": c}
+                    for t, c in sorted(titles.items(), key=lambda kv: (-kv[1], kv[0]))[:6]
+                ],
+            })
+        return sorted(result, key=lambda d: -d["headcount"])
 
     # Weights of the health score components (must sum to 100)
     HEALTH_WEIGHTS = {"span_fit": 35, "layers": 25, "manager_ratio": 20, "single_report": 20}

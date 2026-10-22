@@ -4,14 +4,26 @@
 
 Base URL: `/api/v1` (frontend client: `frontend/src/services/api.ts`)
 
+AI calls: all go through `backend/app/services/llm_client.py` (model `claude-opus-5-5`, effort `high`, streamed, server-side refusal fallback). Override with env vars `ORG_ANALYZER_MODEL`, `ORG_ANALYZER_EFFORT`, `ORG_ANALYZER_MAX_TOKENS`. Prompts contain job titles and aggregates only — never personal names.
+
 ## Org data
 ### POST /org-data/upload  (multipart: file)
 Returns: `{ success, message, employee_count, manager_count, validation_errors[], metadata{} }`
 Used by: Upload page (`frontend/src/pages/Upload.tsx`)
 
 ### GET /metrics/latest
-Returns: `OrgMetrics` — `{ total_employees, manager_stats{}, span_of_control{}, cost_analysis{}, grade_gap_analysis{}, layer_analysis{}, health_indicators{} }`
+Returns: `{ analysis_id, analysis_name, metrics: OrgMetrics, cached }`
+`OrgMetrics` — `{ metrics_version, total_employees, manager_stats{}, span_of_control{}, cost_analysis{}, grade_gap_analysis{}, layer_analysis{}, health_indicators{}, department_analysis[], data_quality{issues[]} }`
+- People are keyed by Employee ID (`employee_id`, resolved `manager_id`); names are display only
+- `layer_analysis.total_layers` comes from the actual reporting chain; `declared_layers`, `level_mismatches`, `longest_chain` alongside
+- `span_of_control.manager_assessments[]` judges each manager against the benchmark for their team's work type (`work_type`, `work_type_basis`, `benchmark_range`, `status`); plus `distribution_vs_benchmark`, `single_report_managers`
+- `health_indicators.components[]` — four weighted parts (`key, label, score, weight, value, benchmark, rule, source`); `health_score` is their weighted average
+- `department_analysis[]` — per department: headcount, managers, spans vs benchmark, layers, cost share, top titles, reports from other departments
+- Every endpoint goes through `metrics_store.ensure_metrics`: missing salaries filled from the grade table; caches with an older `metrics_version` are recalculated
 Used by: Dashboard, Metrics pages
+
+### GET /metrics/summary
+Returns headline figures plus `health_components[]` for the Dashboard.
 
 ## AI analysis (archetypes)
 ### POST /ai-analysis/analyze
@@ -31,7 +43,8 @@ Used by: AIAnalysis page on load.
 - `category_1_industry_trends.insights[]` — each `source` cites named research (from `backend/app/resources/benchmarks_reference.py`)
 - `category_2_health_diagnosis` — `pathologies[]` carry `evidence_class` (OBSERVABLE|PERCEPTUAL|MODEL-INFERRED), `supporting_evidence`, `disconfirming_evidence`, `confidence`, `confidence_rationale`
 - `category_3_strategy_alignment` — scores + key_gaps
-- `category_4_recommended_archetypes` — `all_archetype_scores[]` (all 7) + `recommendations[]` (top 2, each with `score_breakdown`, `practical_examples[]`, `differentiating_activities[]`, `structure_diagram{nodes[],connections[],layout_type}`)
+- `category_4_recommended_archetypes` — `all_archetype_scores[]` (all 7) + `recommendations[]` (top 2, each with `score_breakdown`, `practical_examples[]`, `differentiating_activities[]`, `structure_diagram{nodes[],connections[],layout_type}`). Overall scores are computed by the backend from the breakdown with fixed weights (`scoring_weights`); the AI's own figure is `ai_overall_score`, a difference ≥3 points is `score_discrepancy`, and `ranking_note` appears when the AI's detailed picks differ from the weighted top
+- `_llm` — `{ model_requested, model_served, effort, stop_reason, truncated }`; `parse_warning` when the response hit the output limit
 - `action_plan{phase_1..3}`
 - `data_gaps[]` — `{ gap, why_it_matters, observable_indicator_to_close }`
 - `work_activities_analysis` — preserved current-state analysis (see below)

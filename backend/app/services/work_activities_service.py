@@ -14,6 +14,8 @@ from typing import List, Dict, Optional
 import json
 import re
 
+from .llm_client import run_analysis, AnalysisRefused
+
 
 class WorkActivitiesAnalysisService:
     """Analyze work activities using Claude AI."""
@@ -64,19 +66,16 @@ class WorkActivitiesAnalysisService:
         prompt = self._build_prompt(employees_with_activities, industry)
 
         try:
-            message = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=12000,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
+            # content[0] is a thinking block on current models; run_analysis returns the answer text
+            response_text, call_meta = run_analysis(self.client, prompt)
+            result = self._parse_response(response_text)
+            result["_llm"] = call_meta
+            if call_meta["truncated"]:
+                result["parse_warning"] = "The AI response hit the output limit; later sections may be incomplete."
+            return result
 
-            response_text = message.content[0].text
-
-            # Extract JSON from response
-            return self._parse_response(response_text)
-
+        except AnalysisRefused as e:
+            return {"error": str(e), "message": "The AI declined to analyze this input"}
         except Exception as e:
             return {
                 "error": f"Analysis failed: {str(e)}",
@@ -101,8 +100,9 @@ class WorkActivitiesAnalysisService:
         # Build department summaries
         dept_summaries = []
         for dept, emps in by_department.items():
+            # Positions are described by title and grade only — names never leave the app
             emp_list = "\n".join([
-                f"  - {emp['name']} ({emp['job_title']}, {emp['grade']}): {emp.get('work_activities', 'Not specified')}"
+                f"  - {emp['job_title']} ({emp['grade']}): {emp.get('work_activities', 'Not specified')}"
                 for emp in emps
             ])
             dept_summaries.append(f"**{dept}** ({len(emps)} positions):\n{emp_list}")

@@ -1,5 +1,5 @@
 # Organizational Design Analyzer — Owner's Guide
-*Updated: 2026-07-10*
+*Updated: 2026-10-22*
 
 ## What this app does
 You upload a spreadsheet (CSV) of your organization — names, job titles, grades, who reports to whom, salaries, and optionally each role's work activities. The app then:
@@ -17,7 +17,7 @@ You upload a spreadsheet (CSV) of your organization — names, job titles, grade
 ## How to use it
 1. **Settings** — paste your Anthropic API key (needed for all AI analysis)
 2. **Grade Config** — enter your salary grades so costs can be calculated
-3. **Upload** — upload your org CSV (columns: Name, Job Title, Grade, Department, Level, Line Manager, Salary, Employee ID; optional: Work Activities, Job Description)
+3. **Upload** — upload your org CSV (required: Name, Job Title, Grade, Level, Line Manager; recommended: Employee ID, Department, Salary; optional: Line Manager ID, Work Type, Work Activities, Job Description). Give everyone a unique Employee ID — people who share a name are then kept apart. If two managers share a name, add a Line Manager ID column. Work Type ("Operational" or "Knowledge") lets you state which span benchmark applies instead of letting the app infer it from job titles
 4. **Metrics** — see spans, layers, costs, and run the Work Activities analysis (current state)
 5. **AI Analysis** — add your design criteria and strategy (text or documents), then run the archetype analysis. Read the confidence badges: findings marked "Inferred from research" come from industry knowledge, not your data
 6. **What the Data Can't Tell Us** — at the bottom of the AI analysis; lists what to measure next to firm up the findings
@@ -26,6 +26,7 @@ You upload a spreadsheet (CSV) of your organization — names, job titles, grade
 Type `./run_checks.sh` and press Enter. You want to see "ALL CHECKS PASSED ✅". If anything is red, stop and fix before trusting new changes.
 
 ## What changed recently
+- 2026-10-22: Accuracy fixes. People who share a name are no longer merged. Layers are counted from who actually reports to whom (your Level column is checked against it). Each manager's span is judged against the right benchmark for their team's kind of work (frontline 15–25, knowledge work 5–10). The health score now shows its four parts and how each is calculated. Archetype scores are calculated from the stated weights rather than taken from the AI. The AI now sees your departments and roles (never names) and uses the current Claude model. The previous AI setup would have stopped working from 21 Oct 2026, because a setting it sent is no longer accepted
 - 2026-07-10: Analysis findings now carry confidence levels, the evidence behind them, and counter-evidence where a pattern only half-fits. Benchmarks quoted in the analysis now come from named research (McKinsey, Gallup, Gartner, Deloitte) instead of the AI's memory. A new "What the Data Can't Tell Us" section lists the measurements that would strengthen the analysis. Two long-failing tests were fixed — the full check suite is green for the first time
 - 2026-07: Archetype diagrams no longer overlap or truncate; archetype recommendations now use the current-state (work activities) findings
 

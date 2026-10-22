@@ -97,6 +97,35 @@ export interface HealthIndicators {
   is_healthy: boolean;
 }
 
+export interface DepartmentMetrics {
+  department: string;
+  headcount: number;
+  headcount_pct: number;
+  managers: number;
+  manager_ratio_pct: number;
+  average_span: number;
+  median_span: number;
+  layers_spanned: number[]; // [top layer, bottom layer]
+  layer_count: number;
+  total_cost: number;
+  cost_pct: number;
+  average_cost: number;
+  spans_vs_benchmark: { below: number; within: number; above: number };
+  operational_teams: number;
+  single_report_managers: number;
+  reports_from_other_departments: number;
+  top_titles: Array<{ title: string; count: number }>;
+}
+
+// Which model produced an AI result, and whether it was cut off
+export interface LLMCallMeta {
+  model_requested: string;
+  model_served: string;
+  effort: string;
+  stop_reason: string;
+  truncated: boolean;
+}
+
 export interface OrgMetrics {
   total_employees: number;
   manager_stats: ManagerStats;
@@ -106,6 +135,8 @@ export interface OrgMetrics {
   layer_analysis: LayerAnalysis;
   health_indicators: HealthIndicators;
   data_quality?: { issues: string[] };
+  department_analysis?: DepartmentMetrics[];
+  metrics_version?: number;
 }
 
 // Key gap can be a string or an object with detailed info
@@ -288,6 +319,8 @@ export interface AIAnalysisResult {
     phase_3_optimization: string[];
   };
   data_gaps?: DataGap[];
+  _llm?: LLMCallMeta;
+  parse_warning?: string;
   error?: string;
   raw_response?: string;
 }

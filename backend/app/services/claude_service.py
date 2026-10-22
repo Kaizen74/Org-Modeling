@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Optional
 import os
 
+from .llm_client import MODEL
+
 
 class ClaudeService:
     """Manage Claude API connection with persistent key storage."""
@@ -62,10 +64,12 @@ class ClaudeService:
             }
 
         try:
+            # Cheapest possible round-trip on the same model the analyses use
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=10,
-                messages=[{"role": "user", "content": "test"}]
+                model=MODEL,
+                max_tokens=64,
+                output_config={"effort": "low"},
+                messages=[{"role": "user", "content": "Reply with OK."}]
             )
 
             return {
