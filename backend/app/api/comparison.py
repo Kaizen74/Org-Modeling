@@ -1,7 +1,6 @@
 """Option comparison API: weighted design criteria applied to the current state and every scenario."""
 
 import json
-import re
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +14,7 @@ from ..services.comparison_service import DEFAULT_CRITERIA, MEASURABLE, score_op
 from ..services.claude_service import claude_service
 from ..services.ai_analysis_service import AIAnalysisService
 from ..services.llm_client import run_analysis, AnalysisRefused
+from ..services.privacy import name_map, without_names
 from .scenarios import evaluate
 
 router = APIRouter(prefix="/api/v1/comparison", tags=["comparison"])
@@ -120,24 +120,16 @@ async def update_judgment(request: JudgmentUpdate, db: AsyncSession = Depends(ge
     return await _payload(analysis, comparison, db)
 
 
-def _without_names(text: str, name_to_title: Dict[str, str]) -> str:
-    """Replace personal names with job titles (longest names first, whole words only)."""
-    for name in sorted(name_to_title, key=len, reverse=True):
-        if name:
-            text = re.sub(rf"\b{re.escape(name)}\b", f"the {name_to_title[name] or 'role'}", text)
-    return text
-
-
 def _suggest_prompt(analysis: OrgAnalysis, options: List[Dict], judged: List[Dict]) -> str:
     """Prompt for AI-suggested judged scores. Aggregates and role titles only — no names."""
-    name_to_title = {e.get("name", ""): e.get("job_title", "") for e in (analysis.raw_data or {}).get("employees", [])}
+    name_to_title = name_map((analysis.raw_data or {}).get("employees", []))
     ai = analysis.ai_analysis or {}
     recs = (ai.get("category_4_recommended_archetypes") or {}).get("recommendations", []) if isinstance(ai.get("category_4_recommended_archetypes"), dict) else []
     archetypes = "\n".join(f"- {r.get('archetype')}: {r.get('why_it_fits', '')[:300]}" for r in recs[:2]) or "None run yet."
     option_lines = []
     for o in options:
         f = o["figures"]
-        moves = _without_names("; ".join(o["moves_summary"][:12]), name_to_title) or "no changes"
+        moves = without_names("; ".join(o["moves_summary"][:12]), name_to_title) or "no changes"
         option_lines.append(
             f"- option_id={o['id']} | {o['name']} (source: {o['source']}): health {f['health_score']}, layers {f['layers']}, "
             f"managers {f['managers']}, spans within benchmark {f['spans_within_benchmark']}, cost {f['total_cost']:,.0f}, "

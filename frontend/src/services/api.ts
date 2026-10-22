@@ -17,7 +17,8 @@ import type {
   ComparisonCriterion,
   ComparisonPayload,
   Disposition,
-  DispositionPayload
+  DispositionPayload,
+  ImplementationPlan
 } from '../types';
 
 /** Whole organization when department is empty, otherwise one department. */
@@ -300,6 +301,15 @@ export const scenariosApi = {
   removeMove: async (id: string, index: number): Promise<ScenarioDetail> => (await api.delete(`/scenarios/${id}/moves/${index}`)).data,
   remove: async (id: string): Promise<void> => { await api.delete(`/scenarios/${id}`); },
   preview: async (moves: DesignMove[]): Promise<ScenarioEvaluation> => (await api.post('/scenarios/preview', { moves })).data,
+  implementation: async (id: string): Promise<ImplementationPlan> => (await api.get(`/scenarios/${id}/implementation`)).data,
+};
+
+/** URL of the board-ready findings pack (opens in a new tab; print to PDF from there). */
+export const packUrl = (scenarioId?: string, includeNames = false) => {
+  const q = new URLSearchParams();
+  if (scenarioId) q.set('scenario_id', scenarioId);
+  if (includeNames) q.set('include_names', 'true');
+  return `/api/v1/export/pack${q.toString() ? `?${q}` : ''}`;
 };
 
 // Option comparison API

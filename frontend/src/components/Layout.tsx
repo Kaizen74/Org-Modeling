@@ -29,6 +29,13 @@ const stages: Array<{ number: string; title: string; items: Array<{ name: string
       { name: 'Compare options', href: '/compare', hint: 'Score against your criteria' },
     ],
   },
+  {
+    number: '03',
+    title: 'Implement',
+    items: [
+      { name: 'Implications', href: '/implementation', hint: 'Cost, risks, sequence, pack' },
+    ],
+  },
 ];
 
 const setup = [

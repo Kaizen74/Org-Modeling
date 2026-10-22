@@ -94,6 +94,11 @@ Per job title: `disposition` automate | augment | keep_human, `capacity_freed_pc
 - `POST /ai-disposition/suggest` `{industry?}` → AI tags for untagged roles (never overwrites user tags; titles and activities only)
 Scenario headlines gain `ai_capacity_fte` (FTE freed; never changes headcount); comparison measure `ai_capacity_fte` (higher is better) is available but not in the default criteria.
 
+## Implementation and export
+- `GET /scenarios/{id}/implementation` → scenario summary + `baseline/scenario/delta/departments` + `summary{people_affected, people_affected_pct, new_manager, new_department, roles_removed, roles_added, managers_gaining, managers_losing}`, `cost{removed_roles, added_roles, net_change, note}`, `change_load{managers_gaining[], managers_losing[], new_manager[], new_department[], roles_removed[], roles_added[]}`, `risks[{severity, area, risk, mitigation}]`, `waves[{key appoint|move|remove|stabilise, title, guidance, moves[{index,message,note}]}]` — all rule-based, no AI
+- `GET /export/pack?scenario_id=&include_names=false` → self-contained HTML findings pack (evidence inventory, facts, diagnosis, options, implementation of the chosen or top-ranked scenario, limits). Names replaced by job titles unless `include_names=true`.
+Used by: Implementation page (`frontend/src/pages/Implementation.tsx`).
+
 ## Grades
 ### GET/POST /grades, POST /grades/bulk-import
 Returns/accepts `GradeSalary { id, grade, median_salary, currency, display_order }`

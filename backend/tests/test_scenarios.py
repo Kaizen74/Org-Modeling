@@ -172,3 +172,31 @@ async def test_new_project_clears_scenarios(client: AsyncClient, sample_csv_path
     await client.delete("/api/v1/org-data/clear-all")
     await _upload(client, sample_csv_path)
     assert (await client.get("/api/v1/scenarios")).json()["scenarios"] == []
+
+
+@pytest.mark.asyncio
+async def test_implementation_plan(client: AsyncClient, sample_csv_path):
+    await _upload(client, sample_csv_path)
+    org = (await client.get("/api/v1/org-data/latest")).json()["employees"]
+    by_name = {e["name"]: e for e in org}
+    rachel, vincent = by_name["Rachel Goh"], by_name["Vincent Chan"]
+    vps = [e for e in org if e["manager_id"] == vincent["employee_id"]]
+    moves = [
+        {"type": "remove_role", "person_id": rachel["employee_id"], "note": "single-report layer"},
+        {"type": "add_role", "title": "Transformation Lead", "manager_id": vincent["employee_id"], "salary": 150000},
+        {"type": "merge_teams", "from_manager_id": vps[1]["employee_id"], "into_manager_id": vps[0]["employee_id"]},
+        {"type": "teleport"},
+    ]
+    sid = (await client.post("/api/v1/scenarios", json={"name": "Plan", "moves": moves})).json()["id"]
+    plan = (await client.get(f"/api/v1/scenarios/{sid}/implementation")).json()
+
+    assert [w["key"] for w in plan["waves"]] == ["appoint", "move", "remove", "stabilise"]  # appoint before remove
+    assert plan["waves"][2]["moves"][0]["note"] == "single-report layer"
+    assert plan["cost"]["added_roles"] == 150000
+    assert plan["cost"]["removed_roles"] == rachel["salary"]
+    assert plan["summary"]["roles_removed"] == 1 and plan["summary"]["roles_added"] == 1
+    areas = {r["area"] for r in plan["risks"]}
+    assert "Design completeness" in areas  # the skipped 'teleport' move
+    assert "People and employee relations" in areas
+    assert plan["risks"][0]["severity"] in ("High", "Medium")
+    assert plan["change_load"]["managers_gaining"][0]["span_after"] > plan["change_load"]["managers_gaining"][0]["span_before"]

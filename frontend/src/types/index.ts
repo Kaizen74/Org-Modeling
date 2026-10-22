@@ -800,3 +800,47 @@ export interface DispositionPayload {
   ai_available: boolean;
   suggestions_added?: number;
 }
+
+// ---------- Implementation ----------
+
+export interface ImplementationRisk {
+  severity: 'High' | 'Medium' | 'Low';
+  area: string;
+  risk: string;
+  mitigation: string;
+}
+
+export interface ImplementationWave {
+  key: 'appoint' | 'move' | 'remove' | 'stabilise';
+  title: string;
+  guidance: string;
+  moves: Array<{ index: number; message: string; note?: string }>;
+}
+
+export interface ImplementationPlan extends ScenarioSummary {
+  baseline: ScenarioHeadline;
+  scenario: ScenarioHeadline;
+  delta: ScenarioHeadline;
+  departments: DepartmentDelta[];
+  summary: {
+    people_affected: number;
+    people_affected_pct: number;
+    new_manager: number;
+    new_department: number;
+    roles_removed: number;
+    roles_added: number;
+    managers_gaining: number;
+    managers_losing: number;
+  };
+  cost: { removed_roles: number; added_roles: number; net_change: number; note: string };
+  change_load: {
+    managers_gaining: ScenarioImpact['managers_with_changed_span'];
+    managers_losing: ScenarioImpact['managers_with_changed_span'];
+    new_manager: ScenarioImpact['new_manager'];
+    new_department: ScenarioImpact['new_department'];
+    roles_removed: PersonBrief[];
+    roles_added: PersonBrief[];
+  };
+  risks: ImplementationRisk[];
+  waves: ImplementationWave[];
+}

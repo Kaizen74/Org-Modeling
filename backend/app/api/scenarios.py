@@ -12,6 +12,7 @@ from ..models.models import OrgAnalysis, Scenario
 from ..services.metrics_service import MetricsCalculator
 from ..services.metrics_store import ensure_metrics, load_grades, enrich_employees_with_grade_salary
 from ..services.ai_disposition_service import capacity_freed
+from ..services.implementation_service import build_plan
 from .ai_disposition import active_roles
 from ..services.scenario_engine import (
     MOVE_TYPES,
@@ -152,6 +153,16 @@ async def get_scenario(scenario_id: str, db: AsyncSession = Depends(get_session)
     scenario = await _get_scenario(db, scenario_id)
     analysis = (await db.execute(select(OrgAnalysis).where(OrgAnalysis.id == scenario.analysis_id))).scalar_one()
     return {**_summary(scenario), "moves": scenario.moves or [], **(await evaluate(analysis, scenario.moves or [], db))}
+
+
+@router.get("/{scenario_id}/implementation")
+async def implementation(scenario_id: str, db: AsyncSession = Depends(get_session)):
+    """What it takes to implement a scenario: cost, change load, risks, transition sequence."""
+    scenario = await _get_scenario(db, scenario_id)
+    analysis = (await db.execute(select(OrgAnalysis).where(OrgAnalysis.id == scenario.analysis_id))).scalar_one()
+    ev = await evaluate(analysis, scenario.moves or [], db)
+    return {**_summary(scenario), "baseline": ev["baseline"], "scenario": ev["scenario"], "delta": ev["delta"],
+            "departments": ev["departments"], **build_plan(ev, scenario.moves or [])}
 
 
 @router.put("/{scenario_id}")

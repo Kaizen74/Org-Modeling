@@ -12,6 +12,7 @@ const checks = [
   { path: '/analysis', expect: /AI|Analysis/ },
   { path: '/scenarios', expect: /Build structural options and see what each one changes/ },
   { path: '/compare', expect: /Create a scenario to compare it with today|highest against your criteria/ },
+  { path: '/implementation', expect: /Build an option first|people affected/ },
 ];
 
 const browser = await chromium.launch();
