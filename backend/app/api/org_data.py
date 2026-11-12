@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import io
 
 from ..models.database import get_session
-from ..models.models import OrgAnalysis, GradeSalary, Scenario, Comparison, AIDisposition
+from ..models.models import OrgAnalysis, GradeSalary, Scenario, Comparison, AIDisposition, Engagement
 from ..parsers.csv_parser import OrgCSVParser
 
 router = APIRouter(prefix="/api/v1/org-data", tags=["org-data"])
@@ -193,6 +193,7 @@ async def delete_analysis(analysis_id: str, db: AsyncSession = Depends(get_sessi
     await db.execute(delete(Scenario).where(Scenario.analysis_id == analysis_id))
     await db.execute(delete(Comparison).where(Comparison.analysis_id == analysis_id))
     await db.execute(delete(AIDisposition).where(AIDisposition.analysis_id == analysis_id))
+    await db.execute(delete(Engagement).where(Engagement.analysis_id == analysis_id))
     await db.delete(analysis)
     await db.commit()
     return {"message": f"Analysis '{analysis.name}' deleted"}
@@ -215,6 +216,7 @@ async def clear_all_data(db: AsyncSession = Depends(get_session)):
     await db.execute(delete(Scenario))
     await db.execute(delete(Comparison))
     await db.execute(delete(AIDisposition))
+    await db.execute(delete(Engagement))
     for analysis in analyses:
         await db.delete(analysis)
 

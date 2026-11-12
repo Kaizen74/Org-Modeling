@@ -1,0 +1,1491 @@
+{
+  "format": "compass-handoff",
+  "format_version": "1.0",
+  "generated_at": "2026-11-12T00:00:00.000Z",
+  "source_app": "capability-compass",
+  "engagement": {
+    "key": "MERIDIAN",
+    "name": "Meridian Group (fictional demo)",
+    "organisation": "Meridian Group (fictional demo)",
+    "industry": "Aviation, Logistics & Transportation",
+    "unit": "capability",
+    "scope": "Whole group, six capability clusters",
+    "currency": "$",
+    "value_unit": "m",
+    "baseline_version": "v1.0",
+    "working_version": "v1.1 (working)"
+  },
+  "vocabulary": {
+    "maturity_levels": [
+      {
+        "level": 1,
+        "label": "Absent"
+      },
+      {
+        "level": 2,
+        "label": "Early"
+      },
+      {
+        "level": 3,
+        "label": "Emerging"
+      },
+      {
+        "level": 4,
+        "label": "Established"
+      }
+    ],
+    "evidence_grades": [
+      {
+        "key": "confirmed",
+        "label": "Confirmed",
+        "signal_label": "Metric",
+        "means": "You would defend this in front of a sceptic: independent sources agree, or a system record backs it.",
+        "org_modeling_term": "OBSERVABLE",
+        "process_map_term": "Observed (O)"
+      },
+      {
+        "key": "indicated",
+        "label": "Indicated",
+        "signal_label": "Trace",
+        "means": "A reasonable reading of limited evidence: one good source, or several of the same kind.",
+        "org_modeling_term": "PERCEPTUAL",
+        "process_map_term": "Inferred (I)"
+      },
+      {
+        "key": "hypothesis",
+        "label": "Hypothesis",
+        "signal_label": "Claim",
+        "means": "Not yet tested: AI output, self-report, or marketing. Never drives a decision on its own.",
+        "org_modeling_term": "MODEL-INFERRED",
+        "process_map_term": "Inferred (I), unverified"
+      }
+    ],
+    "id_prefixes": [
+      {
+        "prefix": "CAP",
+        "what": "Capability cluster",
+        "owner": "Compass"
+      },
+      {
+        "prefix": "VS",
+        "what": "Value stream (a cluster in a value-stream workspace, or a pilot)",
+        "owner": "Compass"
+      },
+      {
+        "prefix": "LV",
+        "what": "P&L lever",
+        "owner": "Compass"
+      },
+      {
+        "prefix": "RL",
+        "what": "Anchor role",
+        "owner": "Compass"
+      },
+      {
+        "prefix": "SG",
+        "what": "External signal",
+        "owner": "Compass"
+      },
+      {
+        "prefix": "P",
+        "what": "Operating-model design principle",
+        "owner": "Compass (Stage 0)"
+      },
+      {
+        "prefix": "C",
+        "what": "Operating-system reference component",
+        "owner": "Compass (Stage 0)"
+      },
+      {
+        "prefix": "DC",
+        "what": "Design criterion",
+        "owner": "Compass (Stage 0)"
+      },
+      {
+        "prefix": "LG",
+        "what": "Leapfrog gate test",
+        "owner": "Compass (Stage 0)"
+      },
+      {
+        "prefix": "DEC",
+        "what": "Decision-log entry",
+        "owner": "Compass (Stage 0)"
+      },
+      {
+        "prefix": "S",
+        "what": "Process step",
+        "owner": "Process Map Studio"
+      },
+      {
+        "prefix": "X",
+        "what": "Discrepancy (documented vs done)",
+        "owner": "Process Map Studio"
+      },
+      {
+        "prefix": "I",
+        "what": "Intent statement",
+        "owner": "Process Map Studio"
+      },
+      {
+        "prefix": "H",
+        "what": "Operating-model hypothesis",
+        "owner": "Org Modeling"
+      }
+    ],
+    "note": "Quote an ID as <engagement key>:<ID>, for example MERIDIAN:CAP-01, when it leaves this engagement."
+  },
+  "charter": {
+    "sponsor": "Group Chief Executive (fictional)",
+    "locked_at": "2026-03-15T09:00:00Z",
+    "thesis": {
+      "serve": "Airlines, freight forwarders and food-service customers who need reliable turnarounds at scale.",
+      "outcome": "Aircraft and cargo that leave on time, safely, with nothing left behind.",
+      "profit": "Paid per unit handled; margin comes from labour productivity and renewal pricing.",
+      "moat": "Licences, network breadth and judgement built over years in safety-critical work.",
+      "scale": "Each new station is cheaper to bring up once the operating routines are standard."
+    },
+    "principles": [
+      {
+        "ref": "P1",
+        "principle": "Decisions are made at the station, by one named role.",
+        "refuted_by": "Event records showing a different role deciding in more than one case in five."
+      },
+      {
+        "ref": "P2",
+        "principle": "Standard work is written once and run everywhere.",
+        "refuted_by": "Three or more routes for the same step across shifts."
+      },
+      {
+        "ref": "P3",
+        "principle": "AI takes the rule-based work; people keep the judgement.",
+        "refuted_by": "An automated step that still needs a person to correct it most days."
+      },
+      {
+        "ref": "P4",
+        "principle": "Capability is built ahead of growth, not after it.",
+        "refuted_by": "Anchor seats still absent two cycles after a growth decision."
+      }
+    ],
+    "reference_model": [
+      {
+        "ref": "C1",
+        "name": "Direction",
+        "observable_test": "Share of unit scorecards tied to the breakthrough goals and reviewed monthly"
+      },
+      {
+        "ref": "C2",
+        "name": "Standard work",
+        "observable_test": "Share of critical steps where the documented way matches what is done"
+      },
+      {
+        "ref": "C3",
+        "name": "Daily management",
+        "observable_test": "Board updated every cycle; time from a red signal to escalation"
+      },
+      {
+        "ref": "C4",
+        "name": "Problem solving",
+        "observable_test": "Median days from a red signal to a countermeasure; 90-day recurrence"
+      },
+      {
+        "ref": "C5",
+        "name": "Improvement engine",
+        "observable_test": "Improvements delivered per quarter with savings evidence"
+      },
+      {
+        "ref": "C6",
+        "name": "Governance and decision rights",
+        "observable_test": "A named owner; decision rights documented and followed"
+      },
+      {
+        "ref": "C7",
+        "name": "Capability and talent",
+        "observable_test": "Share of unit leaders certified; the criterion is used in talent reviews"
+      },
+      {
+        "ref": "C8",
+        "name": "Integration playbook",
+        "observable_test": "Days for a new unit to run the first two tiers of the routine"
+      }
+    ],
+    "design_criteria": [
+      {
+        "id": "installs_the_routines_in_a_new_unit_quic",
+        "ref": "DC-1",
+        "name": "Installs the routines in a new unit quickly",
+        "kind": "judged",
+        "weight": 25,
+        "description": "How fast the design gets the operating system running somewhere new"
+      },
+      {
+        "id": "clear_decision_rights_at_the_anchor_laye",
+        "ref": "DC-2",
+        "name": "Clear decision rights at the anchor layer",
+        "kind": "judged",
+        "weight": 20,
+        "description": "One named role makes each recurring decision"
+      },
+      {
+        "id": "protects_and_develops_judgement_in_compl",
+        "ref": "DC-3",
+        "name": "Protects and develops judgement in complex work",
+        "kind": "judged",
+        "weight": 15,
+        "description": "Human judgement is kept where the work needs it"
+      },
+      {
+        "id": "layers_added",
+        "ref": "DC-4",
+        "name": "Layers added",
+        "kind": "measured",
+        "weight": 15,
+        "metric": "layers",
+        "better": "lower"
+      },
+      {
+        "id": "annual_cost_change",
+        "ref": "DC-5",
+        "name": "Annual cost change",
+        "kind": "measured",
+        "weight": 15,
+        "metric": "total_cost",
+        "better": "lower"
+      },
+      {
+        "id": "disruption_people_affected",
+        "ref": "DC-6",
+        "name": "Disruption (people affected)",
+        "kind": "measured",
+        "weight": 10,
+        "metric": "people_affected_pct",
+        "better": "lower"
+      }
+    ],
+    "leapfrog_gate": [
+      {
+        "ref": "LG-1",
+        "test": "Standards for clear, rule-based work are written so a machine can run and check them"
+      },
+      {
+        "ref": "LG-2",
+        "test": "Standards are refreshed on a fixed cadence from how the work is actually done"
+      },
+      {
+        "ref": "LG-3",
+        "test": "AI is built into daily management and problem solving, not bolted on"
+      },
+      {
+        "ref": "LG-4",
+        "test": "Human judgement is protected and developed in complex work"
+      },
+      {
+        "ref": "LG-5",
+        "test": "The design installs faster than competitors can in a new unit"
+      }
+    ],
+    "evidence_rules": [
+      {
+        "rule": "Every finding carries a grade: Confirmed, Indicated or Hypothesis. The grade is the assessor's judgement, made with the evidence in view.",
+        "applies_to": "All apps"
+      },
+      {
+        "rule": "A Hypothesis never drives a decision on its own.",
+        "applies_to": "All apps"
+      },
+      {
+        "rule": "One assessor scores each cell; the rationale and sources are recorded so the score can be challenged.",
+        "applies_to": "Capability Compass"
+      },
+      {
+        "rule": "At least 5 cases behind any step metric.",
+        "applies_to": "Process Map Studio"
+      },
+      {
+        "rule": "At least 30 desire-pulse responses per role group; any task mapping below 0.70 confidence is reviewed by a person.",
+        "applies_to": "Workbench"
+      },
+      {
+        "rule": "Archetype fit stays a Hypothesis until process evidence tests it.",
+        "applies_to": "Org Modeling"
+      },
+      {
+        "rule": "Value figures are estimates until finance validates them.",
+        "applies_to": "All apps"
+      }
+    ],
+    "decision_log": [
+      {
+        "ref": "DEC-01",
+        "stage": "0 Frame",
+        "decision": "Thesis, design principles, reference model, criteria and evidence rules",
+        "owner": "Group Chief Executive",
+        "evidence_required": "Sponsor sign-off",
+        "status": "decided",
+        "date": "2026-03-15T09:00:00Z"
+      },
+      {
+        "ref": "DEC-02",
+        "stage": "1 Focus",
+        "decision": "Which value streams to pilot",
+        "owner": "Divisional CEO",
+        "evidence_required": "Every cluster scored; exclusions stated",
+        "status": "open",
+        "date": null
+      },
+      {
+        "ref": "DEC-03",
+        "stage": "2 Find",
+        "decision": "Which discrepancies to act on",
+        "owner": "Pilot steering group",
+        "evidence_required": "Each graded Confirmed or Indicated",
+        "status": "open",
+        "date": null
+      },
+      {
+        "ref": "DEC-04",
+        "stage": "3 Dial",
+        "decision": "Step dispositions and the top operating-system gaps",
+        "owner": "Pilot steering group",
+        "evidence_required": "Evidence shown for every gap",
+        "status": "open",
+        "date": null
+      },
+      {
+        "ref": "DEC-05",
+        "stage": "4 Design",
+        "decision": "The combined model-and-system design, and first-tranche funding",
+        "owner": "Group executive committee",
+        "evidence_required": "Criteria ranking, leapfrog gate, investment case",
+        "status": "open",
+        "date": null
+      },
+      {
+        "ref": "DEC-06",
+        "stage": "5 Deliver",
+        "decision": "Scale, adjust or stop",
+        "owner": "Group executive committee",
+        "evidence_required": "Scorecard with finance-validated value",
+        "status": "open",
+        "date": null
+      }
+    ]
+  },
+  "clusters": [
+    {
+      "ref": "CAP-01",
+      "name": "Gateway / Hub Services",
+      "desc": "Cargo, ground handling, and hub-of-the-future innovation.",
+      "priority_move": "Scale hub-of-the-future globally + close the safety-culture gap urgently.",
+      "avg_level": 3.25,
+      "trajectory": "Improving",
+      "economic_weight_pct": 21,
+      "exposure_index": 5.3,
+      "value_at_stake": 105,
+      "money_at_risk": 26.3,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-01.Structure",
+          "lens": "Structure",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Reinforced structure",
+          "rationale": "Deputy CEO appointed; three regional CEOs plus a global commercial architecture in place.",
+          "intervention": "Sustain and extend the structure to hub-of-the-future scale.",
+          "grade": "confirmed",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Org announcement Q1",
+              "note": "Leadership structure confirmed",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-01.People",
+          "lens": "People",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Progressing bench",
+          "rationale": "94% contract renewal; two flagship-airline wins; specialist forwarder muscle still building.",
+          "intervention": "Acquire specialist forwarder and product-management talent.",
+          "grade": "indicated",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Workforce file Q2",
+              "note": "Bench-depth analysis",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-01.Process",
+          "lens": "Process",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Live and scaling",
+          "rationale": "Computer-vision cargo readback at 96% accuracy; ops-assist tooling delivering +10–15% productivity across live stations.",
+          "intervention": "Scale the digital hub playbook to all regions.",
+          "grade": "confirmed",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Ops dashboard Q2",
+              "note": "Productivity metrics",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-01.Culture",
+          "lens": "Culture",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Safety concern",
+          "rationale": "Safety engagement 5 points below the high-performance norm; serious-incident count rising; regional trust gap persists in the Americas.",
+          "intervention": "Move safety from policy to embedded culture.",
+          "grade": "confirmed",
+          "trajectory": "Stable",
+          "confidence": "High",
+          "evidence": [
+            {
+              "label": "Engagement survey 2026",
+              "note": "Safety category detail",
+              "ref": null
+            }
+          ],
+          "watch": [
+            "Near-miss reporting rate falls for 2 consecutive months → flip trajectory down and escalate",
+            "Americas pulse below 80 at next quarterly check → re-score Culture"
+          ]
+        }
+      ]
+    },
+    {
+      "ref": "CAP-02",
+      "name": "Food & Catering Solutions",
+      "desc": "Aviation catering and adjacent large-scale food manufacturing.",
+      "priority_move": "Monetise waste-intelligence platform + arrest the cultural decline.",
+      "avg_level": 3.5,
+      "trajectory": "Stable",
+      "economic_weight_pct": 10,
+      "exposure_index": 1.7,
+      "value_at_stake": 50,
+      "money_at_risk": 8.3,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-02.Structure",
+          "lens": "Structure",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Strong structure",
+          "rationale": "New divisional CEO transition confirmed; mature three-tier model operating across six geographies.",
+          "intervention": "Sustain.",
+          "grade": "confirmed",
+          "trajectory": "Stable",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Org announcement Q2",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-02.People",
+          "lens": "People",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Deep bench",
+          "rationale": "Two major account wins; deep culinary and food-tech talent distributed globally.",
+          "intervention": "Sustain and rotate top talent across regions.",
+          "grade": "indicated",
+          "trajectory": "Stable",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Talent review Q2",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-02.Process",
+          "lens": "Process",
+          "level": 4,
+          "level_label": "Established",
+          "status": "AI-enabled supply chain",
+          "rationale": "AI-powered supply-chain control tower live; flagship facility at 32K meals/day; waste-to-value pilot operational.",
+          "intervention": "Monetise waste intelligence at network scale.",
+          "grade": "confirmed",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Ops review Q2",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-02.Culture",
+          "lens": "Culture",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Declining signals",
+          "rationale": "Engagement −2, integrity −4, excellence −4 versus prior year; high pride in innovation but mixed frontline signals.",
+          "intervention": "Diagnose the root cause and reset.",
+          "grade": "indicated",
+          "trajectory": "At risk",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Engagement survey 2026",
+              "note": "Divisional cut",
+              "ref": null
+            }
+          ],
+          "watch": []
+        }
+      ]
+    },
+    {
+      "ref": "CAP-03",
+      "name": "Technology, Data & AI",
+      "desc": "Operational excellence, technology, and data & AI as one discipline.",
+      "priority_move": "Scale the digital core + drive data standardisation + AI CoE globally.",
+      "avg_level": 3.25,
+      "trajectory": "Improving",
+      "economic_weight_pct": 30,
+      "exposure_index": 7.5,
+      "value_at_stake": 160,
+      "money_at_risk": 40,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-03.Structure",
+          "lens": "Structure",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Unified discipline",
+          "rationale": "Chief Digital Officer in place; tech, data and operational excellence consolidated as one discipline; AI CoE framework live.",
+          "intervention": "Sustain and scale the AI Centre of Excellence.",
+          "grade": "confirmed",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Operating model paper",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-03.People",
+          "lens": "People",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Building bench",
+          "rationale": "Key AI capabilities acquired via build/borrow/buy; engineering bench under construction.",
+          "intervention": "Continue aggressive acquisition and global upskilling.",
+          "grade": "indicated",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Workforce file Q2",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-03.Process",
+          "lens": "Process",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "In build & scaling",
+          "rationale": "Core data programme started; ERP, CRM and planning systems commenced; managed-services deal approved.",
+          "intervention": "Complete data standardisation as priority #1.",
+          "grade": "indicated",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Programme board pack",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-03.Culture",
+          "lens": "Culture",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Mindset shifting",
+          "rationale": "AI upskilling curriculum live; growth-mindset campaign running; innovation permission still uneven.",
+          "intervention": "Unblock innovation permission at pace.",
+          "grade": "hypothesis",
+          "trajectory": "Stable",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Engagement survey 2026",
+              "note": "Growth category",
+              "ref": null
+            }
+          ],
+          "watch": []
+        }
+      ]
+    },
+    {
+      "ref": "CAP-04",
+      "name": "Commercial Leadership",
+      "desc": "Global accounts, pricing, bid management, and customer value.",
+      "priority_move": "Fill the commercial bench + activate global accounts + per-country growth plans.",
+      "avg_level": 3,
+      "trajectory": "Improving",
+      "economic_weight_pct": 22,
+      "exposure_index": 7.3,
+      "value_at_stake": 120,
+      "money_at_risk": 40,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-04.Structure",
+          "lens": "Structure",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Architecture defined",
+          "rationale": "Chief Commercial Officer in place with a full six-part commercial architecture designed.",
+          "intervention": "Complete staffing at pace.",
+          "grade": "confirmed",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Org announcement Q1",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-04.People",
+          "lens": "People",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Bench gaps",
+          "rationale": "Structure defined but pricing, revenue management, and bid-solution architect roles not yet visibly staffed.",
+          "intervention": "Acquire pricing, RevOps, and bid architects urgently.",
+          "grade": "confirmed",
+          "trajectory": "Stable",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Workforce file Q2",
+              "note": "Open-roles report",
+              "ref": null
+            }
+          ],
+          "watch": [
+            "Fewer than 3 specialist offers accepted by end of quarter → bench gap persists, hold L2 and flag to board"
+          ]
+        },
+        {
+          "ref": "CAP-04.Process",
+          "lens": "Process",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "In rollout",
+          "rationale": "CRM programme commenced; contract-lifecycle system underway; multi-year EBITDA uplift targeted.",
+          "intervention": "Complete the CRM + CPQ + CLM stack.",
+          "grade": "indicated",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Programme board pack",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": [
+            "CRM adoption below 60% at 90 days post-launch → flip trajectory down (adoption gap predicts stall)"
+          ]
+        },
+        {
+          "ref": "CAP-04.Culture",
+          "lens": "Culture",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Shift underway",
+          "rationale": "Brand architecture rolling out; commercial mindset shift underway; regional trust variance remains.",
+          "intervention": "Anchor the commercial narrative + rebuild regional trust.",
+          "grade": "hypothesis",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Engagement survey 2026",
+              "note": "Regional cut",
+              "ref": null
+            }
+          ],
+          "watch": []
+        }
+      ]
+    },
+    {
+      "ref": "CAP-05",
+      "name": "Enterprise Leadership",
+      "desc": "Leadership bench, succession, and organisational effectiveness.",
+      "priority_move": "Scale leadership development globally + close the bottom-quintile long tail.",
+      "avg_level": 3.5,
+      "trajectory": "Stable",
+      "economic_weight_pct": 12,
+      "exposure_index": 2,
+      "value_at_stake": 60,
+      "money_at_risk": 10,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-05.Structure",
+          "lens": "Structure",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Functionalised",
+          "rationale": "Global corporate functions functionalised; enterprise leadership seats filled.",
+          "intervention": "Sustain + build OD/change specialist capability.",
+          "grade": "confirmed",
+          "trajectory": "Stable",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Operating model paper",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-05.People",
+          "lens": "People",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Exceptional bench",
+          "rationale": "90%+ of top-two leadership tiers have internal successors ready within 0–3 years; top-talent density within norm.",
+          "intervention": "Sustain + close the 20% leadership long tail.",
+          "grade": "confirmed",
+          "trajectory": "Stable",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Talent review Q2",
+              "note": "Succession data",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-05.Process",
+          "lens": "Process",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Frameworks live",
+          "rationale": "Group balanced scorecard live for the top 450 leaders; global governance matrix operating.",
+          "intervention": "Establish an enterprise PMO + capital-allocation discipline.",
+          "grade": "indicated",
+          "trajectory": "Stable",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Programme board pack",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-05.Culture",
+          "lens": "Culture",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Improving",
+          "rationale": "Leadership category +1 versus prior year; a 20% long tail of leaders scores at or below threshold; behaviour standards codified.",
+          "intervention": "Close the bottom quintile + embed non-negotiable behaviours.",
+          "grade": "indicated",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Engagement survey 2026",
+              "note": "Leadership category",
+              "ref": null
+            }
+          ],
+          "watch": []
+        }
+      ]
+    },
+    {
+      "ref": "CAP-06",
+      "name": "Human Capital & Enabling",
+      "desc": "Future-ready HR, finance, and support capabilities.",
+      "priority_move": "Build people analytics + activate the engagement framework at scale.",
+      "avg_level": 3.25,
+      "trajectory": "Improving",
+      "economic_weight_pct": 5,
+      "exposure_index": 1.3,
+      "value_at_stake": 25,
+      "money_at_risk": 6.3,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-06.Structure",
+          "lens": "Structure",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Functionalised",
+          "rationale": "CHRO in place; fully functionalised human-capital organisation.",
+          "intervention": "Add a people-analytics function.",
+          "grade": "confirmed",
+          "trajectory": "Stable",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Org announcement Q1",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-06.People",
+          "lens": "People",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Specialist gaps",
+          "rationale": "Key HC capabilities acquired via build/borrow/buy; people-analytics function still not visible.",
+          "intervention": "Build people analytics + specialist talent-acquisition capability.",
+          "grade": "indicated",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Workforce file Q2",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-06.Process",
+          "lens": "Process",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Progressive rollout",
+          "rationale": "HRIS rollout in progress across regions; global data alignment for performance, goals, and learning underway.",
+          "intervention": "Complete HRIS + build the data foundation for people analytics.",
+          "grade": "indicated",
+          "trajectory": "Improving",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Programme board pack",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-06.Culture",
+          "lens": "Culture",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Values embedded",
+          "rationale": "People values embedded; global town halls running; engagement framework live.",
+          "intervention": "Activate the engagement framework at scale + own the remedy first.",
+          "grade": "hypothesis",
+          "trajectory": "Stable",
+          "confidence": "Medium",
+          "evidence": [
+            {
+              "label": "Engagement survey 2026",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        }
+      ]
+    }
+  ],
+  "levers": [
+    {
+      "ref": "LV-01",
+      "name": "Revenue quality",
+      "figure": "$6,345M · +9%",
+      "economic_weight_pct": 22,
+      "value_at_stake": 120,
+      "validated": false,
+      "capability": "Commercial operating model, pricing & revenue management, bid architecture, global key accounts",
+      "cluster_ref": "CAP-04"
+    },
+    {
+      "ref": "LV-02",
+      "name": "Staff-cost productivity",
+      "figure": "$3,425M · ~54% of revenue",
+      "economic_weight_pct": 30,
+      "value_at_stake": 160,
+      "validated": false,
+      "capability": "AI workforce optimisation, predictive rostering, job redesign, workforce analytics",
+      "cluster_ref": "CAP-03"
+    },
+    {
+      "ref": "LV-03",
+      "name": "Food input & materials",
+      "figure": "$574M",
+      "economic_weight_pct": 10,
+      "value_at_stake": 50,
+      "validated": false,
+      "capability": "Culinary innovation, food technology, procurement, waste intelligence",
+      "cluster_ref": "CAP-02"
+    },
+    {
+      "ref": "LV-04",
+      "name": "Assets & capital",
+      "figure": "$603M · capex ~5%",
+      "economic_weight_pct": 14,
+      "value_at_stake": 70,
+      "validated": false,
+      "capability": "Hub development & automation engineering, asset management, capital-allocation governance",
+      "cluster_ref": "CAP-01"
+    },
+    {
+      "ref": "LV-05",
+      "name": "Synergy & integration",
+      "figure": "$696M subcontracting",
+      "economic_weight_pct": 12,
+      "value_at_stake": 60,
+      "validated": false,
+      "capability": "M&A integration leadership, PMO & benefits realisation, shared-services automation",
+      "cluster_ref": "CAP-05"
+    },
+    {
+      "ref": "LV-06",
+      "name": "Licence to operate",
+      "figure": "Enterprise priority #1",
+      "economic_weight_pct": 7,
+      "value_at_stake": 35,
+      "validated": false,
+      "capability": "Safety & HSSE leadership, security, quality and compliance",
+      "cluster_ref": "CAP-01"
+    },
+    {
+      "ref": "LV-07",
+      "name": "People & enabling cost base",
+      "figure": "Corporate functions",
+      "economic_weight_pct": 5,
+      "value_at_stake": 25,
+      "validated": false,
+      "capability": "People analytics, HRIS, procurement, shared services",
+      "cluster_ref": "CAP-06"
+    }
+  ],
+  "roles": [
+    {
+      "ref": "RL-001",
+      "title": "Regional VP Cargo",
+      "status": "exists",
+      "cluster_ref": "CAP-01",
+      "criticality_index": 4.2,
+      "tacit_intensity": 4.2,
+      "route": "dual",
+      "note": "Owns regional cargo P&L and trade-lane strategy."
+    },
+    {
+      "ref": "RL-002",
+      "title": "Cargo & Pharma Manager (cold-chain certified)",
+      "status": "exists",
+      "cluster_ref": "CAP-01",
+      "criticality_index": 4.6,
+      "tacit_intensity": 4.5,
+      "route": "dual",
+      "note": "Certification is a contract gatekeeper for the highest-margin lane."
+    },
+    {
+      "ref": "RL-003",
+      "title": "Load Control / Weight & Balance Officer",
+      "status": "exists",
+      "cluster_ref": "CAP-01",
+      "criticality_index": 2.8,
+      "tacit_intensity": 4,
+      "route": "specialist",
+      "note": "Safety-critical loading judgement; years to master."
+    },
+    {
+      "ref": "RL-004",
+      "title": "Hub Duty Controller (disruption)",
+      "status": "thin",
+      "cluster_ref": "CAP-01",
+      "criticality_index": 3,
+      "tacit_intensity": 4.5,
+      "route": "specialist",
+      "note": "Real-time judgement across the whole operation; pattern recognition built over years."
+    },
+    {
+      "ref": "RL-005",
+      "title": "Executive Chef — Culinary Design",
+      "status": "exists",
+      "cluster_ref": "CAP-02",
+      "criticality_index": 3.4,
+      "tacit_intensity": 4.8,
+      "route": "specialist",
+      "note": "Customer-specific palate calibration; brand-defining and hard to codify."
+    },
+    {
+      "ref": "RL-006",
+      "title": "Food Safety & Quality Lead",
+      "status": "exists",
+      "cluster_ref": "CAP-02",
+      "criticality_index": 3.2,
+      "tacit_intensity": 3.3,
+      "route": "standard",
+      "note": "Licence-to-operate role across all facilities."
+    },
+    {
+      "ref": "RL-007",
+      "title": "Head, Analytics & AI",
+      "status": "thin",
+      "cluster_ref": "CAP-03",
+      "criticality_index": 4.8,
+      "tacit_intensity": 2.5,
+      "route": "critical",
+      "note": "Enabler of the workforce-optimisation programme — the largest in-year margin lever."
+    },
+    {
+      "ref": "RL-008",
+      "title": "Head, Data Engineering & Platform",
+      "status": "thin",
+      "cluster_ref": "CAP-03",
+      "criticality_index": 4.8,
+      "tacit_intensity": 2.5,
+      "route": "critical",
+      "note": "The data spine every commercial and ops decision rides on."
+    },
+    {
+      "ref": "RL-009",
+      "title": "Core-system super-user",
+      "status": "exists",
+      "cluster_ref": "CAP-03",
+      "criticality_index": 2.3,
+      "tacit_intensity": 4,
+      "route": "specialist",
+      "note": "Undocumented workarounds live in a few heads; continuity risk."
+    },
+    {
+      "ref": "RL-010",
+      "title": "People Analytics & Workforce Planning Lead",
+      "status": "absent",
+      "cluster_ref": "CAP-03",
+      "criticality_index": 4,
+      "tacit_intensity": 2.5,
+      "route": "critical",
+      "note": "Engine for the staff-cost lever and peak-coverage productivity."
+    },
+    {
+      "ref": "RL-011",
+      "title": "Head of Pricing / Revenue Management",
+      "status": "absent",
+      "cluster_ref": "CAP-04",
+      "criticality_index": 4.6,
+      "tacit_intensity": 2.5,
+      "route": "critical",
+      "note": "The scarce technical keystone; without it pricing fragments across sales, finance and ops."
+    },
+    {
+      "ref": "RL-012",
+      "title": "Global Head, Commercial Excellence",
+      "status": "absent",
+      "cluster_ref": "CAP-04",
+      "criticality_index": 4.2,
+      "tacit_intensity": 3,
+      "route": "critical",
+      "note": "No enterprise owner of win-rate, renewal and pricing discipline."
+    },
+    {
+      "ref": "RL-013",
+      "title": "Bid & Solutions Architect",
+      "status": "absent",
+      "cluster_ref": "CAP-04",
+      "criticality_index": 4.1,
+      "tacit_intensity": 3.3,
+      "route": "critical",
+      "note": "Live bid economics — hard-to-fake technical depth."
+    },
+    {
+      "ref": "RL-014",
+      "title": "VP Global Account Management",
+      "status": "exists",
+      "cluster_ref": "CAP-04",
+      "criticality_index": 4,
+      "tacit_intensity": 4,
+      "route": "dual",
+      "note": "Converts network breadth into wallet share; renewal cliffs are the real margin."
+    },
+    {
+      "ref": "RL-015",
+      "title": "Regional Managing Director",
+      "status": "exists",
+      "cluster_ref": "CAP-05",
+      "criticality_index": 4,
+      "tacit_intensity": 4,
+      "route": "dual",
+      "note": "Owns regional P&L, service reliability and renewals."
+    },
+    {
+      "ref": "RL-016",
+      "title": "Station Head / General Manager",
+      "status": "exists",
+      "cluster_ref": "CAP-05",
+      "criticality_index": 3,
+      "tacit_intensity": 4.2,
+      "route": "specialist",
+      "note": "Airport-authority and union relationships built over years."
+    },
+    {
+      "ref": "RL-017",
+      "title": "M&A / Integration Lead",
+      "status": "absent",
+      "cluster_ref": "CAP-05",
+      "criticality_index": 3.8,
+      "tacit_intensity": 3.2,
+      "route": "critical",
+      "note": "Value leaks fastest at integration; protects deal synergies."
+    },
+    {
+      "ref": "RL-018",
+      "title": "Organisation Design & Change Lead",
+      "status": "absent",
+      "cluster_ref": "CAP-06",
+      "criticality_index": 3.4,
+      "tacit_intensity": 3.3,
+      "route": "standard",
+      "note": "The adoption layer that makes major programmes land at the frontline."
+    },
+    {
+      "ref": "RL-019",
+      "title": "Head of Talent Acquisition — specialist hiring",
+      "status": "thin",
+      "cluster_ref": "CAP-06",
+      "criticality_index": 3,
+      "tacit_intensity": 2.7,
+      "route": "standard",
+      "note": "Feeds every acquire-first gap on the register."
+    }
+  ],
+  "signals": [],
+  "pilots": [
+    {
+      "ref": "VS-02",
+      "cluster_ref": "CAP-03",
+      "name": "Roster to shift cover",
+      "process_kpi": "Overtime and agency hours per 1,000 handled units",
+      "reason": "Carries the largest lever; rollout under way, bench thin."
+    },
+    {
+      "ref": "VS-01",
+      "cluster_ref": "CAP-04",
+      "name": "Bid to contract renewal",
+      "process_kpi": "Win rate on renewals; days from bid request to signed contract",
+      "reason": "Largest weak-and-owned exposure; three anchor seats absent."
+    }
+  ],
+  "exclusions": [
+    {
+      "cluster_ref": "CAP-01",
+      "name": "Gateway / Hub Services",
+      "decision": "later",
+      "reason": "Process already Established; revisit once the safety-culture work reports."
+    },
+    {
+      "cluster_ref": "CAP-02",
+      "name": "Food & Catering Solutions",
+      "decision": "later",
+      "reason": "Culture decline needs diagnosis before a process pilot would hold."
+    },
+    {
+      "cluster_ref": "CAP-05",
+      "name": "Enterprise Leadership",
+      "decision": "out",
+      "reason": "Strong and steady; no process pilot needed this cycle."
+    },
+    {
+      "cluster_ref": "CAP-06",
+      "name": "Human Capital & Enabling",
+      "decision": "out",
+      "reason": "Small economic weight; covered by the HRIS programme."
+    }
+  ],
+  "readiness": {
+    "ready": true,
+    "verdict": "Ready to hand off",
+    "open": []
+  },
+  "for_apps": {
+    "org_modeling": {
+      "how": "Paste strategy_text into the strategy box and enter design_criteria in Compare options. Upload the org file there; it is not part of this packet.",
+      "strategy_text": "Who we serve: Airlines, freight forwarders and food-service customers who need reliable turnarounds at scale.\nThe outcome we sell: Aircraft and cargo that leave on time, safely, with nothing left behind.\nThe profit formula: Paid per unit handled; margin comes from labour productivity and renewal pricing.\nThe moat: Licences, network breadth and judgement built over years in safety-critical work.\nThe scale logic: Each new station is cheaper to bring up once the operating routines are standard.\n\nDesign principles:\nP1 Decisions are made at the station, by one named role.\nP2 Standard work is written once and run everywhere.\nP3 AI takes the rule-based work; people keep the judgement.\nP4 Capability is built ahead of growth, not after it.\n\nCapability priorities (highest value exposure first):\nCAP-03 Technology, Data & AI — maturity 3.25/4, improving, 30% of economic weight. Priority move: Scale the digital core + drive data standardisation + AI CoE globally.\nCAP-04 Commercial Leadership — maturity 3/4, improving, 22% of economic weight. Priority move: Fill the commercial bench + activate global accounts + per-country growth plans.\nCAP-01 Gateway / Hub Services — maturity 3.25/4, improving, 21% of economic weight. Priority move: Scale hub-of-the-future globally + close the safety-culture gap urgently.\nCAP-05 Enterprise Leadership — maturity 3.5/4, stable, 12% of economic weight. Priority move: Scale leadership development globally + close the bottom-quintile long tail.\nCAP-02 Food & Catering Solutions — maturity 3.5/4, stable, 10% of economic weight. Priority move: Monetise waste-intelligence platform + arrest the cultural decline.\nCAP-06 Human Capital & Enabling — maturity 3.25/4, improving, 5% of economic weight. Priority move: Build people analytics + activate the engagement framework at scale.",
+      "design_criteria": [
+        {
+          "id": "installs_the_routines_in_a_new_unit_quic",
+          "ref": "DC-1",
+          "name": "Installs the routines in a new unit quickly",
+          "kind": "judged",
+          "weight": 25,
+          "description": "How fast the design gets the operating system running somewhere new"
+        },
+        {
+          "id": "clear_decision_rights_at_the_anchor_laye",
+          "ref": "DC-2",
+          "name": "Clear decision rights at the anchor layer",
+          "kind": "judged",
+          "weight": 20,
+          "description": "One named role makes each recurring decision"
+        },
+        {
+          "id": "protects_and_develops_judgement_in_compl",
+          "ref": "DC-3",
+          "name": "Protects and develops judgement in complex work",
+          "kind": "judged",
+          "weight": 15,
+          "description": "Human judgement is kept where the work needs it"
+        },
+        {
+          "id": "layers_added",
+          "ref": "DC-4",
+          "name": "Layers added",
+          "kind": "measured",
+          "weight": 15,
+          "metric": "layers",
+          "better": "lower"
+        },
+        {
+          "id": "annual_cost_change",
+          "ref": "DC-5",
+          "name": "Annual cost change",
+          "kind": "measured",
+          "weight": 15,
+          "metric": "total_cost",
+          "better": "lower"
+        },
+        {
+          "id": "disruption_people_affected",
+          "ref": "DC-6",
+          "name": "Disruption (people affected)",
+          "kind": "measured",
+          "weight": 10,
+          "metric": "people_affected_pct",
+          "better": "lower"
+        }
+      ],
+      "structure_lens": [
+        {
+          "ref": "CAP-01.Structure",
+          "cluster": "Gateway / Hub Services",
+          "level": "Established",
+          "status": "Reinforced structure",
+          "grade": "confirmed"
+        },
+        {
+          "ref": "CAP-02.Structure",
+          "cluster": "Food & Catering Solutions",
+          "level": "Established",
+          "status": "Strong structure",
+          "grade": "confirmed"
+        },
+        {
+          "ref": "CAP-03.Structure",
+          "cluster": "Technology, Data & AI",
+          "level": "Established",
+          "status": "Unified discipline",
+          "grade": "confirmed"
+        },
+        {
+          "ref": "CAP-04.Structure",
+          "cluster": "Commercial Leadership",
+          "level": "Established",
+          "status": "Architecture defined",
+          "grade": "confirmed"
+        },
+        {
+          "ref": "CAP-05.Structure",
+          "cluster": "Enterprise Leadership",
+          "level": "Established",
+          "status": "Functionalised",
+          "grade": "confirmed"
+        },
+        {
+          "ref": "CAP-06.Structure",
+          "cluster": "Human Capital & Enabling",
+          "level": "Established",
+          "status": "Functionalised",
+          "grade": "confirmed"
+        }
+      ]
+    },
+    "process_map_studio": {
+      "how": "Open one engagement per pilot. Put process_kpi on the scope card and use the prompts in the interviews.",
+      "engagements": [
+        {
+          "name": "MERIDIAN VS-02 Roster to shift cover",
+          "process_name": "Roster to shift cover",
+          "process_kpi": "Overtime and agency hours per 1,000 handled units",
+          "industry": "Aviation, Logistics & Transportation",
+          "in_scope_roles": [
+            "Head, Analytics & AI",
+            "Head, Data Engineering & Platform",
+            "Core-system super-user",
+            "People Analytics & Workforce Planning Lead"
+          ],
+          "interview_prompts": []
+        },
+        {
+          "name": "MERIDIAN VS-01 Bid to contract renewal",
+          "process_name": "Bid to contract renewal",
+          "process_kpi": "Win rate on renewals; days from bid request to signed contract",
+          "industry": "Aviation, Logistics & Transportation",
+          "in_scope_roles": [
+            "Head of Pricing / Revenue Management",
+            "Global Head, Commercial Excellence",
+            "Bid & Solutions Architect",
+            "VP Global Account Management"
+          ],
+          "interview_prompts": [
+            "CAP-04.People People is Early: Structure defined but pricing, revenue management, and bid-solution architect roles not yet visibly staffed. Watch: Fewer than 3 specialist offers accepted by end of quarter → bench gap persists, hold L2 and flag to board",
+            "CAP-04.Process Process is Emerging: CRM programme commenced; contract-lifecycle system underway; multi-year EBITDA uplift targeted. Watch: CRM adoption below 60% at 90 days post-launch → flip trajectory down (adoption gap predicts stall)"
+          ]
+        }
+      ]
+    },
+    "workbench": {
+      "how": "Create one engagement with this name and load the same org file. Start Task Intelligence with these roles.",
+      "engagement_name": "MERIDIAN Meridian Group (fictional demo)",
+      "roles": [
+        {
+          "ref": "RL-001",
+          "title": "Regional VP Cargo",
+          "cluster_ref": "CAP-01",
+          "route": "dual",
+          "status": "exists"
+        },
+        {
+          "ref": "RL-002",
+          "title": "Cargo & Pharma Manager (cold-chain certified)",
+          "cluster_ref": "CAP-01",
+          "route": "dual",
+          "status": "exists"
+        },
+        {
+          "ref": "RL-007",
+          "title": "Head, Analytics & AI",
+          "cluster_ref": "CAP-03",
+          "route": "critical",
+          "status": "thin"
+        },
+        {
+          "ref": "RL-008",
+          "title": "Head, Data Engineering & Platform",
+          "cluster_ref": "CAP-03",
+          "route": "critical",
+          "status": "thin"
+        },
+        {
+          "ref": "RL-009",
+          "title": "Core-system super-user",
+          "cluster_ref": "CAP-03",
+          "route": "specialist",
+          "status": "exists"
+        },
+        {
+          "ref": "RL-010",
+          "title": "People Analytics & Workforce Planning Lead",
+          "cluster_ref": "CAP-03",
+          "route": "critical",
+          "status": "absent"
+        },
+        {
+          "ref": "RL-011",
+          "title": "Head of Pricing / Revenue Management",
+          "cluster_ref": "CAP-04",
+          "route": "critical",
+          "status": "absent"
+        },
+        {
+          "ref": "RL-012",
+          "title": "Global Head, Commercial Excellence",
+          "cluster_ref": "CAP-04",
+          "route": "critical",
+          "status": "absent"
+        },
+        {
+          "ref": "RL-013",
+          "title": "Bid & Solutions Architect",
+          "cluster_ref": "CAP-04",
+          "route": "critical",
+          "status": "absent"
+        },
+        {
+          "ref": "RL-014",
+          "title": "VP Global Account Management",
+          "cluster_ref": "CAP-04",
+          "route": "dual",
+          "status": "exists"
+        },
+        {
+          "ref": "RL-015",
+          "title": "Regional Managing Director",
+          "cluster_ref": "CAP-05",
+          "route": "dual",
+          "status": "exists"
+        },
+        {
+          "ref": "RL-017",
+          "title": "M&A / Integration Lead",
+          "cluster_ref": "CAP-05",
+          "route": "critical",
+          "status": "absent"
+        }
+      ]
+    }
+  }
+}
