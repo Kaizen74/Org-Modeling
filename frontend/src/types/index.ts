@@ -727,6 +727,7 @@ export interface ComparisonCriterion {
   metric?: string; // measured: a ScenarioHeadline key or people_affected_pct
   better?: 'higher' | 'lower';
   description?: string;
+  ref?: string; // Compass design-criterion ID (DC-n), kept exactly as imported
 }
 
 export interface Judgment {
@@ -843,4 +844,73 @@ export interface ImplementationPlan extends ScenarioSummary {
   };
   risks: ImplementationRisk[];
   waves: ImplementationWave[];
+}
+
+// ---------- Shared workflow language (Capability Compass hand-off) ----------
+
+export type Grade = 'confirmed' | 'indicated' | 'hypothesis';
+export type HypothesisStatus = 'open' | 'supported' | 'refuted';
+
+export interface CompassEngagement {
+  key: string;
+  name?: string;
+  organisation?: string;
+  industry?: string;
+  scope?: string;
+  generated_at?: string;
+  format_version?: string;
+}
+
+export interface CompassContextData {
+  structure_lens: Array<{ ref: string; cluster: string; level: string; status: string; grade: Grade }>;
+  clusters: Array<{ ref: string; name: string; priority_move?: string; avg_level?: number; trajectory?: string; economic_weight_pct?: number }>;
+}
+
+export interface Hypothesis {
+  ref: string; // H1, H2… never reused
+  statement: string;
+  refuted_by: string;
+  status: HypothesisStatus;
+  note: string;
+}
+
+export interface SharedFinding {
+  ref: string;
+  kind: 'structural_baseline' | 'work_activity' | 'hypothesis' | 'option_score';
+  title: string;
+  detail: string;
+  figure: string;
+  evidence_class?: EvidenceClass | null;
+  suggested_grade: Grade;
+  grade: Grade;
+  grade_set_by_you: boolean;
+  relates_to: string[];
+  source_note: string;
+}
+
+export interface CompassState {
+  engagement: CompassEngagement | null;
+  imported_at: string | null;
+  strategy_draft: string;
+  context: CompassContextData;
+  refs: Array<{ ref: string; label: string }>;
+  hypotheses: Hypothesis[];
+  grades: Grade[];
+  grade_labels: Record<Grade, string>;
+  evidence_to_grade: Record<string, Grade>;
+  grade_overrides: Record<string, Grade>;
+  hypothesis_statuses: HypothesisStatus[];
+  findings: SharedFinding[];
+  applied?: string[];
+  warnings?: string[];
+}
+
+export interface CompassPreview {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+  engagement?: CompassEngagement;
+  criteria?: { action: 'set' | 'ask' | 'same' | 'none' | 'invalid'; note: string; incoming: ComparisonCriterion[]; problems: string[]; current_count: number };
+  strategy?: { action: 'set' | 'ask' | 'same' | 'none'; note: string; incoming: string; current: string };
+  context?: { structure_findings: number; clusters: number; ids: number };
 }

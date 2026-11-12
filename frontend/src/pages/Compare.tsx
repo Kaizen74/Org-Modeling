@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { comparisonApi } from '../services/api';
 import type { ComparisonCriterion, ComparisonPayload } from '../types';
 import { PageHeader, Section, Callout, EmptyState, Loading, Chip, formatMoney } from '../components/ui';
+import { CompassContext, CompassImport, useCompass } from '../components/Compass';
 
 /** Sequential ink shading for 0-100 cells: darker = stronger. */
 function cellStyle(score: number | null | undefined) {
@@ -55,6 +56,7 @@ function CriteriaEditor({ data, onSaved }: { data: ComparisonPayload; onSaved: (
           {rows.map((r, i) => (
             <tr key={i} className="hairline-b">
               <td className="px-5 py-2.5">
+                {r.ref && <span className="tabular mb-1 block text-[11px] font-semibold text-primary-700">{r.ref}</span>}
                 <input className="input min-w-[240px] py-1.5" value={r.name} onChange={(e) => update(i, { name: e.target.value })} aria-label="Criterion name" />
               </td>
               <td className="px-3 py-2.5">
@@ -110,6 +112,8 @@ export default function Compare() {
   const [draft, setDraft] = useState<{ score: number | null; rationale: string }>({ score: null, rationale: '' });
   const [suggesting, setSuggesting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const [compass] = useCompass();
 
   useEffect(() => {
     comparisonApi.get().then(setData).catch(() => setError('Upload an org structure CSV first.')).finally(() => setLoading(false));
@@ -176,6 +180,7 @@ export default function Compare() {
         ) : undefined}
       />
       {notice && <div className="mb-8"><Callout label="Suggestions" tone="accent">{notice}</Callout></div>}
+      <CompassContext state={compass} />
 
       <Section eyebrow="01 · Options against criteria" title="Weighted scores" lede="Darker cells score higher. Click a judged cell to score it; AI suggestions are marked and can be changed.">
         <div className="card overflow-x-auto p-0">
@@ -185,6 +190,7 @@ export default function Compare() {
                 <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">Option</th>
                 {criteria.map((c) => (
                   <th key={c.id} className="px-2 py-3 text-center">
+                    {c.ref && <span className="tabular block text-[11px] font-semibold text-primary-700">{c.ref}</span>}
                     <span className="block text-[12px] font-semibold text-ink">{c.name}</span>
                     <span className="block text-[11px] text-faint">{c.kind === 'measured' ? 'measured' : 'judged'} · {Math.round((c.weight / totalWeight) * 100)}%</span>
                   </th>
@@ -260,7 +266,8 @@ export default function Compare() {
             </div>
             {judgments[editing.optionId]?.[editing.criterionId]?.source === 'ai' && (
               <p className="mb-3 text-xs text-faint">
-                AI suggestion · {judgments[editing.optionId][editing.criterionId].evidence_class ?? 'evidence not stated'} · confidence {judgments[editing.optionId][editing.criterionId].confidence ?? '—'}
+                AI suggestion · {judgments[editing.optionId][editing.criterionId].evidence_class ?? 'evidence not stated'}
+                {compass?.evidence_to_grade[judgments[editing.optionId][editing.criterionId].evidence_class ?? ''] && ` · suggested grade ${compass.grade_labels[compass.evidence_to_grade[judgments[editing.optionId][editing.criterionId].evidence_class ?? '']]}`} · confidence {judgments[editing.optionId][editing.criterionId].confidence ?? '—'}
               </p>
             )}
             <label className="label" htmlFor="rationale">Reason</label>
@@ -281,6 +288,9 @@ export default function Compare() {
 
       <Section eyebrow="02 · Your design criteria" title="What matters, and how much" lede="Name the criteria from your design brief and weight them. Measured criteria are scored automatically from each option.">
         <CriteriaEditor data={data} onSaved={setData} />
+        <div className="mt-5">
+          <CompassImport onImported={async () => setData(await comparisonApi.get())} />
+        </div>
       </Section>
 
       <Section eyebrow="03 · The figures behind the measured scores">

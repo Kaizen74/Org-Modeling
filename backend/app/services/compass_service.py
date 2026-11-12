@@ -226,7 +226,8 @@ def _work_findings(wa: Dict) -> List[Dict]:
                 continue
             seen.add(ref)
             detail = item.get("business_impact") or item.get("business_risk") or item.get("current_state") or ""
-            where = ", ".join(item.get("affected_departments") or [d for d in (item.get("from_department"), item.get("to_department")) if d])
+            where = ", ".join(dict.fromkeys(
+                item.get("affected_departments") or [d for d in (item.get("from_department"), item.get("to_department")) if d]))
             out.append({
                 "ref": ref, "kind": "work_activity", "title": f"{label}: {item[title_field]}",
                 "detail": "; ".join(x for x in (detail, f"Departments: {where}" if where else "") if x),

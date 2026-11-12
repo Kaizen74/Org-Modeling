@@ -4,6 +4,7 @@
 set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 MOCK_DIR="$ROOT/scripts/mock_journey"
+PACKET="$ROOT/backend/tests/fixtures/meridian_compass_handoff.json"  # sample Capability Compass hand-off (fictional)
 
 # Servers and scratch folders started below; all stopped/removed on exit, pass or fail
 PIDS=""; TMPS=""
@@ -52,7 +53,7 @@ MOCK="$(mktemp -d)"; TMPS="$TMPS $MOCK"
 python "$MOCK_DIR/make_org.py" "$MOCK/org.csv" > /dev/null
 start_fake_api 8766 "$MOCK/api"
 wait_for "http://localhost:8766/health"
-python "$MOCK_DIR/journey_api.py" "http://localhost:8766" "$MOCK/org.csv" "$MOCK/api/prompts.jsonl" \
+python "$MOCK_DIR/journey_api.py" "http://localhost:8766" "$MOCK/org.csv" "$MOCK/api/prompts.jsonl" "$PACKET" \
   || { echo "Backend log (last lines):"; tail -20 "$MOCK/api/api.log"; exit 1; }
 if [ -z "$PW" ]; then
   echo "SKIPPED browser half: Playwright not installed on this machine"
@@ -61,7 +62,7 @@ else
   start_fake_api 8767 "$MOCK/ui"
   start_web 4766 8767 "$MOCK/web.log"
   wait_for "http://localhost:8767/health"; wait_for "http://localhost:4766/"
-  node "$MOCK_DIR/journey_ui.mjs" "http://localhost:4766" "$PW/index.js" "$MOCK/org.csv" \
+  node "$MOCK_DIR/journey_ui.mjs" "http://localhost:4766" "$PW/index.js" "$MOCK/org.csv" "$PACKET" \
     || { echo "Backend log (last lines):"; tail -20 "$MOCK/ui/api.log"; exit 1; }
 fi
 

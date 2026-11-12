@@ -1,8 +1,11 @@
 // Browser journey: a practitioner's full path through the UI, against the backend
 // with the fake Claude (fake_claude_server.py) and the sample org from make_org.py.
 // Run by run_checks.sh step 5 on a fresh database.
-// Usage: node journey_ui.mjs <frontend-url> <playwright-module> <csv> [screenshots-dir]
-const [base, pwPath, csvPath, shots] = process.argv.slice(2);
+// Usage: node journey_ui.mjs <frontend-url> <playwright-module> <csv> <compass_handoff.json> [screenshots-dir]
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+const [base, pwPath, csvPath, packetPath, shots] = process.argv.slice(2);
 const { chromium } = (await import(pwPath)).default;
 
 const browser = await chromium.launch();
@@ -48,6 +51,22 @@ await step('upload: Excel CSV through the file picker', async () => {
   await waitText(/141/);
   await waitText(/could not be resolved/i);
   await shot('01-upload');
+});
+
+await step('compass: broken file refused, good file previewed then imported', async () => {
+  const broken = join(mkdtempSync(join(tmpdir(), 'compass-')), 'broken_handoff.json');
+  writeFileSync(broken, JSON.stringify({ ...JSON.parse(readFileSync(packetPath, 'utf8')), format: 'something-else' }));
+  await go('/upload');
+  await page.setInputFiles('[data-testid=compass-file]', broken);
+  await waitText(/not a Capability Compass hand-off file[\s\S]*Nothing was changed/i);
+  await page.setInputFiles('[data-testid=compass-file]', packetPath);
+  await waitText(/nothing is changed until you confirm/i);
+  await waitText(/DC-1 Installs the routines in a new unit quickly · 25/);
+  if (await page.locator('[data-testid=engagement-key]').count()) throw new Error('engagement key shown before confirming');
+  await page.getByRole('button', { name: 'Confirm import' }).click();
+  await waitText(/6 comparison criteria set from the file/);
+  await page.locator('[data-testid=engagement-key]', { hasText: 'MERIDIAN' }).waitFor();
+  await shot('01b-compass-import');
 });
 
 await step('overview: health score and departments', async () => {
@@ -100,13 +119,33 @@ await step('AI overlay: optional, opens, AI suggests, user tag applied', async (
 
 await step('archetypes: run, weighted ranking, grounded diagram', async () => {
   await go('/analysis');
+  await waitText(/What the Compass found/i);
+  const prefilled = await page.inputValue('textarea[aria-label="Strategy context"]');
+  if (!prefilled.startsWith('Who we serve:')) throw new Error(`strategy box not pre-filled: ${prefilled.slice(0, 60)}`);
   await page.fill('#criteria', 'Faster frontline decisions');
-  await page.fill('textarea[aria-label="Strategy context"]', 'Grow on-time performance');
   await page.getByRole('button', { name: /Run the analysis|Re-run the analysis/ }).click();
   const t = await waitText(/Front-Back Hybrid/, 30000);
   if (!/Process-Based|weighted/i.test(t)) throw new Error('ranking note not shown');
   if (!/Marketing/.test(t)) throw new Error('invented unit not called out');
   await shot('06-archetypes');
+});
+
+await step('hypotheses: H1 added, grade changed, number not reused', async () => {
+  const add = async (text) => {
+    await page.getByLabel('New hypothesis statement').fill(text);
+    await page.getByLabel('New hypothesis refuting evidence').fill('Event records show another role deciding');
+    await page.getByRole('button', { name: 'Add hypothesis' }).click();
+    await waitText(new RegExp(text));
+  };
+  await add('Station decides turnaround trade-offs');
+  await add('Second hypothesis');
+  await page.getByRole('button', { name: 'Delete' }).nth(1).click();
+  await add('Third hypothesis');
+  const t = await main().innerText();
+  if (!/\bH1\b/.test(t) || !/\bH3\b/.test(t) || /\bH2\b/.test(t)) throw new Error('expected H1 and H3 only');
+  await page.getByLabel('Grade for H1').selectOption('indicated');
+  await waitText(/set by you/);
+  await shot('06b-hypotheses');
 });
 
 await step('archetypes: build top option as a scenario', async () => {
@@ -138,6 +177,9 @@ await step('scenarios: add a role through the form', async () => {
 await step('compare: score a cell, AI fills the rest', async () => {
   await go('/compare');
   await waitText(/Weighted scores/);
+  await waitText(/DC-1/);
+  await page.getByRole('button', { name: /What the Compass found/ }).click();
+  await waitText(/CAP-01\.Structure[\s\S]*Reinforced structure/);
   await page.getByRole('button', { name: 'Score', exact: true }).first().click();
   await page.getByRole('button', { name: /^5\s*strong$/i }).click();
   await page.getByRole('button', { name: 'Save score' }).click();
@@ -161,6 +203,23 @@ await step('implementation: waves and board pack', async () => {
   await shot('10-pack', pack);
   await pack.close();
   await shot('09-implementation');
+});
+
+await step('return file: link a Compass ID, download matches the screen', async () => {
+  await go('/implementation');
+  await waitText(/What this app found, in the shared language/i);
+  await page.getByLabel('Relate H1 to a Compass ID').selectOption('CAP-04.People');
+  await page.locator('[data-finding=H1] button', { hasText: 'CAP-04.People' }).waitFor();
+  const ret = await (await page.request.get(base + '/api/v1/compass/return')).json();
+  const h1 = ret.findings.find((f) => f.ref === 'H1');
+  if (ret.format !== 'compass-return' || ret.engagement_key !== 'MERIDIAN') throw new Error('wrong return header');
+  if (h1?.grade !== 'indicated' || h1.relates_to.join() !== 'CAP-04.People') throw new Error(`H1 not as set on screen: ${JSON.stringify(h1)}`);
+  const kinds = new Set(ret.findings.map((f) => f.kind));
+  for (const k of ['structural_baseline', 'work_activity', 'hypothesis', 'option_score']) if (!kinds.has(k)) throw new Error(`no ${k} finding`);
+  const text = await (await page.request.get(base + '/api/v1/compass/return.txt')).text();
+  if (!text.includes('[MERIDIAN:H1]')) throw new Error('readable text lacks the engagement-keyed ID');
+  for (const n of ['Alicia Seah', 'Tan Boon Hock', 'Jasmine Lim']) if (JSON.stringify(ret).includes(n) || text.includes(n)) throw new Error(`name in return file: ${n}`);
+  await shot('09b-findings');
 });
 
 await step('layout: no table clipped at laptop width', async () => {

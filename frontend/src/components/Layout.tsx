@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
-import { orgDataApi } from '../services/api';
+import { compassApi, orgDataApi } from '../services/api';
+import { COMPASS_CHANGED } from './Compass';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -60,6 +61,15 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [engagementKey, setEngagementKey] = useState<string | null>(null);
+
+  // Engagement key from an imported Capability Compass hand-off, shown on every page
+  useEffect(() => {
+    const load = () => compassApi.get().then((s) => setEngagementKey(s.engagement?.key ?? null)).catch(() => setEngagementKey(null));
+    load();
+    window.addEventListener(COMPASS_CHANGED, load);
+    return () => window.removeEventListener(COMPASS_CHANGED, load);
+  }, [location.pathname]);
 
   const handleConfirmClear = async () => {
     setClearing(true);
@@ -87,6 +97,11 @@ export default function Layout({ children }: LayoutProps) {
           <Mark />
           <span className="font-display text-[18px] font-bold leading-tight">Org Design Analyzer</span>
         </Link>
+        {engagementKey && (
+          <p className="-mt-5 mb-6 px-6 text-[11px] font-semibold uppercase tracking-[.16em] text-faint" data-testid="engagement-key">
+            Engagement <span className="text-primary-600">{engagementKey}</span>
+          </p>
+        )}
 
         <nav className="flex-1 px-3" aria-label="Main">
           {stages.map((stage) => (
@@ -157,6 +172,7 @@ export default function Layout({ children }: LayoutProps) {
               <li><span className="text-primary-600 mr-2">·</span>Calculated metrics</li>
               <li><span className="text-primary-600 mr-2">·</span>AI and work activities analyses</li>
               <li><span className="text-primary-600 mr-2">·</span>Scenarios, comparison scores and AI-role tags</li>
+              <li><span className="text-primary-600 mr-2">·</span>The imported Compass file, hypotheses and grades</li>
             </ul>
             <p className="mb-7 text-sm text-faint">Your Claude API key and grade configuration are kept.</p>
             <div className="flex gap-3">

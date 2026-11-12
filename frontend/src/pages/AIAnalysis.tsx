@@ -6,6 +6,8 @@ import { aiAnalysisApi, settingsApi, metricsApi, scenariosApi } from '../service
 import type { AIAnalysisResult, ArchetypeRecommendation, ArchetypeScoreSummary } from '../types';
 import ArchetypeDiagram from '../components/ArchetypeDiagram';
 import { PageHeader, Section, Callout, Chip, Disclosure, StatusPill, ScoreBar, severityStatus, scoreStatus } from '../components/ui';
+import { CompassContext, GradeSelect, HypothesisRegister, slug, useCompass } from '../components/Compass';
+import type { CompassState } from '../types';
 import type { Status } from '../components/ui';
 
 const EVIDENCE_LABEL: Record<string, string> = {
@@ -44,7 +46,9 @@ function Label({ children, color = 'var(--color-secondary)' }: { children: React
   return <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.14em]" style={{ color }}>{children}</p>;
 }
 
-function Recommendation({ arch, onBuild }: { arch: ArchetypeRecommendation; onBuild: () => void }) {
+function Recommendation({ arch, onBuild, compass, onCompass }: {
+  arch: ArchetypeRecommendation; onBuild: () => void; compass: CompassState | null; onCompass: (s: CompassState) => void;
+}) {
   const score = arch.overall_fit_score ?? arch.business_model_match_score;
   return (
     <article className="card mb-6 p-0">
@@ -56,6 +60,8 @@ function Recommendation({ arch, onBuild }: { arch: ArchetypeRecommendation; onBu
             {arch.transformation_timeline && <Chip>Timeline {arch.transformation_timeline}</Chip>}
             {arch.confidence_level && <StatusPill status={CONFIDENCE_STATUS[arch.confidence_level] ?? 'neutral'} label={`${arch.confidence_level} confidence`} />}
             {arch.confidence_rationale && <span className="max-w-md">{arch.confidence_rationale}</span>}
+            {/* Archetype fit stays a Hypothesis until the designer says otherwise */}
+            {compass && <GradeSelect findingRef={`archetype.${arch.archetype_id ?? slug(arch.archetype)}`} suggested="hypothesis" state={compass} onChange={onCompass} />}
           </div>
         </div>
         {score !== undefined && (
@@ -162,6 +168,13 @@ export default function AIAnalysis() {
   const [scopeDepartment, setScopeDepartment] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const [compass, setCompass] = useCompass();
+
+  // Strategy text imported from the Compass (or saved earlier) pre-fills the box; it stays editable
+  const draft = compass?.strategy_draft;
+  useEffect(() => {
+    if (draft) setStrategyText((current) => current || draft);
+  }, [draft]);
 
   useEffect(() => {
     settingsApi.getStatus().then((s) => setApiConfigured(s.configured)).catch(() => undefined);
@@ -217,6 +230,8 @@ export default function AIAnalysis() {
         title={ok && lead ? `${lead.archetype.split(' (')[0]} fits best${recs[1] ? `, then ${recs[1].archetype.split(' (')[0]}` : ''}` : 'Which structures fit the strategy'}
         lede="All seven archetypes are scored against your organization, strategy and design criteria; the overall score is computed from five weighted criteria. The AI sees departments, roles and figures — never names."
       />
+
+      <CompassContext state={compass} />
 
       {!apiConfigured && (
         <div className="mb-8">
@@ -354,7 +369,7 @@ export default function AIAnalysis() {
 
           {recs.length > 0 && (
             <Section eyebrow="02 · Recommended options" title="The two strongest fits in detail">
-              {recs.map((arch, i) => <Recommendation key={i} arch={arch} onBuild={() => startScenarioFor(arch.archetype_id, arch.archetype)} />)}
+              {recs.map((arch, i) => <Recommendation key={i} arch={arch} onBuild={() => startScenarioFor(arch.archetype_id, arch.archetype)} compass={compass} onCompass={setCompass} />)}
             </Section>
           )}
 
@@ -372,6 +387,7 @@ export default function AIAnalysis() {
                         <p className="font-medium text-ink">{p.name}</p>
                         <StatusPill status={severityStatus(p.severity)} label={p.severity} />
                         {p.evidence_class && <Chip>{EVIDENCE_LABEL[p.evidence_class] ?? p.evidence_class}</Chip>}
+                        {compass && <GradeSelect findingRef={`diagnosis.${slug(p.name)}`} suggested={compass.evidence_to_grade[p.evidence_class ?? ''] ?? 'hypothesis'} state={compass} onChange={setCompass} />}
                         {p.dimension && <Chip>{p.dimension}</Chip>}
                         {p.confidence && <span className="text-xs text-faint" title={p.confidence_rationale || ''}>Confidence <b className="text-secondary">{p.confidence}</b>{p.confidence_rationale && ` — ${p.confidence_rationale}`}</span>}
                       </div>
@@ -477,12 +493,14 @@ export default function AIAnalysis() {
             </Section>
           )}
 
-          <p className="text-xs text-faint">
+          <p className="mb-14 text-xs text-faint">
             Archetype fit, benchmarks and examples are AI interpretations; figures come from your data.
             {analysis._llm && ` Produced by ${analysis._llm.model_served}.`}
           </p>
         </>
       )}
+
+      {compass && <HypothesisRegister state={compass} onChange={setCompass} />}
     </>
   );
 }
