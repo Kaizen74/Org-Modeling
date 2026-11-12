@@ -3,6 +3,13 @@ import { Link } from 'react-router-dom';
 import { scenariosApi, comparisonApi, packUrl } from '../services/api';
 import type { ImplementationPlan, ScenarioListItem } from '../types';
 import { PageHeader, Section, StatTile, StatusPill, EmptyState, Loading, Callout, severityStatus, formatMoney } from '../components/ui';
+import { FindingsRegister, useCompass } from '../components/Compass';
+
+/** Findings in the shared workflow language; available with or without a scenario. */
+function SendBack() {
+  const [compass, setCompass] = useCompass();
+  return compass ? <div className="mt-14"><FindingsRegister state={compass} onChange={setCompass} /></div> : null;
+}
 
 function signedMoney(n: number) {
   if (!n) return '—';
@@ -57,6 +64,7 @@ export default function Implementation() {
           body="Implementation implications are worked out for a scenario. Create one in the Scenario Studio."
           action={<Link to="/scenarios" className="btn btn-primary">Open the Scenario Studio →</Link>}
         />
+        <SendBack />
       </>
     );
   }
@@ -201,6 +209,7 @@ export default function Implementation() {
           </Callout>
         </>
       )}
+      <SendBack />
     </>
   );
 }

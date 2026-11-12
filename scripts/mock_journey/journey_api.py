@@ -3,7 +3,7 @@ API journey: every step of the workflow against the backend with the fake
 Claude (fake_claude_server.py), on the sample org from make_org.py.
 Expectations are computed independently from the CSV wherever possible.
 Needs a fresh database and no saved API key. Run by run_checks.sh step 5.
-Usage: python journey_api.py <api_base> <csv_path> <prompt_log>
+Usage: python journey_api.py <api_base> <csv_path> <prompt_log> <compass_handoff.json>
 """
 import csv
 import io
@@ -12,7 +12,8 @@ import sys
 
 import httpx
 
-BASE, CSV_PATH, PROMPT_LOG = sys.argv[1], sys.argv[2], sys.argv[3]
+BASE, CSV_PATH, PROMPT_LOG, PACKET_PATH = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+PACKET = json.load(open(PACKET_PATH))
 c = httpx.Client(base_url=BASE + "/api/v1", timeout=60)
 results = []
 
@@ -230,6 +231,49 @@ def s10():
     check("grades: salary edit changes cost for blank-salary people only", abs((after - before) - blanks * 10000) < 1, (after - before, blanks))
 step("grades", s10)
 
+# 10b. Shared workflow: Capability Compass hand-off, hypotheses, grades, return file
+def s_compass():
+    before = ok(c.get("/comparison"))
+    bad = ok(c.post("/compass/preview", json={"packet": {**PACKET, "format": "something-else"}}))
+    check("compass: wrong format rejected in plain language", bad["ok"] is False and "not a Capability Compass hand-off file" in bad["errors"][0])
+    nokey = c.post("/compass/import", json={"packet": {**PACKET, "engagement": {**PACKET["engagement"], "key": ""}}})
+    check("compass: file without engagement key refused", nokey.status_code == 400 and "no engagement key" in nokey.text)
+    pre = ok(c.post("/compass/preview", json={"packet": PACKET}))
+    check("compass: preview asks before replacing scored criteria", pre["ok"] and pre["criteria"]["action"] == "ask", pre.get("criteria"))
+    check("compass: preview applies nothing", ok(c.get("/compass"))["engagement"] is None and ok(c.get("/comparison"))["criteria"] == before["criteria"])
+    kept = ok(c.post("/compass/import", json={"packet": PACKET}))
+    check("compass: import without consent keeps your criteria", ok(c.get("/comparison"))["criteria"] == before["criteria"] and "Your comparison criteria were kept" in kept["applied"])
+    check("compass: engagement key and strategy stored", kept["engagement"]["key"] == "MERIDIAN" and kept["strategy_draft"].startswith("Who we serve"))
+    ok(c.post("/compass/import", json={"packet": PACKET, "replace_criteria": True}))
+    comp = ok(c.get("/comparison"))
+    check("compass: criteria replaced on consent, DC refs kept", [x.get("ref") for x in comp["criteria"]] == [f"DC-{i}" for i in range(1, 7)])
+    check("compass: import sets no score", comp["judgments"] == before["judgments"])
+    check("compass: measured criteria score at once", all(comp["result"]["cells"]["current"][x["id"]] is not None for x in comp["criteria"] if x["kind"] == "measured"))
+
+    h = {"statement": "Alicia Seah's office decides turnaround trade-offs", "refuted_by": "Event records show the station deciding"}
+    ok(c.post("/compass/hypotheses", json=h)); ok(c.post("/compass/hypotheses", json={**h, "statement": "Second"}))
+    ok(c.delete("/compass/hypotheses/H2"))
+    st = ok(c.post("/compass/hypotheses", json={**h, "statement": "Third"}))
+    check("hypotheses: numbers never reused", [x["ref"] for x in st["hypotheses"]] == ["H1", "H3"])
+    check("links: unknown Compass ID refused", c.put("/compass/relates", json={"ref": "H1", "relates_to": ["CAP-99"]}).status_code == 400)
+    ok(c.put("/compass/relates", json={"ref": "H1", "relates_to": ["CAP-04.People", "VS-01"]}))
+    ok(c.put("/compass/grades", json={"ref": "H1", "grade": "indicated"}))
+
+    ret = ok(c.get("/compass/return"))
+    kinds = {f["kind"] for f in ret["findings"]}
+    check("return file: format, key and all four kinds", ret["format"] == "compass-return" and ret["engagement_key"] == "MERIDIAN"
+          and kinds == {"structural_baseline", "work_activity", "hypothesis", "option_score"}, kinds)
+    by = {f["ref"]: f for f in ret["findings"]}
+    check("return file: your grade and links on H1", by["H1"]["grade"] == "indicated" and by["H1"]["relates_to"] == ["CAP-04.People", "VS-01"])
+    check("return file: baseline matches the metrics", by["baseline.layers"]["figure"] == f"{ctx['metrics']['layer_analysis']['total_layers']} layers" and by["baseline.layers"]["grade"] == "confirmed")
+    check("return file: option totals per DC", "DC-4" in by["option.current"]["detail"] and by["option.current"]["figure"].endswith("out of 100 (weighted total)"))
+    dumped = json.dumps(ret, ensure_ascii=False) + c.get("/compass/return.txt").text
+    leaked = [n for n in DISTINCT if n in dumped]
+    check("return file: no personal names, key or strategy text", not leaked and "sk-ant" not in dumped and "Who we serve" not in dumped, leaked)
+    pack = c.get("/export/pack").text
+    check("pack: engagement key, DC refs and findings register", "Engagement MERIDIAN" in pack and "DC-1" in pack and "Findings register" in pack and not [n for n in DISTINCT if n in pack])
+step("compass", s_compass)
+
 # 11. Privacy across every AI call
 def s11():
     prompts = [json.loads(l) for l in open(PROMPT_LOG)]
@@ -247,6 +291,7 @@ def s12():
     ok(c.delete("/org-data/clear-all"))
     check("new project: metrics gone", c.get("/metrics/latest").status_code == 404)
     check("new project: scenarios gone", c.get("/scenarios").status_code == 404)
+    check("new project: Compass link and hypotheses gone", c.get("/compass").status_code == 404)
     check("new project: key kept", ok(c.get("/settings/claude-api-key/status"))["configured"])
 step("new project", s12)
 

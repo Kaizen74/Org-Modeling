@@ -97,6 +97,28 @@ class AIDisposition(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class Engagement(Base):
+    """
+    Shared-workflow record for one upload: the imported Capability Compass packet
+    (optional), the strategy text waiting to be used, operating-model hypotheses,
+    and the shared evidence grades / Compass links set on findings.
+    """
+    __tablename__ = "engagements"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    analysis_id = Column(String(36), ForeignKey("org_analyses.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    key = Column(String(100))  # Compass engagement key, e.g. "MERIDIAN"; None when no packet was imported
+    packet = Column(JSON)  # the compass-handoff file as received
+    imported_at = Column(DateTime)
+    strategy_draft = Column(Text)  # pre-fills the strategy box on the archetype page
+    hypotheses = Column(JSON, default=list)  # [{ref: "H1", statement, refuted_by, status, note}]
+    hypothesis_seq = Column(Integer, default=0)  # last number used; never reused
+    grades = Column(JSON, default=dict)  # {finding ref: confirmed|indicated|hypothesis} — the assessor's overrides
+    relates = Column(JSON, default=dict)  # {finding ref: [Compass IDs]}
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Setting(Base):
     """Application settings key-value store."""
     __tablename__ = "settings"

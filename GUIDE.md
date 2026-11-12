@@ -47,3 +47,10 @@ Type `./run_checks.sh` and press Enter. You want to see "ALL CHECKS PASSED ✅".
 - **Archetype**: a research-based template for how organizations can be structured (e.g., Functional, Front-Back Hybrid)
 - **Observable evidence**: something counted directly from your uploaded data
 - **Model-inferred**: something the AI knows from industry research, not from your data — treat as hypothesis to verify
+
+## Working with the other apps (optional)
+- **Import from Capability Compass** — on *Upload data* (after the org file) or *Compare options*. Choose the `<key>_compass_handoff.json` file. You see a preview first; nothing changes until you press *Confirm import*. If you have already changed the criteria or typed strategy text, the preview asks before replacing them.
+- After import: the engagement key shows under the app name; *Compare options* uses the Compass design criteria (DC-1…); the strategy box on *Archetype options* is pre-filled and editable; "What the Compass found" is read-only context and never sets a score.
+- **Grades** — findings carry Confirmed / Indicated / Hypothesis. The app suggests one; change it where you disagree. Archetype fit starts as Hypothesis.
+- **Hypotheses** — bottom of *Archetype options*: H1, H2… with the evidence that would refute each. Numbers are never reused.
+- **Sending findings back** — bottom of *Implications*: attach Compass IDs to a finding, then *Download return file (JSON)* or open the *Readable text* (upload that to Compass as a document for now). The same register is in the board pack. No names, no API key, no strategy text leave the app this way.

@@ -10,6 +10,8 @@ from datetime import datetime
 from html import escape
 from typing import Callable, Dict, List, Optional
 
+from .compass_service import GRADE_LABELS, slug, suggested_grade
+
 CSS = """
 :root{--paper:#FAF7F3;--ink:#1C1F24;--sec:#575C63;--faint:#8A8F96;--hair:#E7E0D8;--red:#C41E3A;--green:#257A55;--amber:#B97F24;--bad:#B02E2E}
 *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 'DM Sans',system-ui,sans-serif}
@@ -47,6 +49,10 @@ def _signed(v: float, money: bool = False) -> str:
     return ("+" if v > 0 else "") + (_money(v) if money else f"{v:g}")
 
 
+def _grade_tag(grade: Optional[str]) -> Optional[str]:
+    return f"Grade: {GRADE_LABELS[grade]}" if grade in GRADE_LABELS else None
+
+
 def _table(headers: List[str], rows: List[List[str]], numeric: Optional[List[int]] = None) -> str:
     numeric = numeric or []
     th = "".join(f'<th class="{"n" if i in numeric else ""}">{escape(h)}</th>' for i, h in enumerate(headers))
@@ -68,6 +74,9 @@ def build_pack(
     strategy_provided: bool,
     design_criteria: Optional[str],
     scrub: Callable[[str], str],
+    engagement: Optional[Dict] = None,
+    findings: Optional[List[Dict]] = None,
+    grade_overrides: Optional[Dict] = None,
 ) -> str:
     """All text that may contain names passes through `scrub` before escaping."""
     e = lambda t: escape(scrub(str(t or "")))  # noqa: E731
@@ -82,11 +91,13 @@ def build_pack(
     recs = cat4.get("recommendations", []) if isinstance(cat4, dict) else []
     llm = (ai_analysis or {}).get("_llm") or wa.get("_llm") or {}
     parts: List[str] = []
+    key = (engagement or {}).get("key")
+    overrides = grade_overrides or {}
 
     # Cover
     parts.append(f"""<header><p class="eyebrow">Organization design · findings pack</p>
 <h1>{e(org_name)}</h1>
-<p class="sec">{now} · {metrics.get('total_employees', 0)} people · {len(depts)} departments</p>
+<p class="sec">{f"Engagement {escape(key)} · " if key else ""}{now} · {metrics.get('total_employees', 0)} people · {len(depts)} departments</p>
 <p class="faint">Registers are kept separate: <b class="fact">Fact</b> = computed from the uploaded data · <b class="interp">Interpretation</b> = analysis, AI-assisted where marked · <b class="rec">Recommendation</b> = proposed action.</p></header>""")
 
     # 1. Evidence inventory
@@ -125,7 +136,7 @@ def build_pack(
     # 3. Interpretation
     interp: List[str] = []
     for p in diag.get("pathologies", []) or []:
-        tags = "".join(f'<span class="tag">{escape(str(t))}</span>' for t in [p.get("dimension"), p.get("evidence_class"), p.get("confidence") and f"Confidence {p.get('confidence')}"] if t)
+        tags = "".join(f'<span class="tag">{escape(str(t))}</span>' for t in [p.get("dimension"), p.get("evidence_class"), _grade_tag(overrides.get(f"diagnosis.{slug(p.get('name'))}") or suggested_grade(p.get("evidence_class"))), p.get("confidence") and f"Confidence {p.get('confidence')}"] if t)
         interp.append(f"""<div class="card"><p class="reg interp">Interpretation · {e(p.get('severity'))} severity</p><b>{e(p.get('name'))}</b>
 <p class="sec">{e(p.get('description'))}</p>
 {f'<p><b>Evidence:</b> {e(p.get("supporting_evidence"))}</p>' if p.get('supporting_evidence') else ''}
@@ -154,7 +165,7 @@ def build_pack(
             cells = [("–" if res["cells"][o["id"]].get(c["id"]) is None else f'{round(res["cells"][o["id"]][c["id"]])}') for c in crit]
             total = res["totals"].get(o["id"])
             rows.append([str(rank), e(o["name"]), *cells, "–" if total is None else f"<b>{round(total)}</b>"])
-        heads = ["#", "Option", *[f"{c['name']} ({c['weight']})" for c in crit], "Total"]
+        heads = ["#", "Option", *[f"{c['ref'] + ' ' if c.get('ref') else ''}{c['name']} ({c['weight']})" for c in crit], "Total"]
         note = "" if res.get("complete") else '<p class="faint">Some judged scores are missing — the ranking is provisional.</p>'
         fig_rows = [[e(o["name"]), str(o["figures"]["health_score"]), str(o["figures"]["layers"]), str(o["figures"]["managers"]),
                      _money(o["figures"]["total_cost"]), f'{o["figures"]["people_affected_pct"]}%'] for o in comparison["options"]]
@@ -198,6 +209,14 @@ def build_pack(
         rows = [[e(g.get("gap")), e(g.get("why_it_matters")), e(g.get("observable_indicator_to_close"))] for g in gaps]
         parts.append(f"""<section><p class="eyebrow">06 · Limits</p><h2>What we still don't know</h2>
 {_table(['Gap', 'Why it matters', 'What to measure next'], rows)}</section>""")
+
+    # 7. Findings register in the shared language (same content as the compass-return file)
+    if findings:
+        rows = [[escape(f["ref"]), f'<b>{e(f["title"])}</b><br><span class="sec">{e(f["detail"])}</span>', escape(f["figure"]),
+                 escape(GRADE_LABELS[f["grade"]]), escape(", ".join(f["relates_to"]))] for f in findings]
+        parts.append(f"""<section><p class="eyebrow">07 · Findings register</p><h2>Findings in the shared workflow language</h2>
+<p class="faint">Grades are the assessor's judgement: Confirmed, Indicated or Hypothesis. A Hypothesis never drives a decision on its own.{f" IDs in the last column belong to engagement {escape(key)}." if key else ""}</p>
+{_table(['Ref', 'Finding', 'Figure', 'Grade', 'Relates to'], rows)}</section>""")
 
     parts.append(f"""<footer class="faint" style="border-top:1px solid var(--hair);padding-top:14px;font-size:12px">
 Generated by Org Design Analyzer on {now}. Figures are computed from the uploaded data; AI-assisted interpretation is labelled and should be validated with observable evidence before decisions.

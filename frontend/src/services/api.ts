@@ -18,7 +18,11 @@ import type {
   ComparisonPayload,
   Disposition,
   DispositionPayload,
-  ImplementationPlan
+  ImplementationPlan,
+  CompassState,
+  CompassPreview,
+  Grade,
+  Hypothesis
 } from '../types';
 
 /** Whole organization when department is empty, otherwise one department. */
@@ -330,4 +334,21 @@ export const aiDispositionApi = {
   tag: async (jobTitle: string, disposition: Disposition | null, capacityFreedPct?: number, rationale?: string): Promise<DispositionPayload> =>
     (await api.put('/ai-disposition/role', { job_title: jobTitle, disposition, capacity_freed_pct: capacityFreedPct, rationale })).data,
   suggest: async (industry?: string): Promise<DispositionPayload> => (await api.post('/ai-disposition/suggest', { industry })).data,
+};
+
+// Shared workflow language: Capability Compass hand-off, hypotheses, grades, return file
+type HypothesisInput = Pick<Hypothesis, 'statement' | 'refuted_by' | 'status' | 'note'>;
+export const compassApi = {
+  get: async (): Promise<CompassState> => (await api.get('/compass')).data,
+  preview: async (packet: unknown): Promise<CompassPreview> => (await api.post('/compass/preview', { packet })).data,
+  importPacket: async (packet: unknown, replaceCriteria: boolean, replaceStrategy: boolean): Promise<CompassState> =>
+    (await api.post('/compass/import', { packet, replace_criteria: replaceCriteria, replace_strategy: replaceStrategy })).data,
+  saveStrategyDraft: async (text: string): Promise<void> => { await api.put('/compass/strategy-draft', { text }); },
+  addHypothesis: async (h: HypothesisInput): Promise<CompassState> => (await api.post('/compass/hypotheses', h)).data,
+  updateHypothesis: async (ref: string, h: HypothesisInput): Promise<CompassState> => (await api.put(`/compass/hypotheses/${ref}`, h)).data,
+  deleteHypothesis: async (ref: string): Promise<CompassState> => (await api.delete(`/compass/hypotheses/${ref}`)).data,
+  setGrade: async (ref: string, grade: Grade | null): Promise<CompassState> => (await api.put('/compass/grades', { ref, grade })).data,
+  setRelates: async (ref: string, relatesTo: string[]): Promise<CompassState> => (await api.put('/compass/relates', { ref, relates_to: relatesTo })).data,
+  returnJsonUrl: '/api/v1/compass/return',
+  returnTextUrl: '/api/v1/compass/return.txt',
 };

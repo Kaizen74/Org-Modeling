@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { orgDataApi } from '../services/api';
 import type { UploadResponse } from '../types';
 import { PageHeader, Section, StatTile, Callout } from '../components/ui';
+import { CompassImport } from '../components/Compass';
 
 const COLUMNS: Array<{ name: string; need: 'Required' | 'Recommended' | 'Optional'; what: string }> = [
   { name: 'Name', need: 'Required', what: 'Person’s name (shown on screen; never sent to the AI)' },
@@ -141,6 +142,15 @@ export default function Upload() {
           </p>
         </Section>
       </div>
+
+      <Section
+        className="mt-12"
+        eyebrow="Optional · shared workflow"
+        title="Bring in the Capability Compass hand-off"
+        lede="After the org file is uploaded, import the hand-off file from Capability Compass to set your comparison criteria, pre-fill the strategy text and see what the Compass found. You see a preview first; nothing changes until you confirm."
+      >
+        <CompassImport />
+      </Section>
     </>
   );
 }

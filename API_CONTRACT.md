@@ -108,3 +108,11 @@ Used by: GradeConfig page.
 ### GET /settings/status → `{ configured, masked_key }`
 ### POST /settings/api-key → stores Anthropic API key
 Used by: Settings page; AIAnalysis page checks `configured` before enabling analysis.
+
+## Shared workflow (`/api/v1/compass`) — optional; 404 until an org file is uploaded
+- `GET /compass` → `engagement` (key, name… or null), `strategy_draft`, `context` (`structure_lens[]`, `clusters[]`), `refs[]` (every Compass ID in the packet), `hypotheses[]`, `grade_overrides`, `findings[]` (`ref, kind, title, detail, figure, suggested_grade, grade, grade_set_by_you, relates_to, source_note`)
+- `POST /compass/preview {packet}` → `ok, errors, warnings, engagement, criteria{action: set|ask|same|none|invalid, incoming, problems}, strategy{action}, context` — applies nothing
+- `POST /compass/import {packet, replace_criteria, replace_strategy}` → state + `applied[]`; 400 with the reason for a wrong `format`, non-1.x version or missing engagement key
+- `PUT /compass/strategy-draft {text}`; `POST|PUT|DELETE /compass/hypotheses[/{ref}]` (`statement, refuted_by, status: open|supported|refuted, note`); `PUT /compass/grades {ref, grade|null}`; `PUT /compass/relates {ref, relates_to[]}` (IDs must be in the imported packet)
+- `GET /compass/return` → `compass-return` v1.0 JSON; `GET /compass/return.txt` → the same as text
+- Comparison criteria may carry `ref` (`DC-n`), kept as imported
