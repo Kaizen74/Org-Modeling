@@ -184,3 +184,88 @@ def test_existing_link_becomes_the_whole_organization_link(tmp_path):
         # Two links on one upload are now allowed when their countries differ
         conn.execute(text("INSERT INTO engagements (id, analysis_id, country) VALUES ('e2', 'a1', 'Belmar')"))
         assert "engagements_before_countries" not in inspect(conn).get_table_names()
+
+
+# ------------------------------------------------------------- Compass roles by country
+
+async def _three_linked(client):
+    await _upload_countries(client)
+    for c in ("Arden", "Belmar", "Caldera"):
+        await client.post("/api/v1/compass/import", json={"packet": PACKETS[c]})
+
+
+def _cell(view, ref, country):
+    role = next(r for r in view["roles"] if r["ref"] == ref)
+    return next(c for c in role["cells"] if c["country"] == country)
+
+
+@pytest.mark.asyncio
+async def test_roles_screen_matches_the_acceptance_table(client: AsyncClient):
+    await _three_linked(client)
+    view = (await client.get("/api/v1/compass/roles")).json()
+    assert len(view["roles"]) == 19 and [l["country"] for l in view["links"]] == ["Arden", "Belmar", "Caldera"]
+    # Nothing confirmed yet: suggestions only, counted as neither existing nor absent
+    rl11 = next(r for r in view["roles"] if r["ref"] == "RL-011")
+    assert not rl11["match_confirmed"] and rl11["suggestions"] == [{"title": "Head of Pricing / Revenue Management", "kind": "exact"}]
+    assert _cell(view, "RL-011", "Belmar")["presence"] == "not_matched" and _cell(view, "RL-011", "Belmar")["holders"] is None
+
+    view = (await client.post("/api/v1/compass/roles/accept-exact")).json()
+    assert view["accepted"] == 16
+    for ref in ("RL-010", "RL-012", "RL-017"):  # no job title for these in the file
+        view = (await client.put("/api/v1/compass/roles/match", json={"ref": ref, "titles": []})).json()
+
+    expected = {
+        ("RL-011", "Arden"): (0, "absent"), ("RL-011", "Belmar"): (1, "exists"), ("RL-011", "Caldera"): (0, "absent"),
+        ("RL-004", "Arden"): (1, "thin"), ("RL-004", "Belmar"): (0, "absent"), ("RL-004", "Caldera"): (2, "exists"),
+        ("RL-018", "Arden"): (0, "absent"), ("RL-018", "Belmar"): (0, "absent"), ("RL-018", "Caldera"): (1, "exists"),
+    }
+    for (ref, country), (holders, status) in expected.items():
+        cell = _cell(view, ref, country)
+        assert (cell["holders"], cell["compass_status"]) == (holders, status), (ref, country, cell)
+    caldera18 = _cell(view, "RL-018", "Caldera")
+    assert caldera18["status_confirmed"] is False and caldera18["presence"] == "to_confirm"
+    assert caldera18["flag"] == "Still to confirm in the Compass; the org file shows 1 person."
+    # A role with nobody in it is never silent
+    assert _cell(view, "RL-004", "Belmar")["missing_note"] == "Why is it missing? Not recorded."
+    # "To confirm" is never counted as existing or absent
+    assert view["summary"]["Caldera"]["to_confirm"] == 2
+    assert sum(view["summary"]["Belmar"].values()) == 19 and view["summary"]["Belmar"]["not_matched"] == 0
+    belmar_empty = sorted(r["ref"] for r in view["roles"] if _cell(view, r["ref"], "Belmar")["holders"] == 0)
+    assert belmar_empty == ["RL-004", "RL-007", "RL-008", "RL-010", "RL-012", "RL-017", "RL-018"]
+    assert view["unmatched_titles"] == 10  # titles in the file that match no Compass role: counted, not listed
+    assert [e["ref"] for e in view["match_log"]][-3:] == ["RL-010", "RL-012", "RL-017"]
+
+
+@pytest.mark.asyncio
+async def test_flags_reasons_and_their_validation(client: AsyncClient):
+    await _three_linked(client)
+    await client.post("/api/v1/compass/roles/accept-exact")
+    view = (await client.get("/api/v1/compass/roles")).json()
+    # Compass says Arden's Head, Analytics & AI is thin... the file agrees (1 person); Belmar says absent, file shows 0
+    assert _cell(view, "RL-007", "Belmar")["flag"] is None
+    belmar = copy.deepcopy(PACKETS["Belmar"])
+    next(r for r in belmar["roles"] if r["ref"] == "RL-013")["status"] = "absent"
+    next(r for r in belmar["roles"] if r["ref"] == "RL-004")["status"] = "exists"
+    view = (await client.post("/api/v1/compass/import", json={"packet": belmar})).json()
+    view = (await client.get("/api/v1/compass/roles")).json()
+    assert _cell(view, "RL-013", "Belmar")["flag"] == "The Compass says absent; the org file shows 1 person."
+    assert _cell(view, "RL-004", "Belmar")["flag"] == "The Compass says this role exists; the org file shows nobody in it."
+
+    reason = {"ref": "RL-011", "country": "Belmar", "reason_class": "chosen", "compared_with": "Arden", "grade": None,
+              "text": "Created in 2023 when Belmar won its two largest renewal contracts; Arden leaves pricing to finance."}
+    view = (await client.put("/api/v1/compass/roles/reason", json=reason)).json()
+    assert _cell(view, "RL-011", "Belmar")["reason"]["reason_class"] == "chosen"
+    assert (await client.put("/api/v1/compass/roles/reason", json={**reason, "reason_class": "because"})).status_code == 400
+    assert (await client.put("/api/v1/compass/roles/reason", json={**reason, "compared_with": "Belmar"})).status_code == 400
+    assert (await client.put("/api/v1/compass/roles/reason", json={**reason, "country": "Dorne"})).status_code == 404
+    assert (await client.put("/api/v1/compass/roles/match", json={"ref": "RL-011", "titles": ["Chief Wizard"]})).status_code == 400
+    # Back to "not matched yet"
+    view = (await client.put("/api/v1/compass/roles/match", json={"ref": "RL-011", "titles": None})).json()
+    assert _cell(view, "RL-011", "Belmar")["presence"] == "not_matched"
+
+
+@pytest.mark.asyncio
+async def test_roles_screen_without_packets_is_empty(client: AsyncClient, sample_csv_path):
+    await client.post("/api/v1/org-data/upload-csv", files={"file": ("pax.csv", sample_csv_path.read_bytes(), "text/csv")})
+    view = (await client.get("/api/v1/compass/roles")).json()
+    assert view["roles"] == [] and view["links"] == []

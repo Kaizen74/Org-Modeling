@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.database import get_session
 from ..models.models import Engagement, OrgAnalysis
 from ..services import compass_service as cs
+from ..services import compass_roles as roles
 from ..services.metrics_store import ensure_metrics
 from ..services.privacy import name_map, without_names
 from .comparison import _context as comparison_context, _payload as comparison_payload
@@ -216,8 +217,8 @@ async def import_packet(request: ImportRequest, db: AsyncSession = Depends(get_s
     link.packet = request.packet
     link.imported_at = datetime.utcnow()
     # Reasons for roles this packet no longer has would point nowhere
-    roles = {r.get("ref") for r in request.packet.get("roles") or []}
-    link.role_reasons = {k: v for k, v in (link.role_reasons or {}).items() if k in roles}
+    role_refs = {r.get("ref") for r in request.packet.get("roles") or []}
+    link.role_reasons = {k: v for k, v in (link.role_reasons or {}).items() if k in role_refs}
     await db.flush()
     # Links on whole-organization findings to IDs no linked packet has would point nowhere
     valid = {r["ref"] for r in all_refs(await linked(analysis, db))}
@@ -341,3 +342,107 @@ async def return_file(db: AsyncSession = Depends(get_session)):
 async def return_text(db: AsyncSession = Depends(get_session)):
     ret, stem = await _return(db)
     return PlainTextResponse(cs.return_as_text(ret), headers={"Content-Disposition": f'inline; filename="{stem}.txt"'})
+
+
+# ------------------------------------------------------------------ Compass roles by country
+
+class RoleMatchIn(BaseModel):
+    ref: str
+    titles: Optional[List[str]] = None  # [] = no job title in this file; None = back to "not matched yet"
+
+
+class RoleReasonIn(BaseModel):
+    ref: str
+    country: str
+    reason_class: str = "unknown"
+    text: str = ""
+    compared_with: str = ""
+    grade: Optional[str] = None
+
+
+async def _roles_view(analysis: OrgAnalysis, db: AsyncSession) -> Dict:
+    whole = await get_engagement(analysis, db)
+    links = [{"country": l.country, "key": l.key, "packet": l.packet, "reasons": l.role_reasons or {}}
+             for l in await linked(analysis, db)]
+    view = roles.build_roles_view(analysis.raw_data["employees"], links, (whole.role_matches if whole else None) or {})
+    view["match_log"] = ((whole.role_match_log if whole else None) or [])[-20:]
+    view["grades"] = cs.GRADES
+    view["file_countries"] = file_countries(analysis)
+    return view
+
+
+@router.get("/roles")
+async def get_roles(db: AsyncSession = Depends(get_session)):
+    """Compass anchor roles with holders, Compass status and reasons per linked country."""
+    analysis = await latest_analysis(db)
+    return await _roles_view(analysis, db)
+
+
+def _set_match(whole: Engagement, ref: str, titles: Optional[List[str]]):
+    matches = dict(whole.role_matches or {})
+    before = matches.get(ref)
+    if titles is None:
+        matches.pop(ref, None)
+    else:
+        matches[ref] = list(dict.fromkeys(t.strip() for t in titles if t.strip()))
+    if matches.get(ref) == before:
+        return
+    whole.role_matches = matches
+    # Every change to a match is kept, so a head-count can be traced back
+    whole.role_match_log = [*(whole.role_match_log or []),
+                            {"at": datetime.utcnow().isoformat(timespec="seconds") + "Z", "ref": ref, "before": before, "after": matches.get(ref)}]
+
+
+@router.put("/roles/match")
+async def set_role_match(request: RoleMatchIn, db: AsyncSession = Depends(get_session)):
+    analysis = await latest_analysis(db)
+    view = await _roles_view(analysis, db)
+    if request.ref not in {r["ref"] for r in view["roles"]}:
+        raise HTTPException(status_code=404, detail=f"{request.ref} is not a role in the linked Compass files.")
+    unknown = [t for t in request.titles or [] if t.strip() not in view["file_titles"]]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Not a job title in the org file: {', '.join(unknown)}")
+    whole = await get_engagement(analysis, db, create=True)
+    _set_match(whole, request.ref, request.titles)
+    await db.commit()
+    return await _roles_view(analysis, db)
+
+
+@router.post("/roles/accept-exact")
+async def accept_exact_matches(db: AsyncSession = Depends(get_session)):
+    """Confirm every exact title match for roles not matched yet. Close matches still need a person."""
+    analysis = await latest_analysis(db)
+    view = await _roles_view(analysis, db)
+    whole = await get_engagement(analysis, db, create=True)
+    accepted = 0
+    for r in view["roles"]:
+        exact = [s["title"] for s in r["suggestions"] if s["kind"] == "exact"]
+        if not r["match_confirmed"] and exact:
+            _set_match(whole, r["ref"], exact)
+            accepted += 1
+    await db.commit()
+    return {"accepted": accepted, **await _roles_view(analysis, db)}
+
+
+@router.put("/roles/reason")
+async def set_role_reason(request: RoleReasonIn, db: AsyncSession = Depends(get_session)):
+    """Why a role exists, is thin or is missing in one country. The designer's; the AI never sets it."""
+    if request.reason_class not in roles.REASON_CLASSES:
+        raise HTTPException(status_code=400, detail=f"Reason must be one of: {', '.join(roles.REASON_LABELS.values())}")
+    if request.grade is not None and request.grade not in cs.GRADES:
+        raise HTTPException(status_code=400, detail=f"Grade must be one of: {', '.join(cs.GRADES)}")
+    analysis = await latest_analysis(db)
+    link = await get_engagement(analysis, db, country=request.country)
+    if not link or not link.packet:
+        raise HTTPException(status_code=404, detail=f"No Compass file is linked to {cs.link_label(request.country)}.")
+    if request.ref not in {r.get("ref") for r in link.packet.get("roles") or []}:
+        raise HTTPException(status_code=404, detail=f"{request.ref} is not a role in {cs.link_label(request.country)}'s Compass file.")
+    compared = request.compared_with.strip()
+    if compared and (compared == request.country or compared not in file_countries(analysis)):
+        raise HTTPException(status_code=400, detail="'Compared with' must be another country in the org file.")
+    reasons = dict(link.role_reasons or {})
+    reasons[request.ref] = {"reason_class": request.reason_class, "text": request.text.strip(),
+                            "compared_with": compared, "grade": request.grade}
+    link.role_reasons = reasons
+    await db.commit()
+    return await _roles_view(analysis, db)

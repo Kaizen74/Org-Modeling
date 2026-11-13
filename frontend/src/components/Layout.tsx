@@ -19,6 +19,7 @@ const stages: Array<{ number: string; title: string; items: Array<{ name: string
       { name: 'Structure', href: '/metrics', hint: 'Spans, layers, cost' },
       { name: 'Org chart', href: '/org-chart', hint: 'Reporting lines' },
       { name: 'Work activities', href: '/work-activities', hint: 'What the work is' },
+      { name: 'Compass roles', href: '/compass-roles', hint: 'Which roles exist where, and why' },
     ],
   },
   {
@@ -65,7 +66,7 @@ export default function Layout({ children }: LayoutProps) {
 
   // Engagement key from an imported Capability Compass hand-off, shown on every page
   useEffect(() => {
-    const load = () => compassApi.get().then((s) => setEngagementKey(s.engagement ? `${s.engagement.key}${s.links.length > 1 ? ` · ${s.links.length} links` : ''}` : null)).catch(() => setEngagementKey(null));
+    const load = () => compassApi.get().then((s) => setEngagementKey(s.engagement ? `${s.engagement.key}${s.links.length > 1 ? ` · ${s.links.length} ${s.links.every((l) => l.country) ? 'countries' : 'links'}` : ''}` : null)).catch(() => setEngagementKey(null));
     load();
     window.addEventListener(COMPASS_CHANGED, load);
     return () => window.removeEventListener(COMPASS_CHANGED, load);

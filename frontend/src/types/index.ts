@@ -941,6 +941,55 @@ export interface CompassState {
   warnings?: string[];
 }
 
+// ---------- Compass anchor roles by country ----------
+
+export type ReasonClass = 'required' | 'chosen' | 'inherited' | 'unknown';
+
+export interface RoleReason {
+  reason_class: ReasonClass;
+  text: string;
+  compared_with: string;
+  grade: Grade | null;
+}
+
+export interface RoleCell {
+  country: string;
+  in_packet: boolean;
+  compass_status: 'exists' | 'thin' | 'absent' | string | null;
+  status_confirmed: boolean | null;
+  holders: number | null; // null until the job-title match is confirmed
+  presence: 'exists' | 'absent' | 'to_confirm' | 'not_matched';
+  flag: string | null;
+  reason: RoleReason | null;
+  missing_note: string | null;
+}
+
+export interface CompassRole {
+  ref: string;
+  title: string;
+  cluster_ref: string;
+  route: string;
+  match_confirmed: boolean;
+  titles: string[];
+  suggestions: Array<{ title: string; kind: 'exact' | 'close' }>;
+  cells: RoleCell[];
+}
+
+export interface CompassRolesView {
+  links: Array<{ country: string; key: string }>;
+  roles: CompassRole[];
+  file_titles: string[];
+  unmatched_titles: number;
+  summary: Record<string, { exists: number; absent: number; to_confirm: number; not_matched: number }>;
+  reason_classes: ReasonClass[];
+  reason_labels: Record<ReasonClass, string>;
+  reason_help: Record<ReasonClass, string>;
+  match_log: Array<{ at: string; ref: string; before: string[] | null; after: string[] | null }>;
+  grades: Grade[];
+  file_countries: string[];
+  accepted?: number;
+}
+
 export interface CompassPreview {
   ok: boolean;
   errors: string[];

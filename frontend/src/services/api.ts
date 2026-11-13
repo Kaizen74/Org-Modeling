@@ -22,7 +22,9 @@ import type {
   CompassState,
   CompassPreview,
   Grade,
-  Hypothesis
+  Hypothesis,
+  CompassRolesView,
+  ReasonClass
 } from '../types';
 
 /** Whole organization when department is empty, otherwise one department. */
@@ -351,6 +353,13 @@ export const compassApi = {
   deleteHypothesis: async (ref: string): Promise<CompassState> => (await api.delete(`/compass/hypotheses/${ref}`)).data,
   setGrade: async (ref: string, grade: Grade | null): Promise<CompassState> => (await api.put('/compass/grades', { ref, grade })).data,
   setRelates: async (ref: string, relatesTo: string[]): Promise<CompassState> => (await api.put('/compass/relates', { ref, relates_to: relatesTo })).data,
+  roles: async (): Promise<CompassRolesView> => (await api.get('/compass/roles')).data,
+  /** titles: [] = no job title in this file; null = back to "not matched yet". */
+  setRoleMatch: async (ref: string, titles: string[] | null): Promise<CompassRolesView> =>
+    (await api.put('/compass/roles/match', { ref, titles })).data,
+  acceptExactMatches: async (): Promise<CompassRolesView> => (await api.post('/compass/roles/accept-exact')).data,
+  setRoleReason: async (r: { ref: string; country: string; reason_class: ReasonClass; text: string; compared_with: string; grade: Grade | null }): Promise<CompassRolesView> =>
+    (await api.put('/compass/roles/reason', r)).data,
   returnJsonUrl: '/api/v1/compass/return',
   returnTextUrl: '/api/v1/compass/return.txt',
 };

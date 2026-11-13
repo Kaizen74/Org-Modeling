@@ -9,7 +9,7 @@ An Organizational Design Analyzer for an OD practitioner: upload an org-structur
 - [x] 1. Country column (`Country` or `Country/Region`; blank → "Not stated") and per-country figures (layers from the top of the whole organization; spans count reports in any country)
 - [x] 2. By-country view; country filter on the department table and org chart
 - [x] 3. One Compass link per (upload, country), with migration
-- [ ] 4. Compass roles screen (title matches, holders, reasons, flags)
+- [x] 4. Compass roles screen (title matches, holders, reasons, flags)
 - [ ] 5. One findings file per country
 
 ## This session (2026-10-22) — approved plan, in order
