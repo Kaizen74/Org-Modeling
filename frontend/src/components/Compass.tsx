@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { compassApi } from '../services/api';
-import type { CompassPreview, CompassState, Grade, Hypothesis, HypothesisStatus } from '../types';
+import type { CompassPreview, CompassState, Grade, Hypothesis, HypothesisStatus, LinkFindings, SharedFinding } from '../types';
 import { Callout, Chip, Section } from './ui';
 
 export const COMPASS_CHANGED = 'compass-changed';
@@ -85,8 +85,14 @@ export function CompassImport({ onImported }: { onImported?: (s: CompassState) =
   const [replaceStrategy, setReplaceStrategy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string[] | null>(null);
+  // Where to link a packet whose country isn't in the file (undefined = follow the packet's own country)
+  const [linkCountry, setLinkCountry] = useState<string | undefined>(undefined);
 
-  const reset = () => { setPacket(null); setPreview(null); setReplaceCriteria(false); setReplaceStrategy(false); };
+  const reset = () => { setPacket(null); setPreview(null); setReplaceCriteria(false); setReplaceStrategy(false); setLinkCountry(undefined); };
+  const choose_link = async (c: string) => {
+    setLinkCountry(c);
+    try { setPreview(await compassApi.preview(packet, c)); } catch (e) { setError(detailOf(e, 'The file could not be checked.')); }
+  };
 
   const choose = async (file?: File) => {
     if (!file) return;
@@ -109,7 +115,7 @@ export function CompassImport({ onImported }: { onImported?: (s: CompassState) =
   const confirm = async () => {
     setBusy(true);
     try {
-      const state = await compassApi.importPacket(packet, replaceCriteria, replaceStrategy);
+      const state = await compassApi.importPacket(packet, replaceCriteria, replaceStrategy, linkCountry);
       setDone(state.applied ?? []);
       reset();
       onImported?.(state);
@@ -153,6 +159,25 @@ export function CompassImport({ onImported }: { onImported?: (s: CompassState) =
           )}
 
           <dl className="mt-5 space-y-5 text-sm">
+            {preview.country && (
+              <div>
+                <dt className="font-semibold text-ink">Country</dt>
+                <dd className="mt-1 text-secondary" data-testid="link-target">
+                  {preview.country.named ? <>The file covers <b className="text-ink">{preview.country.named}</b>. </> : null}
+                  {preview.country.note}
+                </dd>
+                {(preview.country.needs_choice || linkCountry !== undefined) && (
+                  <dd className="mt-2">
+                    <select className="input w-auto py-1.5" aria-label="Link this file to" value={linkCountry ?? ''}
+                      onChange={(e) => choose_link(e.target.value === '__none' ? '' : e.target.value)}>
+                      {linkCountry === undefined && <option value="">Choose a country…</option>}
+                      {preview.country.choices.map((c) => <option key={c || '__none'} value={c || '__none'}>{c || 'Whole organization'}</option>)}
+                    </select>
+                  </dd>
+                )}
+                {preview.replaces && <dd className="mt-1 font-semibold text-primary-700">The file linked there now will be replaced.</dd>}
+              </div>
+            )}
             <div>
               <dt className="font-semibold text-ink">Comparison criteria</dt>
               <dd className="mt-1 text-secondary">{preview.criteria?.note}</dd>
@@ -193,7 +218,9 @@ export function CompassImport({ onImported }: { onImported?: (s: CompassState) =
           </dl>
 
           <div className="mt-6 flex gap-3">
-            <button className="btn btn-primary" onClick={confirm} disabled={busy}>{busy ? 'Importing…' : 'Confirm import'}</button>
+            <button className="btn btn-primary" onClick={confirm} disabled={busy || !!preview.country?.needs_choice}>
+              {busy ? 'Importing…' : preview.replaces ? 'Confirm and replace' : 'Confirm import'}
+            </button>
             <button className="btn btn-quiet" onClick={reset} disabled={busy}>Cancel</button>
           </div>
         </div>
@@ -206,18 +233,30 @@ export function CompassImport({ onImported }: { onImported?: (s: CompassState) =
 
 export function CompassContext({ state }: { state: CompassState | null }) {
   const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
   if (!state?.engagement) return null;
-  const { structure_lens, clusters } = state.context;
+  const linkCountries = Object.keys(state.contexts ?? {});
+  const shown = picked !== null && picked in (state.contexts ?? {}) ? picked : linkCountries[0] ?? '';
+  const link = state.links?.find((l) => l.country === shown);
+  const { structure_lens, clusters } = state.contexts?.[shown] ?? state.context;
   return (
     <section className="card mb-10 p-0" aria-label="What the Compass found">
       <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left">
         <span>
-          <span className="eyebrow mb-1 block">Read-only context · {state.engagement.key}</span>
+          <span className="eyebrow mb-1 block">Read-only context · {link?.key ?? state.engagement.key}</span>
           <span className="font-display text-[20px] font-bold text-ink">What the Compass found</span>
           <span className="mt-0.5 block text-sm text-secondary">Evidence to test against the structure. It never sets or changes a score here.</span>
         </span>
         <span className="font-display text-2xl text-primary-600" aria-hidden>{open ? '–' : '+'}</span>
       </button>
+      {open && linkCountries.length > 1 && (
+        <div className="hairline-t flex flex-wrap items-center gap-2 px-6 py-3">
+          <span className="label mb-0 mr-1">Country</span>
+          {linkCountries.map((c) => (
+            <Chip key={c || '__whole'} active={c === shown} onClick={() => setPicked(c)}>{c || 'Whole organization'}</Chip>
+          ))}
+        </div>
+      )}
       {open && (
         <div className="hairline-t grid gap-8 px-6 py-5 lg:grid-cols-2">
           <div>
@@ -324,39 +363,95 @@ export function HypothesisRegister({ state, onChange }: { state: CompassState; o
 // ------------------------------------------------------------------ findings to send back
 
 const KIND_LABEL: Record<string, string> = {
-  structural_baseline: 'Structural baseline', work_activity: 'Work activity', hypothesis: 'Hypothesis', option_score: 'Option score',
+  structural_baseline: 'Structural baseline', role_reason: 'Why a role exists or is missing', work_activity: 'Work activity',
+  hypothesis: 'Hypothesis', option_score: 'Option score',
 };
+const REASON_WORD: Record<string, string> = { required: 'Required', chosen: 'Chosen', inherited: 'Inherited', unknown: 'Not known yet' };
 
+/** The grade on one finding, for either kind of file. */
+function FindingGrade({ f, grades, labels, onChange }: {
+  f: SharedFinding; grades: Grade[]; labels: Record<Grade, string>; onChange: (g: Grade | null) => void;
+}) {
+  return (
+    <label className="inline-flex items-center gap-1.5 text-xs text-faint">
+      <span aria-hidden style={{ color: GRADE_COLOR[f.grade] }}>{GRADE_GLYPH[f.grade]}</span>
+      <select aria-label={`Grade for ${f.ref}`} className="rounded border border-hairline bg-white px-1.5 py-0.5 text-xs font-semibold text-ink"
+        value={f.grade} onChange={(e) => onChange(e.target.value === f.suggested_grade ? null : (e.target.value as Grade))}>
+        {grades.map((g) => <option key={g} value={g}>{labels[g]}{g === f.suggested_grade ? ' (suggested)' : ''}</option>)}
+      </select>
+      {f.grade_set_by_you && <span>set by you</span>}
+    </label>
+  );
+}
+
+/**
+ * "Findings for the Compass": choose the link to export — each linked country,
+ * or the whole organization — then grade, attach Compass IDs and download.
+ */
 export function FindingsRegister({ state, onChange }: { state: CompassState; onChange: (s: CompassState) => void }) {
   const [error, setError] = useState<string | null>(null);
-  const setRelates = async (ref: string, refs: string[]) => {
+  const countries = state.links.filter((l) => l.country);
+  const [link, setLink] = useState('');
+  const [data, setData] = useState<LinkFindings | null>(null);
+  useEffect(() => {
+    if (!link) { setData(null); return; }
+    compassApi.findings(link).then(setData).catch((e) => setError(detailOf(e, 'Could not load the findings.')));
+  }, [link]);
+
+  const findings = link ? data?.findings ?? [] : state.findings;
+  const key = link ? state.links.find((l) => l.country === link)?.key : state.engagement?.key;
+  const run = async (fn: () => Promise<void>) => {
     setError(null);
-    try { onChange(await compassApi.setRelates(ref, refs)); } catch (e) { setError(detailOf(e, 'Could not save the link.')); }
+    try { await fn(); } catch (e) { setError(detailOf(e, 'Could not save.')); }
   };
+  const setGrade = (ref: string, g: Grade | null) => run(async () => {
+    if (link) setData(await compassApi.setLinkGrade(link, ref, g));
+    else { onChange(await compassApi.setGrade(ref, g)); announce(); }
+  });
+  const setRelates = (ref: string, refs: string[]) => run(async () => {
+    if (link) setData(await compassApi.setLinkRelates(link, ref, refs));
+    else onChange(await compassApi.setRelates(ref, refs));
+  });
+
   return (
     <Section
-      eyebrow={`Findings to send back${state.engagement ? ` · ${state.engagement.key}` : ''}`}
+      eyebrow={`Findings for the Compass${key ? ` · ${key}` : ''}`}
       title="What this app found, in the shared language"
-      lede="Each finding carries a grade you can change and the Compass IDs it bears on. People appear as counts or job titles, never names."
+      lede="Each finding carries a grade you can change and the Compass IDs it bears on. People appear as counts or job titles, never names or Employee IDs."
       aside={
         <div className="flex flex-wrap gap-3">
-          <a className="btn btn-secondary" href={compassApi.returnJsonUrl} download>Download return file (JSON)</a>
-          <a className="btn btn-quiet" href={compassApi.returnTextUrl} target="_blank" rel="noreferrer">Readable text ↗</a>
+          <a className="btn btn-secondary" href={compassApi.returnUrl(link)} download>Download {link ? `${link}'s` : 'the'} file (JSON)</a>
+          <a className="btn btn-quiet" href={compassApi.returnUrl(link, true)} target="_blank" rel="noreferrer">Readable text ↗</a>
         </div>
       }
     >
+      {countries.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-2" role="group" aria-label="Which file to export">
+          <span className="label mb-0 mr-1">Export for</span>
+          <Chip active={link === ''} onClick={() => setLink('')}>Whole organization</Chip>
+          {countries.map((l) => <Chip key={l.country} active={link === l.country} onClick={() => setLink(l.country)}>{l.country} · {l.key}</Chip>)}
+        </div>
+      )}
+      {link && (
+        <p className="mb-4 text-sm text-secondary">
+          {link}'s file holds the structure computed on the people who work there and, for each Compass role, why it exists or is missing.
+          Work activities, hypotheses and option scores are about the whole organization and stay in its file.
+          {data && data.left_out_not_matched > 0 && <b className="text-ink"> {data.left_out_not_matched} role{data.left_out_not_matched === 1 ? ' is' : 's are'} left out until matched to a job title on the Compass roles screen.</b>}
+        </p>
+      )}
       {error && <div className="mb-4"><Callout label="Not saved" tone="attention">{error}</Callout></div>}
       <ul className="card divide-y divide-hairline p-0">
-        {state.findings.map((f) => (
+        {findings.map((f) => (
           <li key={f.ref} className="grid gap-x-6 gap-y-2 px-6 py-4 lg:grid-cols-[1fr_300px]" data-finding={f.ref}>
             <div className="min-w-0 text-sm">
               <p className="text-xs text-faint"><span className="tabular font-semibold text-primary-700">{f.ref}</span> · {KIND_LABEL[f.kind]}</p>
               <p className="font-medium text-ink">{f.title}{f.figure && <span className="font-normal text-secondary"> — {f.figure}</span>}</p>
+              {f.reason_class && <p className="mt-0.5 text-xs font-semibold text-ink">{REASON_WORD[f.reason_class]}{f.compared_with && <span className="font-normal text-secondary"> · compared with {f.compared_with}</span>}</p>}
               {f.detail && <p className="mt-0.5 text-secondary">{f.detail}</p>}
               <p className="mt-0.5 text-xs text-faint">Rests on: {f.source_note}</p>
             </div>
             <div className="space-y-2">
-              <GradeSelect findingRef={f.ref} suggested={f.suggested_grade} state={state} onChange={onChange} />
+              <FindingGrade f={f} grades={state.grades} labels={state.grade_labels} onChange={(g) => setGrade(f.ref, g)} />
               <div className="flex flex-wrap items-center gap-1.5">
                 {f.relates_to.map((r) => (
                   <button key={r} title="Remove" onClick={() => setRelates(f.ref, f.relates_to.filter((x) => x !== r))}

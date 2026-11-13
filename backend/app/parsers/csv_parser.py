@@ -21,7 +21,11 @@ class OrgCSVParser:
     """
 
     REQUIRED_COLUMNS = ["Name", "Job Title", "Grade", "Level", "Line Manager"]
-    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Line Manager ID", "Salary", "Work Activities", "Job Description", "Work Type"]
+    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Line Manager ID", "Salary", "Work Activities", "Job Description", "Work Type", "Country"]
+    # Other headers accepted for an optional column
+    COLUMN_ALIASES = {"Country/Region": "Country"}
+    # A person whose Country cell is blank is shown in their own group, never dropped
+    COUNTRY_NOT_STATED = "Not stated"
 
     def __init__(self, csv_source):
         """
@@ -149,6 +153,7 @@ class OrgCSVParser:
     def _clean_data(self) -> pd.DataFrame:
         """Clean and normalize the data."""
         df = self.df.copy()
+        df = df.rename(columns={a: c for a, c in self.COLUMN_ALIASES.items() if a in df.columns and c not in df.columns})
 
         # Strip whitespace from string columns
         for col in df.select_dtypes(include=["object"]).columns:
@@ -181,6 +186,11 @@ class OrgCSVParser:
             df["Department"] = "Unknown"
         else:
             df["Department"] = df["Department"].fillna("Unknown")
+
+        # Country is where the person works; only present when the file has the column
+        if "Country" in df.columns:
+            df["Country"] = df["Country"].fillna("").astype(str).str.strip()
+            df.loc[df["Country"].isin(["", "nan", "None"]), "Country"] = self.COUNTRY_NOT_STATED
 
         # Handle Work Activities column
         if "Work Activities" not in df.columns:
@@ -215,6 +225,7 @@ class OrgCSVParser:
                 "employee_id": str(row.get("Employee ID", row["Name"])).strip(),
                 "manager_id": str(row["Line Manager ID"]).strip() if "Line Manager ID" in row and pd.notna(row["Line Manager ID"]) else None,
                 "work_type": str(row["Work Type"]).strip().lower() if "Work Type" in row and pd.notna(row["Work Type"]) and str(row["Work Type"]).strip().lower() not in ("", "nan") else "",
+                "country": str(row["Country"]) if "Country" in row else "",
                 "work_activities": str(row.get("Work Activities", "")).strip() if pd.notna(row.get("Work Activities", "")) else "",
                 "job_description": str(row.get("Job Description", "")).strip() if pd.notna(row.get("Job Description", "")) else ""
             })
@@ -297,7 +308,8 @@ class OrgCSVParser:
             "ic_count": total - len(managers),
             "unique_grades": unique_grades,
             "organizational_layers": max_level,
-            "total_salary_cost": round(total_salary, 2)
+            "total_salary_cost": round(total_salary, 2),
+            "countries": sorted({emp["country"] for emp in employees if emp.get("country")}),
         }
 
     def get_employees_by_manager(self) -> Dict[str, List[str]]:

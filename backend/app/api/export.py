@@ -11,13 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.database import get_session
 from ..models.models import OrgAnalysis, Scenario
 from ..services.archetype_scoring import reconcile_archetype_scores
-from ..services import compass_service as cs
 from ..services.export_service import build_pack
 from ..services.implementation_service import build_plan
 from ..services.metrics_store import ensure_metrics
 from ..services.privacy import name_map, without_names
 from .comparison import _context as comparison_context, _payload as comparison_payload
-from .compass import findings_for, get_engagement
+from .compass import engagement_header, findings_for, get_engagement, linked
 from .scenarios import evaluate
 
 router = APIRouter(prefix="/api/v1/export", tags=["export"])
@@ -68,7 +67,7 @@ async def findings_pack(
         strategy_provided=bool(analysis.strategy_context),
         design_criteria=analysis.design_criteria,
         scrub=scrub,
-        engagement=cs.engagement_summary(eng.packet) if eng else None,
+        engagement=engagement_header(await linked(analysis, db)),
         findings=await findings_for(analysis, eng, db),
         grade_overrides=(eng.grades if eng else None) or {},
     )

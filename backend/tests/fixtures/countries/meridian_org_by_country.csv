@@ -1,0 +1,85 @@
+Employee ID,Name,Job Title,Grade,Level,Line Manager,Line Manager ID,Department,Country,Salary,Work Type
+E001,AR Person 001,Group Chief Executive,G1,1,,,Group Office,Arden,900000,Strategic
+E002,AR Person 002,Regional Managing Director,G2,2,AR Person 001,E001,Country Leadership,Arden,420000,Strategic
+E003,AR Person 003,Station Head / General Manager,G3,3,AR Person 002,E002,Gateway Operations,Arden,260000,Operational
+E004,AR Person 004,Regional VP Cargo,G3,3,AR Person 002,E002,Cargo,Arden,280000,Operational
+E005,AR Person 005,Head of Commercial,G3,3,AR Person 002,E002,Commercial,Arden,250000,Strategic
+E006,AR Person 006,Head of Technology,G3,3,AR Person 002,E002,Technology,Arden,240000,Specialist
+E007,AR Person 007,Head of People,G3,3,AR Person 002,E002,Human Capital,Arden,220000,Specialist
+E008,AR Person 008,Head of Catering,G3,3,AR Person 002,E002,Food Solutions,Arden,230000,Operational
+E009,AR Person 009,Cargo & Pharma Manager (cold-chain certified),G4,4,AR Person 004,E004,Cargo,Arden,150000,Specialist
+E010,AR Person 010,Cargo & Pharma Manager (cold-chain certified),G4,4,AR Person 004,E004,Cargo,Arden,150000,Specialist
+E011,AR Person 011,Load Control / Weight & Balance Officer,G5,4,AR Person 003,E003,Gateway Operations,Arden,90000,Specialist
+E012,AR Person 012,Load Control / Weight & Balance Officer,G5,4,AR Person 003,E003,Gateway Operations,Arden,90000,Specialist
+E013,AR Person 013,Hub Duty Controller (disruption),G4,4,AR Person 003,E003,Gateway Operations,Arden,120000,Operational
+E014,AR Person 014,Executive Chef — Culinary Design,G4,4,AR Person 008,E008,Food Solutions,Arden,130000,Specialist
+E015,AR Person 015,Food Safety & Quality Lead,G4,4,AR Person 008,E008,Food Solutions,Arden,110000,Specialist
+E016,AR Person 016,"Head, Analytics & AI",G4,4,AR Person 006,E006,Technology,Arden,170000,Specialist
+E017,AR Person 017,"Head, Data Engineering & Platform",G4,4,AR Person 006,E006,Technology,Arden,165000,Specialist
+E018,AR Person 018,Core-system super-user,G6,4,AR Person 006,E006,Technology,Arden,70000,Specialist
+E019,AR Person 019,Core-system super-user,G6,4,AR Person 006,E006,Technology,Arden,70000,Specialist
+E020,AR Person 020,VP Global Account Management,G4,4,AR Person 005,E005,Commercial,Arden,190000,Strategic
+E021,AR Person 021,Head of Talent Acquisition — specialist hiring,G5,4,AR Person 007,E007,Human Capital,Arden,105000,Specialist
+E022,AR Person 022,Shift Supervisor,G6,4,AR Person 003,E003,Gateway Operations,Arden,65000,Operational
+E023,AR Person 023,Ramp Agent,G8,5,AR Person 022,E022,Gateway Operations,Arden,38000,Operational
+E024,AR Person 024,Ramp Agent,G8,5,AR Person 022,E022,Gateway Operations,Arden,38000,Operational
+E025,AR Person 025,Ramp Agent,G8,5,AR Person 022,E022,Gateway Operations,Arden,38000,Operational
+E026,AR Person 026,Ramp Agent,G8,5,AR Person 022,E022,Gateway Operations,Arden,38000,Operational
+E027,AR Person 027,Ramp Agent,G8,5,AR Person 022,E022,Gateway Operations,Arden,38000,Operational
+E028,AR Person 028,Ramp Agent,G8,5,AR Person 022,E022,Gateway Operations,Arden,38000,Operational
+E029,AR Person 029,Finance Controller,G4,3,AR Person 002,E002,Finance,Arden,150000,Specialist
+E030,AR Person 030,Finance Analyst,G6,4,AR Person 029,E029,Finance,Arden,68000,Specialist
+E031,BE Person 031,Regional Managing Director,G2,2,AR Person 001,E001,Country Leadership,Belmar,252000,Strategic
+E032,BE Person 032,Station Head / General Manager,G3,3,BE Person 031,E031,Gateway Operations,Belmar,156000,Operational
+E033,BE Person 033,Regional VP Cargo,G3,3,BE Person 031,E031,Cargo,Belmar,168000,Operational
+E034,BE Person 034,Head of Commercial,G3,3,BE Person 031,E031,Commercial,Belmar,150000,Strategic
+E035,BE Person 035,Head of Technology,G3,3,BE Person 031,E031,Technology,Belmar,144000,Specialist
+E036,BE Person 036,Head of People,G3,3,BE Person 031,E031,Human Capital,Belmar,132000,Specialist
+E037,BE Person 037,Head of Catering,G3,3,BE Person 031,E031,Food Solutions,Belmar,138000,Operational
+E038,BE Person 038,Cargo & Pharma Manager (cold-chain certified),G4,4,BE Person 033,E033,Cargo,Belmar,90000,Specialist
+E039,BE Person 039,Cargo & Pharma Manager (cold-chain certified),G4,4,BE Person 033,E033,Cargo,Belmar,90000,Specialist
+E040,BE Person 040,Load Control / Weight & Balance Officer,G5,4,BE Person 032,E032,Gateway Operations,Belmar,54000,Specialist
+E041,BE Person 041,Load Control / Weight & Balance Officer,G5,4,BE Person 032,E032,Gateway Operations,Belmar,54000,Specialist
+E042,BE Person 042,Executive Chef — Culinary Design,G4,4,BE Person 037,E037,Food Solutions,Belmar,78000,Specialist
+E043,BE Person 043,Food Safety & Quality Lead,G4,4,BE Person 037,E037,Food Solutions,Belmar,66000,Specialist
+E044,BE Person 044,Core-system super-user,G6,4,BE Person 035,E035,Technology,Belmar,42000,Specialist
+E045,BE Person 045,Core-system super-user,G6,4,BE Person 035,E035,Technology,Belmar,42000,Specialist
+E046,BE Person 046,Head of Pricing / Revenue Management,G4,4,BE Person 034,E034,Commercial,Belmar,96000,Specialist
+E047,BE Person 047,Bid & Solutions Architect,G5,4,BE Person 034,E034,Commercial,Belmar,72000,Specialist
+E048,BE Person 048,VP Global Account Management,G4,4,BE Person 034,E034,Commercial,Belmar,114000,Strategic
+E049,BE Person 049,Head of Talent Acquisition — specialist hiring,G5,4,BE Person 036,E036,Human Capital,Belmar,63000,Specialist
+E050,BE Person 050,Shift Supervisor,G6,4,BE Person 032,E032,Gateway Operations,Belmar,39000,Operational
+E051,BE Person 051,Ramp Agent,G8,5,BE Person 050,E050,Gateway Operations,Belmar,23000,Operational
+E052,BE Person 052,Ramp Agent,G8,5,BE Person 050,E050,Gateway Operations,Belmar,23000,Operational
+E053,BE Person 053,Ramp Agent,G8,5,BE Person 050,E050,Gateway Operations,Belmar,23000,Operational
+E054,BE Person 054,Ramp Agent,G8,5,BE Person 050,E050,Gateway Operations,Belmar,23000,Operational
+E055,BE Person 055,Finance Controller,G4,3,BE Person 031,E031,Finance,Belmar,90000,Specialist
+E056,BE Person 056,Finance Analyst,G6,4,BE Person 055,E055,Finance,Belmar,41000,Specialist
+E057,CA Person 057,Regional Managing Director,G2,2,AR Person 001,E001,Country Leadership,Caldera,210000,Strategic
+E058,CA Person 058,Operations Director,G3,3,CA Person 057,E057,Gateway Operations,Caldera,150000,Operational
+E059,CA Person 059,Station Head / General Manager,G3,4,CA Person 058,E058,Gateway Operations,Caldera,130000,Operational
+E060,CA Person 060,Regional VP Cargo,G3,3,CA Person 057,E057,Cargo,Caldera,140000,Operational
+E061,CA Person 061,Head of Commercial,G3,4,CA Person 058,E058,Commercial,Caldera,125000,Strategic
+E062,CA Person 062,Head of Technology,G3,3,CA Person 057,E057,Technology,Caldera,120000,Specialist
+E063,CA Person 063,Head of People,G3,3,CA Person 057,E057,Human Capital,Caldera,110000,Specialist
+E064,CA Person 064,Head of Catering,G3,3,CA Person 057,E057,Food Solutions,Caldera,115000,Operational
+E065,CA Person 065,Cargo & Pharma Manager (cold-chain certified),G4,4,CA Person 060,E060,Cargo,Caldera,75000,Specialist
+E066,CA Person 066,Load Control / Weight & Balance Officer,G5,5,CA Person 059,E059,Gateway Operations,Caldera,45000,Specialist
+E067,CA Person 067,Load Control / Weight & Balance Officer,G5,5,CA Person 059,E059,Gateway Operations,Caldera,45000,Specialist
+E068,CA Person 068,Hub Duty Controller (disruption),G4,5,CA Person 059,E059,Gateway Operations,Caldera,60000,Operational
+E069,CA Person 069,Hub Duty Controller (disruption),G4,5,CA Person 059,E059,Gateway Operations,Caldera,60000,Operational
+E070,CA Person 070,Executive Chef — Culinary Design,G4,4,CA Person 064,E064,Food Solutions,Caldera,65000,Specialist
+E071,CA Person 071,Food Safety & Quality Lead,G4,4,CA Person 064,E064,Food Solutions,Caldera,55000,Specialist
+E072,CA Person 072,"Head, Analytics & AI",G4,4,CA Person 062,E062,Technology,Caldera,85000,Specialist
+E073,CA Person 073,Core-system super-user,G6,4,CA Person 062,E062,Technology,Caldera,35000,Specialist
+E074,CA Person 074,Core-system super-user,G6,4,CA Person 062,E062,Technology,Caldera,35000,Specialist
+E075,CA Person 075,VP Global Account Management,G4,5,CA Person 061,E061,Commercial,Caldera,95000,Strategic
+E076,CA Person 076,Organisation Design & Change Lead,G5,4,CA Person 063,E063,Human Capital,Caldera,60000,Specialist
+E077,CA Person 077,Head of Talent Acquisition — specialist hiring,G5,4,CA Person 063,E063,Human Capital,Caldera,53000,Specialist
+E078,CA Person 078,Shift Supervisor,G6,5,CA Person 059,E059,Gateway Operations,Caldera,33000,Operational
+E079,CA Person 079,Ramp Agent,G8,6,CA Person 078,E078,Gateway Operations,Caldera,19000,Operational
+E080,CA Person 080,Ramp Agent,G8,6,CA Person 078,E078,Gateway Operations,Caldera,19000,Operational
+E081,CA Person 081,Ramp Agent,G8,6,CA Person 078,E078,Gateway Operations,Caldera,19000,Operational
+E082,CA Person 082,Ramp Agent,G8,6,CA Person 078,E078,Gateway Operations,Caldera,19000,Operational
+E083,CA Person 083,Finance Controller,G4,3,CA Person 057,E057,Finance,Caldera,75000,Specialist
+E084,CA Person 084,Finance Analyst,G6,4,CA Person 083,E083,Finance,Caldera,34000,Specialist

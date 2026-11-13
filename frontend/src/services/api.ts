@@ -22,7 +22,10 @@ import type {
   CompassState,
   CompassPreview,
   Grade,
-  Hypothesis
+  Hypothesis,
+  CompassRolesView,
+  ReasonClass,
+  LinkFindings
 } from '../types';
 
 /** Whole organization when department is empty, otherwise one department. */
@@ -340,15 +343,31 @@ export const aiDispositionApi = {
 type HypothesisInput = Pick<Hypothesis, 'statement' | 'refuted_by' | 'status' | 'note'>;
 export const compassApi = {
   get: async (): Promise<CompassState> => (await api.get('/compass')).data,
-  preview: async (packet: unknown): Promise<CompassPreview> => (await api.post('/compass/preview', { packet })).data,
-  importPacket: async (packet: unknown, replaceCriteria: boolean, replaceStrategy: boolean): Promise<CompassState> =>
-    (await api.post('/compass/import', { packet, replace_criteria: replaceCriteria, replace_strategy: replaceStrategy })).data,
+  /** linkCountry: where to link a packet whose country isn't in the file ("" = whole organization). */
+  preview: async (packet: unknown, linkCountry?: string): Promise<CompassPreview> =>
+    (await api.post('/compass/preview', { packet, link_country: linkCountry })).data,
+  importPacket: async (packet: unknown, replaceCriteria: boolean, replaceStrategy: boolean, linkCountry?: string): Promise<CompassState> =>
+    (await api.post('/compass/import', { packet, replace_criteria: replaceCriteria, replace_strategy: replaceStrategy, link_country: linkCountry })).data,
   saveStrategyDraft: async (text: string): Promise<void> => { await api.put('/compass/strategy-draft', { text }); },
   addHypothesis: async (h: HypothesisInput): Promise<CompassState> => (await api.post('/compass/hypotheses', h)).data,
   updateHypothesis: async (ref: string, h: HypothesisInput): Promise<CompassState> => (await api.put(`/compass/hypotheses/${ref}`, h)).data,
   deleteHypothesis: async (ref: string): Promise<CompassState> => (await api.delete(`/compass/hypotheses/${ref}`)).data,
   setGrade: async (ref: string, grade: Grade | null): Promise<CompassState> => (await api.put('/compass/grades', { ref, grade })).data,
   setRelates: async (ref: string, relatesTo: string[]): Promise<CompassState> => (await api.put('/compass/relates', { ref, relates_to: relatesTo })).data,
+  /** One link's findings: a country's file, or "" for the whole organization's. */
+  findings: async (link: string): Promise<LinkFindings> => (await api.get('/compass/findings', { params: { link } })).data,
+  setLinkGrade: async (country: string, ref: string, grade: Grade | null): Promise<LinkFindings> =>
+    (await api.put('/compass/grades', { ref, grade, country })).data,
+  setLinkRelates: async (country: string, ref: string, relatesTo: string[]): Promise<LinkFindings> =>
+    (await api.put('/compass/relates', { ref, relates_to: relatesTo, country })).data,
+  returnUrl: (link: string, text = false) => `/api/v1/compass/return${text ? '.txt' : ''}${link ? `?link=${encodeURIComponent(link)}` : ''}`,
+  roles: async (): Promise<CompassRolesView> => (await api.get('/compass/roles')).data,
+  /** titles: [] = no job title in this file; null = back to "not matched yet". */
+  setRoleMatch: async (ref: string, titles: string[] | null): Promise<CompassRolesView> =>
+    (await api.put('/compass/roles/match', { ref, titles })).data,
+  acceptExactMatches: async (): Promise<CompassRolesView> => (await api.post('/compass/roles/accept-exact')).data,
+  setRoleReason: async (r: { ref: string; country: string; reason_class: ReasonClass; text: string; compared_with: string; grade: Grade | null }): Promise<CompassRolesView> =>
+    (await api.put('/compass/roles/reason', r)).data,
   returnJsonUrl: '/api/v1/compass/return',
   returnTextUrl: '/api/v1/compass/return.txt',
 };

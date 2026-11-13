@@ -5,7 +5,8 @@
 An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-*2026-11-12.* Shared workflow with Capability Compass built per the owner's PRD: import of the `compass-handoff` file (preview, then confirm), read-only "What the Compass found", shared evidence grades, hypothesis register (H1…), and the `compass-return` file (JSON + readable text) with a findings register in the board pack. 106 backend tests; mock journey 91 backend checks + 21 browser checks; all of `./run_checks.sh` green. Not done (see GUIDE): grades are not shown inline on the Work Activities page (they are on the findings register); Capability Compass cannot read the return file yet; no button to unlink a packet other than starting a new project.
+*2026-11-13.* Owner's countries PRD built (approved with "go" on the four suggested answers): Country column and by-country view; country filters on the department table and org chart; one Compass link per (upload, country) with migration; Compass roles screen (title matches, holders, Compass status, reasons, flags); one findings file per country. Sample files from the Capability Compass repository are test fixtures. `./run_checks.sh`: 123 backend tests, mock journey 110 backend + 25 browser checks, all green.
+Not done (by agreement or out of scope): AI-suggested title matches; per-country AI analysis; comparing processes between countries; a button to unlink a country's packet (re-import replaces it; a new project clears all).
 
 ## This session (2026-10-22) — approved plan, in order
 Phase 1 — Accuracy fixes

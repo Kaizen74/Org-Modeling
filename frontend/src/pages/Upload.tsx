@@ -17,6 +17,7 @@ const COLUMNS: Array<{ name: string; need: 'Required' | 'Recommended' | 'Optiona
   { name: 'Salary', need: 'Recommended', what: 'Annual base; otherwise taken from the grade table' },
   { name: 'Line Manager ID', need: 'Optional', what: 'Removes guesswork when managers share a name' },
   { name: 'Work Type', need: 'Optional', what: '“Operational” on a manager’s row judges them against 10–20 reports (frontline operational); every other manager is judged against 5–10' },
+  { name: 'Country', need: 'Optional', what: 'Where the person works (also “Country/Region”) — enables the by-country view and one Compass file per country' },
   { name: 'Work Activities', need: 'Optional', what: 'What the role does — powers the work activities analysis' },
   { name: 'Job Description', need: 'Optional', what: 'Longer role description' },
 ];

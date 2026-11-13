@@ -11,6 +11,7 @@ export interface Employee {
   employee_id: string;
   manager_id?: string | null; // resolved from Line Manager / Line Manager ID
   work_type?: string;
+  country?: string; // where the person works; only when the file has a Country column
   work_activities?: string;
   job_description?: string;
 }
@@ -48,6 +49,7 @@ export interface ManagerSpanAssessment {
   work_type_basis: string;
   benchmark_range: [number, number];
   status: 'below' | 'within' | 'above';
+  country?: string; // where the manager works; empty when the file has no Country column
 }
 
 export interface SpanOfControl {
@@ -165,7 +167,27 @@ export interface OrgMetrics {
   health_indicators: HealthIndicators;
   data_quality?: { issues: string[] };
   department_analysis?: DepartmentMetrics[];
+  // Present when the org file has a Country column (empty otherwise)
+  country_analysis?: CountryMetrics[];
+  country_reference?: string;
+  department_analysis_by_country?: Record<string, DepartmentMetrics[]>;
   metrics_version?: number;
+}
+
+/** One country: where people work. Layers run from the top of the whole organization. */
+export interface CountryMetrics {
+  country: string;
+  headcount: number;
+  managers: number;
+  manager_ratio_pct: number;
+  layers: number;
+  median_span: number;
+  spans_vs_benchmark: { below: number; within: number; above: number };
+  single_report_managers: number;
+  total_cost: number;
+  health_score: number;
+  health_components: HealthComponent[];
+  differences: string[]; // against the largest country, in words and a symbol
 }
 
 // Key gap can be a string or an object with detailed info
@@ -859,6 +881,17 @@ export interface CompassEngagement {
   scope?: string;
   generated_at?: string;
   format_version?: string;
+  country?: string; // the country the packet's workspace covers; "" for group-wide
+  countries?: string[]; // countries with a linked packet (header summary)
+}
+
+/** One Compass packet linked to this upload: a country, or "" for the whole organization. */
+export interface CompassLink {
+  country: string;
+  label: string;
+  key: string;
+  imported_at: string | null;
+  ready: boolean;
 }
 
 export interface CompassContextData {
@@ -876,7 +909,10 @@ export interface Hypothesis {
 
 export interface SharedFinding {
   ref: string;
-  kind: 'structural_baseline' | 'work_activity' | 'hypothesis' | 'option_score';
+  kind: 'structural_baseline' | 'role_reason' | 'work_activity' | 'hypothesis' | 'option_score';
+  topic?: 'role_presence' | 'role_reason' | 'decision_right' | 'way_of_working';
+  reason_class?: ReasonClass;
+  compared_with?: string;
   title: string;
   detail: string;
   figure: string;
@@ -890,9 +926,12 @@ export interface SharedFinding {
 
 export interface CompassState {
   engagement: CompassEngagement | null;
+  links: CompassLink[];
+  file_countries: string[];
   imported_at: string | null;
   strategy_draft: string;
   context: CompassContextData;
+  contexts: Record<string, CompassContextData>;
   refs: Array<{ ref: string; label: string }>;
   hypotheses: Hypothesis[];
   grades: Grade[];
@@ -905,12 +944,70 @@ export interface CompassState {
   warnings?: string[];
 }
 
+// ---------- Compass anchor roles by country ----------
+
+export type ReasonClass = 'required' | 'chosen' | 'inherited' | 'unknown';
+
+export interface RoleReason {
+  reason_class: ReasonClass;
+  text: string;
+  compared_with: string;
+  grade: Grade | null;
+}
+
+export interface RoleCell {
+  country: string;
+  in_packet: boolean;
+  compass_status: 'exists' | 'thin' | 'absent' | string | null;
+  status_confirmed: boolean | null;
+  holders: number | null; // null until the job-title match is confirmed
+  presence: 'exists' | 'absent' | 'to_confirm' | 'not_matched';
+  flag: string | null;
+  reason: RoleReason | null;
+  missing_note: string | null;
+}
+
+export interface CompassRole {
+  ref: string;
+  title: string;
+  cluster_ref: string;
+  route: string;
+  match_confirmed: boolean;
+  titles: string[];
+  suggestions: Array<{ title: string; kind: 'exact' | 'close' }>;
+  cells: RoleCell[];
+}
+
+export interface CompassRolesView {
+  links: Array<{ country: string; key: string }>;
+  roles: CompassRole[];
+  file_titles: string[];
+  unmatched_titles: number;
+  summary: Record<string, { exists: number; absent: number; to_confirm: number; not_matched: number }>;
+  reason_classes: ReasonClass[];
+  reason_labels: Record<ReasonClass, string>;
+  reason_help: Record<ReasonClass, string>;
+  match_log: Array<{ at: string; ref: string; before: string[] | null; after: string[] | null }>;
+  grades: Grade[];
+  file_countries: string[];
+  accepted?: number;
+}
+
+/** Findings for one link: a country's file, or ("") the whole organization's. */
+export interface LinkFindings {
+  link: { country: string; key: string | null; label: string };
+  findings: SharedFinding[];
+  left_out_not_matched: number;
+}
+
 export interface CompassPreview {
   ok: boolean;
   errors: string[];
   warnings: string[];
   engagement?: CompassEngagement;
-  criteria?: { action: 'set' | 'ask' | 'same' | 'none' | 'invalid'; note: string; incoming: ComparisonCriterion[]; problems: string[]; current_count: number };
-  strategy?: { action: 'set' | 'ask' | 'same' | 'none'; note: string; incoming: string; current: string };
+  country?: { named: string; matched: string | null; target: string | null; needs_choice: boolean; choices: string[]; note: string };
+  replaces?: boolean;
+  criteria?: { action: 'set' | 'ask' | 'same' | 'different' | 'none' | 'invalid'; note: string; incoming: ComparisonCriterion[]; problems: string[]; current_count: number };
+  strategy?: { action: 'set' | 'ask' | 'same' | 'different' | 'none'; note: string; incoming: string; current: string };
   context?: { structure_findings: number; clusters: number; ids: number };
 }

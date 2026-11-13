@@ -14,7 +14,7 @@ import { orgDataApi, metricsApi } from '../services/api';
 import type { HierarchyNode, ManagerSpanAssessment } from '../types';
 import { PageHeader, Chip, BenchmarkPill, EmptyState, Loading, formatMoney } from '../components/ui';
 
-type Overlay = 'department' | 'span' | 'cost' | 'grade';
+type Overlay = 'department' | 'country' | 'span' | 'cost' | 'grade';
 
 // Muted categorical palette (red is reserved for the accent / attention)
 const CATEGORY_COLORS = ['#2D3748', '#9C6B72', '#257A55', '#B97F24', '#6B7FA3', '#8A6F4E', '#5E8C8A', '#4A5568'];
@@ -34,6 +34,7 @@ interface Person {
   name: string;
   title: string;
   department: string;
+  country: string; // where the person works; empty when the file has no Country column
   grade: string;
   salary: number;
   layer: number;
@@ -55,6 +56,7 @@ function buildPeople(root: HierarchyNode, assessments: Map<string, ManagerSpanAs
       name: h.name,
       title: h.data?.job_title ?? '',
       department: h.data?.department ?? '',
+      country: h.data?.country ?? '',
       grade: h.data?.grade ?? '',
       salary: Number(h.data?.salary ?? 0),
       layer,
@@ -136,18 +138,20 @@ interface ChartNodeData {
   stripe: string;
   overlayLabel: string;
   flags: boolean;
+  outside: boolean; // not in the selected country: faded, kept so the reporting line stays readable
   selected: boolean;
   expanded: boolean;
   onToggle: (id: string) => void;
 }
 
 function PersonNode({ data }: NodeProps<ChartNodeData>) {
-  const { person, leaf, stripe, overlayLabel, flags, selected, expanded, onToggle } = data;
+  const { person, leaf, stripe, overlayLabel, flags, outside, selected, expanded, onToggle } = data;
   const height = leaf ? LEAF_H : NODE_H;
   return (
     <div
       className="relative overflow-hidden rounded-[2px] border bg-white text-left transition-colors"
-      style={{ width: NODE_W, height, borderColor: selected ? 'var(--color-primary)' : 'var(--color-hairline)', boxShadow: selected ? '0 0 0 1px var(--color-primary)' : 'none' }}
+      data-outside={outside || undefined}
+      style={{ width: NODE_W, height, opacity: outside ? 0.35 : 1, borderColor: selected ? 'var(--color-primary)' : 'var(--color-hairline)', boxShadow: selected ? '0 0 0 1px var(--color-primary)' : 'none' }}
     >
       <Handle type="target" position={leaf ? Position.Left : Position.Top} style={{ opacity: 0 }} />
       <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: stripe }} />
@@ -190,6 +194,7 @@ function OrgChartInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay>('department');
+  const [country, setCountry] = useState('');
   const [flags, setFlags] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -240,6 +245,14 @@ function OrgChartInner() {
     // Seniority as a sequential ink scale: most senior darkest
     return new Map(ordered.map((g, i) => [g, `rgba(28,31,36,${1 - (0.8 * i) / Math.max(1, ordered.length - 1)})`]));
   }, [people]);
+  // Countries, largest first; each gets a categorical colour like departments do
+  const countryColors = useMemo(() => {
+    const counts = new Map<string, number>();
+    people.forEach((p) => { if (p.country) counts.set(p.country, (counts.get(p.country) ?? 0) + 1); });
+    const ordered = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+    return new Map(ordered.map((c, i) => [c, i < CATEGORY_COLORS.length ? CATEGORY_COLORS[i] : OTHER_COLOR]));
+  }, [people]);
+  const countries = useMemo(() => [...countryColors.keys()], [countryColors]);
   const maxTeamCost = useMemo(() => Math.max(1, ...people.filter((p) => p.children.length).map((p) => p.teamCost)), [people]);
 
   const overlayFor = useCallback(
@@ -247,6 +260,8 @@ function OrgChartInner() {
       switch (overlay) {
         case 'department':
           return { stripe: departmentColors.get(p.department) ?? OTHER_COLOR, label: p.department };
+        case 'country':
+          return { stripe: countryColors.get(p.country) ?? OTHER_COLOR, label: p.country || 'Country not stated' };
         case 'grade':
           return { stripe: gradeColors.get(p.grade) ?? OTHER_COLOR, label: `Grade ${p.grade}` };
         case 'cost':
@@ -262,7 +277,7 @@ function OrgChartInner() {
         }
       }
     },
-    [overlay, departmentColors, gradeColors, maxTeamCost]
+    [overlay, departmentColors, countryColors, gradeColors, maxTeamCost]
   );
 
   const toggle = useCallback((id: string) => {
@@ -285,7 +300,7 @@ function OrgChartInner() {
         position: { x, y },
         draggable: false,
         data: {
-          person, leaf, stripe: o.stripe, overlayLabel: o.label, flags,
+          person, leaf, stripe: o.stripe, overlayLabel: o.label, flags, outside: !!country && person.country !== country,
           selected: person.id === selectedId, expanded: expanded.has(person.id), onToggle: toggle,
         },
       };
@@ -298,7 +313,7 @@ function OrgChartInner() {
       style: { stroke: '#CFC6BB', strokeWidth: 1.2 },
     }));
     return { nodes: rfNodes, edges: rfEdges };
-  }, [root, expanded, overlayFor, flags, selectedId, toggle]);
+  }, [root, expanded, overlayFor, flags, country, selectedId, toggle]);
 
   const expandTo = (p: Person) => {
     setExpanded((prev) => {
@@ -307,6 +322,24 @@ function OrgChartInner() {
       while (cur) { next.add(cur.id); cur = cur.parent; }
       return next;
     });
+  };
+
+  // Pick a country: open every team that contains someone working there; fade everyone else
+  const showCountry = (c: string) => {
+    setCountry(c);
+    if (!c || !root) return;
+    // Only the teams on the way to that country's people, so other countries don't widen the chart
+    const open = new Set<string>();
+    people.filter((p) => p.country === c).forEach((p) => ancestorIds(p).forEach((id) => open.add(id)));
+    setExpanded(open);
+    // Centre on the country's most senior person at a readable zoom (a whole country can be too wide to fit)
+    const top = people.filter((p) => p.country === c).sort((x, y) => x.layer - y.layer)[0];
+    if (!top) return;
+    setSelectedId(top.id);
+    setTimeout(() => {
+      const pos = layout(root, open).nodes.find((n) => n.person.id === top.id);
+      if (pos) setCenter(pos.x + NODE_W / 2, pos.y + NODE_H * 3, { zoom: 0.75, duration: 400 });
+    }, 50);
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -343,6 +376,8 @@ function OrgChartInner() {
   const legend: Array<[string, string]> =
     overlay === 'department'
       ? [...departmentColors.entries()].slice(0, CATEGORY_COLORS.length).map(([d, c]) => [d, c])
+      : overlay === 'country'
+        ? [...countryColors.entries()].map(([d, c]) => [d, c])
       : overlay === 'grade'
         ? [...gradeColors.entries()].map(([g, c]) => [g, c])
         : overlay === 'span'
@@ -363,9 +398,17 @@ function OrgChartInner() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <span className="label mb-0 mr-1">Colour by</span>
-        {([['department', 'Department'], ['span', 'Span vs benchmark'], ['cost', 'Team cost'], ['grade', 'Grade']] as const).map(([k, label]) => (
-          <Chip key={k} active={overlay === k} onClick={() => setOverlay(k)}>{label}</Chip>
-        ))}
+        {([['department', 'Department'], ['country', 'Country'], ['span', 'Span vs benchmark'], ['cost', 'Team cost'], ['grade', 'Grade']] as const)
+          .filter(([k]) => k !== 'country' || countries.length > 0)
+          .map(([k, label]) => (
+            <Chip key={k} active={overlay === k} onClick={() => setOverlay(k)}>{label}</Chip>
+          ))}
+        {countries.length > 0 && (
+          <select value={country} onChange={(e) => showCountry(e.target.value)} className="input ml-3 w-auto py-1.5 text-sm" aria-label="Filter by country">
+            <option value="">All countries</option>
+            {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
         <label className="ml-3 flex items-center gap-2 text-sm text-secondary">
           <input type="checkbox" checked={flags} onChange={(e) => setFlags(e.target.checked)} className="accent-[#C41E3A]" />
           Flag layer-removal candidates
@@ -382,6 +425,12 @@ function OrgChartInner() {
         </form>
       </div>
       {searchMiss && <p className="mb-3 text-sm text-faint">No one matches “{query}”.</p>}
+      {country && (
+        <p className="mb-3 text-sm text-secondary" role="status">
+          Showing the {people.filter((p) => p.country === country).length} people who work in {country}, with every team that contains one open.
+          People elsewhere are faded, so reporting lines that cross countries stay visible.
+        </p>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div className="card relative h-[640px] p-0">
@@ -413,6 +462,7 @@ function OrgChartInner() {
           <dl className="mt-5 divide-y divide-hairline border-y border-hairline text-sm">
             {[
               ['Department', selected.department || '—'],
+              ...(selected.country ? [['Country', selected.country] as [string, string]] : []),
               ['Grade', selected.grade || '—'],
               ['Layer', selected.layer || '—'],
               ['Direct reports', selected.span],

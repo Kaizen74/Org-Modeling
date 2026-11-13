@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { metricsApi } from '../services/api';
-import type { OrgMetrics, ManagerSpanAssessment } from '../types';
+import type { OrgMetrics, ManagerSpanAssessment, CountryMetrics } from '../types';
 import {
   PageHeader,
   Section,
@@ -13,10 +13,56 @@ import {
   Chip,
   EmptyState,
   Loading,
+  StatusPill,
+  scoreStatus,
   formatMoney,
 } from '../components/ui';
 
 type SpanFilter = 'all' | 'below' | 'within' | 'above';
+
+/** Countries side by side: one column per country, the same measures down the rows. */
+function CountryTable({ countries, reference }: { countries: CountryMetrics[]; reference?: string }) {
+  const rows: Array<[string, (c: CountryMetrics) => React.ReactNode]> = [
+    ['People', (c) => c.headcount],
+    ['Managers', (c) => <>{c.managers} <span className="text-xs text-faint">({c.manager_ratio_pct}%)</span></>],
+    ['Layers', (c) => c.layers],
+    ['Median span', (c) => c.median_span || '–'],
+    ['Managers within their span benchmark', (c) => `${c.spans_vs_benchmark.within} of ${c.managers}`],
+    ['Single-report managers', (c) => c.single_report_managers],
+    ['People cost', (c) => formatMoney(c.total_cost)],
+    ['Structural health', (c) => <span className="inline-flex items-center gap-2">{c.health_score}<StatusPill status={scoreStatus(c.health_score)} /></span>],
+  ];
+  return (
+    <div className="card overflow-x-auto p-0">
+      <table className="w-full text-sm" aria-label="Countries side by side">
+        <thead>
+          <tr className="hairline-b text-left text-[11px] font-semibold uppercase tracking-[.14em] text-secondary">
+            <th className="px-6 py-3">Measure</th>
+            {countries.map((c) => <th key={c.country} className="px-4 py-3 text-right">{c.country}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([label, cell]) => (
+            <tr key={label} className="hairline-b">
+              <td className="px-6 py-2.5 text-ink">{label}</td>
+              {countries.map((c) => <td key={c.country} className="tabular px-4 py-2.5 text-right font-semibold text-ink">{cell(c)}</td>)}
+            </tr>
+          ))}
+          <tr className="align-top">
+            <td className="px-6 py-3 text-ink">Compared with {reference}</td>
+            {countries.map((c) => (
+              <td key={c.country} className="px-4 py-3 text-right text-xs text-secondary">
+                {c.country === reference ? <span className="text-faint">Reference (largest)</span>
+                  : c.differences.length ? c.differences.map((d) => <span key={d} className="block">{d}</span>)
+                  : <span className="text-faint">No notable difference</span>}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 const BENCH_COLORS = {
   below: 'var(--color-score-amber)',
@@ -40,6 +86,7 @@ export default function Metrics() {
   const [error, setError] = useState<string | null>(null);
   const [spanFilter, setSpanFilter] = useState<SpanFilter>('all');
   const [deptFilter, setDeptFilter] = useState('');
+  const [countryFilter, setCountryFilter] = useState('');
   const [showAllManagers, setShowAllManagers] = useState(false);
 
   useEffect(() => {
@@ -65,6 +112,7 @@ export default function Metrics() {
   );
   const filteredManagers = assessments.filter(
     (a) => (spanFilter === 'all' || a.status === spanFilter) && (!deptFilter || a.department === deptFilter)
+      && (!countryFilter || a.country === countryFilter)
   );
 
   if (loading) return <Loading label="Calculating the structure" />;
@@ -83,7 +131,8 @@ export default function Metrics() {
   const below = vs['Below benchmark'];
   const within = vs['Within benchmark'];
   const above = vs['Above benchmark'];
-  const depts = metrics.department_analysis ?? [];
+  const countries = metrics.country_analysis ?? [];
+  const depts = (countryFilter && metrics.department_analysis_by_country?.[countryFilter]) || metrics.department_analysis || [];
   const layers = metrics.layer_analysis;
   const layerRows = Object.entries(layers.by_level)
     .map(([layer, v]) => ({ layer: Number(layer), count: v.count }))
@@ -98,6 +147,13 @@ export default function Metrics() {
     .sort((a, b) => b.total_cost - a.total_cost);
   const maxDeptHeadcount = Math.max(1, ...depts.map((d) => d.headcount));
   const layersComponent = metrics.health_indicators.components?.find((c) => c.key === 'layers');
+  const n = (k: number) => String(k + (countries.length ? 1 : 0)).padStart(2, '0');
+  const countrySelect = countries.length > 0 && (
+    <select value={countryFilter} onChange={(e) => { setCountryFilter(e.target.value); setDeptFilter(''); }} className="input w-auto py-1.5 text-sm" aria-label="Filter by country">
+      <option value="">All countries</option>
+      {countries.map((c) => <option key={c.country} value={c.country}>{c.country}</option>)}
+    </select>
+  );
 
   const headline =
     managers === 0
@@ -127,7 +183,7 @@ export default function Metrics() {
       />
 
       <div className="mb-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatTile label="People" value={metrics.total_employees.toLocaleString()} sub={depts.length ? `${depts.length} departments` : undefined} />
+        <StatTile label="People" value={metrics.total_employees.toLocaleString()} sub={[(metrics.department_analysis ?? []).length && `${(metrics.department_analysis ?? []).length} departments`, countries.length && `${countries.length} countries`].filter(Boolean).join(' · ') || undefined} />
         <StatTile label="Managers" value={managers} sub={`${metrics.manager_stats.manager_ratio_pct}% of people`} />
         <StatTile label="Median span" value={span.median_span} sub={`range ${span.min_span}–${span.max_span}`} />
         <StatTile
@@ -168,8 +224,9 @@ export default function Metrics() {
               {f === 'all' ? `All managers (${assessments.length})` : `${f[0].toUpperCase()}${f.slice(1)} (${assessments.filter((a) => a.status === f).length})`}
             </Chip>
           ))}
+          {countrySelect && <span className="ml-auto">{countrySelect}</span>}
           {depts.length > 1 && (
-            <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className="input ml-auto w-auto py-1.5 text-sm" aria-label="Filter by department">
+            <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className={`input w-auto py-1.5 text-sm ${countrySelect ? '' : 'ml-auto'}`} aria-label="Filter by department">
               <option value="">All departments</option>
               {depts.map((d) => <option key={d.department} value={d.department}>{d.department}</option>)}
             </select>
@@ -222,9 +279,30 @@ export default function Metrics() {
         </p>
       </Section>
 
+      {/* Countries */}
+      {countries.length > 0 && (
+        <Section
+          eyebrow="02 · By country"
+          title="The same lenses, country by country"
+          lede="A person's country is where they work. Differences are stated against the largest country."
+        >
+          <CountryTable countries={countries} reference={metrics.country_reference} />
+          <p className="mt-3 text-xs text-faint">
+            Layers for a country are counted from the top of the whole organization down to its deepest person: decision distance starts at the top.
+            A manager's span counts all their direct reports, wherever those people work, and the manager is listed under their own country.
+          </p>
+          <p className="mt-1 text-xs text-faint">Salaries are read as one currency; convert before uploading if countries are paid in different currencies.</p>
+        </Section>
+      )}
+
       {/* Departments */}
       {depts.length > 0 && (
-        <Section eyebrow="02 · Departments" title="The same lenses, department by department" lede="Sorted by size. Bars start at zero.">
+        <Section
+          eyebrow={`${n(2)} · Departments`}
+          title={countryFilter ? `Departments in ${countryFilter}` : 'The same lenses, department by department'}
+          lede={countryFilter ? 'People who work in this country only; shares are of this country.' : 'Sorted by size. Bars start at zero.'}
+          aside={countrySelect || undefined}
+        >
           <div className="card overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead>
@@ -273,7 +351,7 @@ export default function Metrics() {
       )}
 
       {/* Layers */}
-      <Section eyebrow="03 · Layers" title={layersComponent ? layersComponent.value : `${layers.total_layers} layers`}>
+      <Section eyebrow={`${n(3)} · Layers`} title={layersComponent ? layersComponent.value : `${layers.total_layers} layers`}>
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="card">
             <p className="label">People in each layer</p>
@@ -313,7 +391,7 @@ export default function Metrics() {
       </Section>
 
       {/* Cost */}
-      <Section eyebrow="04 · Cost" title={`${formatMoney(metrics.cost_analysis.total_cost)} annual people cost`}>
+      <Section eyebrow={`${n(4)} · Cost`} title={`${formatMoney(metrics.cost_analysis.total_cost)} annual people cost`}>
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="card">
             <p className="label">Cost by layer</p>
@@ -357,7 +435,7 @@ export default function Metrics() {
 
       {/* Health checks */}
       {metrics.health_indicators.components && (
-        <Section eyebrow="05 · Health checks" title={`Structural health ${metrics.health_indicators.health_score}/100`}>
+        <Section eyebrow={`${n(5)} · Health checks`} title={`Structural health ${metrics.health_indicators.health_score}/100`}>
           <div className="card">
             <div className="grid gap-x-10 gap-y-6 md:grid-cols-2">
               {metrics.health_indicators.components.map((c) => (

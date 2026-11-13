@@ -1,0 +1,74 @@
+{
+  "format": "compass-return",
+  "format_version": "1.0",
+  "generated_at": "2026-11-13T09:00:00Z",
+  "source_app": "org-modeling",
+  "engagement_key": "MERIDIANBE",
+  "country": "Belmar",
+  "findings": [
+    {
+      "ref": "baseline.layers",
+      "kind": "structural_baseline",
+      "title": "Layers in the reporting chain (Belmar)",
+      "detail": "Counted from who reports to whom, for the people whose Country is Belmar. The chain starts at the group chief executive in Arden.",
+      "grade": "confirmed",
+      "figure": "5 layers",
+      "relates_to": [
+        "CAP-05.Structure"
+      ],
+      "source_note": "Computed from the uploaded org file (26 people in Belmar)",
+      "topic": "role_presence"
+    },
+    {
+      "ref": "RL-011",
+      "kind": "role_reason",
+      "title": "Why Head of Pricing / Revenue Management exists in Belmar",
+      "detail": "Created in 2023 when Belmar won its two largest renewal contracts; Arden has no such role and leaves pricing to finance.",
+      "grade": "indicated",
+      "figure": "1 person",
+      "relates_to": [
+        "RL-011",
+        "CAP-04",
+        "CAP-04.People"
+      ],
+      "source_note": "Stated by the country manager; headcount from the uploaded org file.",
+      "topic": "role_reason",
+      "reason_class": "chosen",
+      "compared_with": "Arden"
+    },
+    {
+      "ref": "RL-007",
+      "kind": "role_reason",
+      "title": "Why Head, Analytics & AI is absent in Belmar",
+      "detail": "Belmar buys analytics as a service rather than staffing a team: a deliberate decision taken in 2025 on cost grounds.",
+      "grade": "confirmed",
+      "figure": "0 people",
+      "relates_to": [
+        "RL-007",
+        "CAP-03",
+        "CAP-03.Structure"
+      ],
+      "source_note": "Reason stated by the country manager; headcount from the uploaded org file.",
+      "topic": "role_reason",
+      "reason_class": "chosen",
+      "compared_with": "Arden"
+    },
+    {
+      "ref": "RL-004",
+      "kind": "role_reason",
+      "title": "Why Hub Duty Controller (disruption) is absent in Belmar",
+      "detail": "Covered by rotating shift supervisors since the merger; nobody holds disruption judgement as their job. Arden has one, on a thin bench.",
+      "grade": "indicated",
+      "figure": "0 people",
+      "relates_to": [
+        "RL-004",
+        "CAP-01",
+        "CAP-01.People"
+      ],
+      "source_note": "Stated in three interviews; headcount from the uploaded org file.",
+      "topic": "role_reason",
+      "reason_class": "inherited",
+      "compared_with": "Arden"
+    }
+  ]
+}
