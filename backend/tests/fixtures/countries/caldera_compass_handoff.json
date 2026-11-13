@@ -1,0 +1,1454 @@
+{
+  "format": "compass-handoff",
+  "format_version": "1.0",
+  "generated_at": "2026-11-13T09:00:00Z",
+  "source_app": "capability-compass",
+  "engagement": {
+    "key": "MERIDIANCA",
+    "name": "Meridian Group (fictional demo) — Caldera",
+    "organisation": "Meridian Group (fictional demo)",
+    "industry": "Aviation, Logistics & Transportation",
+    "unit": "capability",
+    "scope": "Caldera — Whole group, six capability clusters",
+    "country": "Caldera",
+    "currency": "$",
+    "value_unit": "m",
+    "baseline_version": null,
+    "working_version": "v0.1 (working)"
+  },
+  "vocabulary": {
+    "maturity_levels": [
+      {
+        "level": 1,
+        "label": "Absent"
+      },
+      {
+        "level": 2,
+        "label": "Early"
+      },
+      {
+        "level": 3,
+        "label": "Emerging"
+      },
+      {
+        "level": 4,
+        "label": "Established"
+      }
+    ],
+    "evidence_grades": [
+      {
+        "key": "confirmed",
+        "label": "Confirmed",
+        "signal_label": "Metric",
+        "means": "You would defend this in front of a sceptic: independent sources agree, or a system record backs it.",
+        "org_modeling_term": "OBSERVABLE",
+        "process_map_term": "Observed (O)"
+      },
+      {
+        "key": "indicated",
+        "label": "Indicated",
+        "signal_label": "Trace",
+        "means": "A reasonable reading of limited evidence: one good source, or several of the same kind.",
+        "org_modeling_term": "PERCEPTUAL",
+        "process_map_term": "Inferred (I)"
+      },
+      {
+        "key": "hypothesis",
+        "label": "Hypothesis",
+        "signal_label": "Claim",
+        "means": "Not yet tested: AI output, self-report, or marketing. Never drives a decision on its own.",
+        "org_modeling_term": "MODEL-INFERRED",
+        "process_map_term": "Inferred (I), unverified"
+      }
+    ],
+    "id_prefixes": [
+      {
+        "prefix": "CAP",
+        "what": "Capability cluster",
+        "owner": "Compass"
+      },
+      {
+        "prefix": "VS",
+        "what": "Value stream (a cluster in a value-stream workspace, or a pilot)",
+        "owner": "Compass"
+      },
+      {
+        "prefix": "LV",
+        "what": "P&L lever",
+        "owner": "Compass"
+      },
+      {
+        "prefix": "RL",
+        "what": "Anchor role",
+        "owner": "Compass"
+      },
+      {
+        "prefix": "SG",
+        "what": "External signal",
+        "owner": "Compass"
+      },
+      {
+        "prefix": "P",
+        "what": "Operating-model design principle",
+        "owner": "Compass (Stage 0)"
+      },
+      {
+        "prefix": "C",
+        "what": "Operating-system reference component",
+        "owner": "Compass (Stage 0)"
+      },
+      {
+        "prefix": "DC",
+        "what": "Design criterion",
+        "owner": "Compass (Stage 0)"
+      },
+      {
+        "prefix": "LG",
+        "what": "Leapfrog gate test",
+        "owner": "Compass (Stage 0)"
+      },
+      {
+        "prefix": "DEC",
+        "what": "Decision-log entry",
+        "owner": "Compass (Stage 0)"
+      },
+      {
+        "prefix": "S",
+        "what": "Process step",
+        "owner": "Process Map Studio"
+      },
+      {
+        "prefix": "X",
+        "what": "Discrepancy (documented vs done)",
+        "owner": "Process Map Studio"
+      },
+      {
+        "prefix": "I",
+        "what": "Intent statement",
+        "owner": "Process Map Studio"
+      },
+      {
+        "prefix": "H",
+        "what": "Operating-model hypothesis",
+        "owner": "Org Modeling"
+      },
+      {
+        "prefix": "V",
+        "what": "Difference between two countries' maps of the same process",
+        "owner": "Process Map Studio"
+      },
+      {
+        "prefix": "T",
+        "what": "Task",
+        "owner": "Workbench"
+      }
+    ],
+    "note": "Quote an ID as <engagement key>:<ID>, for example MERIDIANCA:CAP-01, when it leaves this engagement."
+  },
+  "charter": {
+    "sponsor": "Group Chief Executive (fictional)",
+    "locked_at": "2026-03-15T09:00:00Z",
+    "thesis": {
+      "serve": "Airlines, freight forwarders and food-service customers who need reliable turnarounds at scale.",
+      "outcome": "Aircraft and cargo that leave on time, safely, with nothing left behind.",
+      "profit": "Paid per unit handled; margin comes from labour productivity and renewal pricing.",
+      "moat": "Licences, network breadth and judgement built over years in safety-critical work.",
+      "scale": "Each new station is cheaper to bring up once the operating routines are standard."
+    },
+    "principles": [
+      {
+        "ref": "P1",
+        "principle": "Decisions are made at the station, by one named role.",
+        "refuted_by": "Event records showing a different role deciding in more than one case in five."
+      },
+      {
+        "ref": "P2",
+        "principle": "Standard work is written once and run everywhere.",
+        "refuted_by": "Three or more routes for the same step across shifts."
+      },
+      {
+        "ref": "P3",
+        "principle": "AI takes the rule-based work; people keep the judgement.",
+        "refuted_by": "An automated step that still needs a person to correct it most days."
+      },
+      {
+        "ref": "P4",
+        "principle": "Capability is built ahead of growth, not after it.",
+        "refuted_by": "Anchor seats still absent two cycles after a growth decision."
+      }
+    ],
+    "reference_model": [
+      {
+        "ref": "C1",
+        "name": "Direction",
+        "observable_test": "Share of unit scorecards tied to the breakthrough goals and reviewed monthly"
+      },
+      {
+        "ref": "C2",
+        "name": "Standard work",
+        "observable_test": "Share of critical steps where the documented way matches what is done"
+      },
+      {
+        "ref": "C3",
+        "name": "Daily management",
+        "observable_test": "Board updated every cycle; time from a red signal to escalation"
+      },
+      {
+        "ref": "C4",
+        "name": "Problem solving",
+        "observable_test": "Median days from a red signal to a countermeasure; 90-day recurrence"
+      },
+      {
+        "ref": "C5",
+        "name": "Improvement engine",
+        "observable_test": "Improvements delivered per quarter with savings evidence"
+      },
+      {
+        "ref": "C6",
+        "name": "Governance and decision rights",
+        "observable_test": "A named owner; decision rights documented and followed"
+      },
+      {
+        "ref": "C7",
+        "name": "Capability and talent",
+        "observable_test": "Share of unit leaders certified; the criterion is used in talent reviews"
+      },
+      {
+        "ref": "C8",
+        "name": "Integration playbook",
+        "observable_test": "Days for a new unit to run the first two tiers of the routine"
+      }
+    ],
+    "design_criteria": [
+      {
+        "id": "installs_the_routines_in_a_new_unit_quic",
+        "ref": "DC-1",
+        "name": "Installs the routines in a new unit quickly",
+        "kind": "judged",
+        "weight": 25,
+        "description": "How fast the design gets the operating system running somewhere new"
+      },
+      {
+        "id": "clear_decision_rights_at_the_anchor_laye",
+        "ref": "DC-2",
+        "name": "Clear decision rights at the anchor layer",
+        "kind": "judged",
+        "weight": 20,
+        "description": "One named role makes each recurring decision"
+      },
+      {
+        "id": "protects_and_develops_judgement_in_compl",
+        "ref": "DC-3",
+        "name": "Protects and develops judgement in complex work",
+        "kind": "judged",
+        "weight": 15,
+        "description": "Human judgement is kept where the work needs it"
+      },
+      {
+        "id": "layers_added",
+        "ref": "DC-4",
+        "name": "Layers added",
+        "kind": "measured",
+        "weight": 15,
+        "metric": "layers",
+        "better": "lower"
+      },
+      {
+        "id": "annual_cost_change",
+        "ref": "DC-5",
+        "name": "Annual cost change",
+        "kind": "measured",
+        "weight": 15,
+        "metric": "total_cost",
+        "better": "lower"
+      },
+      {
+        "id": "disruption_people_affected",
+        "ref": "DC-6",
+        "name": "Disruption (people affected)",
+        "kind": "measured",
+        "weight": 10,
+        "metric": "people_affected_pct",
+        "better": "lower"
+      }
+    ],
+    "leapfrog_gate": [
+      {
+        "ref": "LG-1",
+        "test": "Standards for clear, rule-based work are written so a machine can run and check them"
+      },
+      {
+        "ref": "LG-2",
+        "test": "Standards are refreshed on a fixed cadence from how the work is actually done"
+      },
+      {
+        "ref": "LG-3",
+        "test": "AI is built into daily management and problem solving, not bolted on"
+      },
+      {
+        "ref": "LG-4",
+        "test": "Human judgement is protected and developed in complex work"
+      },
+      {
+        "ref": "LG-5",
+        "test": "The design installs faster than competitors can in a new unit"
+      }
+    ],
+    "evidence_rules": [
+      {
+        "rule": "Every finding carries a grade: Confirmed, Indicated or Hypothesis. The grade is the assessor's judgement, made with the evidence in view.",
+        "applies_to": "All apps"
+      },
+      {
+        "rule": "A Hypothesis never drives a decision on its own.",
+        "applies_to": "All apps"
+      },
+      {
+        "rule": "One assessor scores each cell; the rationale and sources are recorded so the score can be challenged.",
+        "applies_to": "Capability Compass"
+      },
+      {
+        "rule": "At least 5 cases behind any step metric.",
+        "applies_to": "Process Map Studio"
+      },
+      {
+        "rule": "At least 30 desire-pulse responses per role group; any task mapping below 0.70 confidence is reviewed by a person.",
+        "applies_to": "Workbench"
+      },
+      {
+        "rule": "Archetype fit stays a Hypothesis until process evidence tests it.",
+        "applies_to": "Org Modeling"
+      },
+      {
+        "rule": "Value figures are estimates until finance validates them.",
+        "applies_to": "All apps"
+      }
+    ],
+    "decision_log": [
+      {
+        "ref": "DEC-01",
+        "stage": "0 Frame",
+        "decision": "Thesis, design principles, reference model, criteria and evidence rules",
+        "owner": "Group Chief Executive",
+        "evidence_required": "Sponsor sign-off",
+        "status": "decided",
+        "date": "2026-03-15T09:00:00Z"
+      },
+      {
+        "ref": "DEC-02",
+        "stage": "1 Focus",
+        "decision": "Which value streams to pilot",
+        "owner": "Divisional CEO",
+        "evidence_required": "Every cluster scored; exclusions stated",
+        "status": "open",
+        "date": null
+      },
+      {
+        "ref": "DEC-03",
+        "stage": "2 Find",
+        "decision": "Which discrepancies to act on",
+        "owner": "Pilot steering group",
+        "evidence_required": "Each graded Confirmed or Indicated",
+        "status": "open",
+        "date": null
+      },
+      {
+        "ref": "DEC-04",
+        "stage": "3 Dial",
+        "decision": "Step dispositions and the top operating-system gaps",
+        "owner": "Pilot steering group",
+        "evidence_required": "Evidence shown for every gap",
+        "status": "open",
+        "date": null
+      },
+      {
+        "ref": "DEC-05",
+        "stage": "4 Design",
+        "decision": "The combined model-and-system design, and first-tranche funding",
+        "owner": "Group executive committee",
+        "evidence_required": "Criteria ranking, leapfrog gate, investment case",
+        "status": "open",
+        "date": null
+      },
+      {
+        "ref": "DEC-06",
+        "stage": "5 Deliver",
+        "decision": "Scale, adjust or stop",
+        "owner": "Group executive committee",
+        "evidence_required": "Scorecard with finance-validated value",
+        "status": "open",
+        "date": null
+      }
+    ]
+  },
+  "clusters": [
+    {
+      "ref": "CAP-01",
+      "name": "Gateway / Hub Services",
+      "desc": "Cargo, ground handling, and hub-of-the-future innovation.",
+      "priority_move": "Scale hub-of-the-future globally + close the safety-culture gap urgently.",
+      "avg_level": 2.75,
+      "trajectory": "Unknown",
+      "economic_weight_pct": 21,
+      "exposure_index": 8.8,
+      "value_at_stake": 32,
+      "money_at_risk": 13.3,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-01.Structure",
+          "lens": "Structure",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Established",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-01.People",
+          "lens": "People",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Early",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-01.Process",
+          "lens": "Process",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Early",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-01.Culture",
+          "lens": "Culture",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Taking hold",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        }
+      ]
+    },
+    {
+      "ref": "CAP-02",
+      "name": "Food & Catering Solutions",
+      "desc": "Aviation catering and adjacent large-scale food manufacturing.",
+      "priority_move": "Monetise waste-intelligence platform + arrest the cultural decline.",
+      "avg_level": 3,
+      "trajectory": "Unknown",
+      "economic_weight_pct": 10,
+      "exposure_index": 3.3,
+      "value_at_stake": 15,
+      "money_at_risk": 5,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-02.Structure",
+          "lens": "Structure",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Taking hold",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-02.People",
+          "lens": "People",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Taking hold",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-02.Process",
+          "lens": "Process",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Taking hold",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-02.Culture",
+          "lens": "Culture",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Taking hold",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        }
+      ]
+    },
+    {
+      "ref": "CAP-03",
+      "name": "Technology, Data & AI",
+      "desc": "Operational excellence, technology, and data & AI as one discipline.",
+      "priority_move": "Scale the digital core + drive data standardisation + AI CoE globally.",
+      "avg_level": 2.25,
+      "trajectory": "Unknown",
+      "economic_weight_pct": 30,
+      "exposure_index": 17.5,
+      "value_at_stake": 48,
+      "money_at_risk": 28,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-03.Structure",
+          "lens": "Structure",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Taking hold",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-03.People",
+          "lens": "People",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Early",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-03.Process",
+          "lens": "Process",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Early",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-03.Culture",
+          "lens": "Culture",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Early",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        }
+      ]
+    },
+    {
+      "ref": "CAP-04",
+      "name": "Commercial Leadership",
+      "desc": "Global accounts, pricing, bid management, and customer value.",
+      "priority_move": "Fill the commercial bench + activate global accounts + per-country growth plans.",
+      "avg_level": 2.25,
+      "trajectory": "Unknown",
+      "economic_weight_pct": 22,
+      "exposure_index": 12.8,
+      "value_at_stake": 36,
+      "money_at_risk": 21,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-04.Structure",
+          "lens": "Structure",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Early",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-04.People",
+          "lens": "People",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Early",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-04.Process",
+          "lens": "Process",
+          "level": 2,
+          "level_label": "Early",
+          "status": "Early",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-04.Culture",
+          "lens": "Culture",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Taking hold",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        }
+      ]
+    },
+    {
+      "ref": "CAP-05",
+      "name": "Enterprise Leadership",
+      "desc": "Leadership bench, succession, and organisational effectiveness.",
+      "priority_move": "Scale leadership development globally + close the bottom-quintile long tail.",
+      "avg_level": 3.25,
+      "trajectory": "Unknown",
+      "economic_weight_pct": 12,
+      "exposure_index": 3,
+      "value_at_stake": 18,
+      "money_at_risk": 4.5,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-05.Structure",
+          "lens": "Structure",
+          "level": 4,
+          "level_label": "Established",
+          "status": "Established",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-05.People",
+          "lens": "People",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Taking hold",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-05.Process",
+          "lens": "Process",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Taking hold",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        },
+        {
+          "ref": "CAP-05.Culture",
+          "lens": "Culture",
+          "level": 3,
+          "level_label": "Emerging",
+          "status": "Taking hold",
+          "rationale": "Fictional demo position for Caldera.",
+          "intervention": "",
+          "grade": "indicated",
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [
+            {
+              "label": "Caldera country review 2026 (demo)",
+              "note": "",
+              "ref": null
+            }
+          ],
+          "watch": []
+        }
+      ]
+    },
+    {
+      "ref": "CAP-06",
+      "name": "Human Capital & Enabling",
+      "desc": "Future-ready HR, finance, and support capabilities.",
+      "priority_move": "Build people analytics + activate the engagement framework at scale.",
+      "avg_level": 1,
+      "trajectory": "Unknown",
+      "economic_weight_pct": 5,
+      "exposure_index": 5,
+      "value_at_stake": 8,
+      "money_at_risk": 8,
+      "value_validated": false,
+      "cells": [
+        {
+          "ref": "CAP-06.Structure",
+          "lens": "Structure",
+          "level": 1,
+          "level_label": "Absent",
+          "status": "Not yet assessed",
+          "rationale": "",
+          "intervention": "",
+          "grade": null,
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [],
+          "watch": []
+        },
+        {
+          "ref": "CAP-06.People",
+          "lens": "People",
+          "level": 1,
+          "level_label": "Absent",
+          "status": "Not yet assessed",
+          "rationale": "",
+          "intervention": "",
+          "grade": null,
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [],
+          "watch": []
+        },
+        {
+          "ref": "CAP-06.Process",
+          "lens": "Process",
+          "level": 1,
+          "level_label": "Absent",
+          "status": "Not yet assessed",
+          "rationale": "",
+          "intervention": "",
+          "grade": null,
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [],
+          "watch": []
+        },
+        {
+          "ref": "CAP-06.Culture",
+          "lens": "Culture",
+          "level": 1,
+          "level_label": "Absent",
+          "status": "Not yet assessed",
+          "rationale": "",
+          "intervention": "",
+          "grade": null,
+          "trajectory": "Unknown",
+          "confidence": null,
+          "evidence": [],
+          "watch": []
+        }
+      ]
+    }
+  ],
+  "levers": [
+    {
+      "ref": "LV-01",
+      "name": "Revenue quality",
+      "figure": "",
+      "economic_weight_pct": 22,
+      "value_at_stake": 36,
+      "validated": false,
+      "capability": "Commercial operating model, pricing & revenue management, bid architecture, global key accounts",
+      "cluster_ref": "CAP-04"
+    },
+    {
+      "ref": "LV-02",
+      "name": "Staff-cost productivity",
+      "figure": "",
+      "economic_weight_pct": 30,
+      "value_at_stake": 48,
+      "validated": false,
+      "capability": "AI workforce optimisation, predictive rostering, job redesign, workforce analytics",
+      "cluster_ref": "CAP-03"
+    },
+    {
+      "ref": "LV-03",
+      "name": "Food input & materials",
+      "figure": "",
+      "economic_weight_pct": 10,
+      "value_at_stake": 15,
+      "validated": false,
+      "capability": "Culinary innovation, food technology, procurement, waste intelligence",
+      "cluster_ref": "CAP-02"
+    },
+    {
+      "ref": "LV-04",
+      "name": "Assets & capital",
+      "figure": "",
+      "economic_weight_pct": 14,
+      "value_at_stake": 21,
+      "validated": false,
+      "capability": "Hub development & automation engineering, asset management, capital-allocation governance",
+      "cluster_ref": "CAP-01"
+    },
+    {
+      "ref": "LV-05",
+      "name": "Synergy & integration",
+      "figure": "",
+      "economic_weight_pct": 12,
+      "value_at_stake": 18,
+      "validated": false,
+      "capability": "M&A integration leadership, PMO & benefits realisation, shared-services automation",
+      "cluster_ref": "CAP-05"
+    },
+    {
+      "ref": "LV-06",
+      "name": "Licence to operate",
+      "figure": "",
+      "economic_weight_pct": 7,
+      "value_at_stake": 11,
+      "validated": false,
+      "capability": "Safety & HSSE leadership, security, quality and compliance",
+      "cluster_ref": "CAP-01"
+    },
+    {
+      "ref": "LV-07",
+      "name": "People & enabling cost base",
+      "figure": "",
+      "economic_weight_pct": 5,
+      "value_at_stake": 8,
+      "validated": false,
+      "capability": "People analytics, HRIS, procurement, shared services",
+      "cluster_ref": "CAP-06"
+    }
+  ],
+  "roles": [
+    {
+      "ref": "RL-001",
+      "title": "Regional VP Cargo",
+      "status": "exists",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-01",
+      "criticality_index": 4.2,
+      "tacit_intensity": 4.2,
+      "route": "dual",
+      "note": "Owns regional cargo P&L and trade-lane strategy."
+    },
+    {
+      "ref": "RL-002",
+      "title": "Cargo & Pharma Manager (cold-chain certified)",
+      "status": "thin",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-01",
+      "criticality_index": 4.6,
+      "tacit_intensity": 4.5,
+      "route": "dual",
+      "note": "Certification is a contract gatekeeper for the highest-margin lane."
+    },
+    {
+      "ref": "RL-003",
+      "title": "Load Control / Weight & Balance Officer",
+      "status": "exists",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-01",
+      "criticality_index": 2.8,
+      "tacit_intensity": 4,
+      "route": "specialist",
+      "note": "Safety-critical loading judgement; years to master."
+    },
+    {
+      "ref": "RL-004",
+      "title": "Hub Duty Controller (disruption)",
+      "status": "exists",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-01",
+      "criticality_index": 3,
+      "tacit_intensity": 4.5,
+      "route": "specialist",
+      "note": "Real-time judgement across the whole operation; pattern recognition built over years."
+    },
+    {
+      "ref": "RL-005",
+      "title": "Executive Chef — Culinary Design",
+      "status": "exists",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-02",
+      "criticality_index": 3.4,
+      "tacit_intensity": 4.8,
+      "route": "specialist",
+      "note": "Customer-specific palate calibration; brand-defining and hard to codify."
+    },
+    {
+      "ref": "RL-006",
+      "title": "Food Safety & Quality Lead",
+      "status": "exists",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-02",
+      "criticality_index": 3.2,
+      "tacit_intensity": 3.3,
+      "route": "standard",
+      "note": "Licence-to-operate role across all facilities."
+    },
+    {
+      "ref": "RL-007",
+      "title": "Head, Analytics & AI",
+      "status": "thin",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-03",
+      "criticality_index": 4.8,
+      "tacit_intensity": 2.5,
+      "route": "critical",
+      "note": "Enabler of the workforce-optimisation programme — the largest in-year margin lever."
+    },
+    {
+      "ref": "RL-008",
+      "title": "Head, Data Engineering & Platform",
+      "status": "absent",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-03",
+      "criticality_index": 4.8,
+      "tacit_intensity": 2.5,
+      "route": "critical",
+      "note": "The data spine every commercial and ops decision rides on."
+    },
+    {
+      "ref": "RL-009",
+      "title": "Core-system super-user",
+      "status": "exists",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-03",
+      "criticality_index": 2.3,
+      "tacit_intensity": 4,
+      "route": "specialist",
+      "note": "Undocumented workarounds live in a few heads; continuity risk."
+    },
+    {
+      "ref": "RL-010",
+      "title": "People Analytics & Workforce Planning Lead",
+      "status": "absent",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-03",
+      "criticality_index": 4,
+      "tacit_intensity": 2.5,
+      "route": "critical",
+      "note": "Engine for the staff-cost lever and peak-coverage productivity."
+    },
+    {
+      "ref": "RL-011",
+      "title": "Head of Pricing / Revenue Management",
+      "status": "absent",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-04",
+      "criticality_index": 4.6,
+      "tacit_intensity": 2.5,
+      "route": "critical",
+      "note": "The scarce technical keystone; without it pricing fragments across sales, finance and ops."
+    },
+    {
+      "ref": "RL-012",
+      "title": "Global Head, Commercial Excellence",
+      "status": "absent",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-04",
+      "criticality_index": 4.2,
+      "tacit_intensity": 3,
+      "route": "critical",
+      "note": "No enterprise owner of win-rate, renewal and pricing discipline."
+    },
+    {
+      "ref": "RL-013",
+      "title": "Bid & Solutions Architect",
+      "status": "absent",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-04",
+      "criticality_index": 4.1,
+      "tacit_intensity": 3.3,
+      "route": "critical",
+      "note": "Live bid economics — hard-to-fake technical depth."
+    },
+    {
+      "ref": "RL-014",
+      "title": "VP Global Account Management",
+      "status": "thin",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-04",
+      "criticality_index": 4,
+      "tacit_intensity": 4,
+      "route": "dual",
+      "note": "Converts network breadth into wallet share; renewal cliffs are the real margin."
+    },
+    {
+      "ref": "RL-015",
+      "title": "Regional Managing Director",
+      "status": "exists",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-05",
+      "criticality_index": 4,
+      "tacit_intensity": 4,
+      "route": "dual",
+      "note": "Owns regional P&L, service reliability and renewals."
+    },
+    {
+      "ref": "RL-016",
+      "title": "Station Head / General Manager",
+      "status": "exists",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-05",
+      "criticality_index": 3,
+      "tacit_intensity": 4.2,
+      "route": "specialist",
+      "note": "Airport-authority and union relationships built over years."
+    },
+    {
+      "ref": "RL-017",
+      "title": "M&A / Integration Lead",
+      "status": "absent",
+      "status_confirmed": true,
+      "cluster_ref": "CAP-05",
+      "criticality_index": 3.8,
+      "tacit_intensity": 3.2,
+      "route": "critical",
+      "note": "Value leaks fastest at integration; protects deal synergies."
+    },
+    {
+      "ref": "RL-018",
+      "title": "Organisation Design & Change Lead",
+      "status": "exists",
+      "status_confirmed": false,
+      "cluster_ref": "CAP-06",
+      "criticality_index": 3.4,
+      "tacit_intensity": 3.3,
+      "route": "standard",
+      "note": "The adoption layer that makes major programmes land at the frontline."
+    },
+    {
+      "ref": "RL-019",
+      "title": "Head of Talent Acquisition — specialist hiring",
+      "status": "exists",
+      "status_confirmed": false,
+      "cluster_ref": "CAP-06",
+      "criticality_index": 3,
+      "tacit_intensity": 2.7,
+      "route": "standard",
+      "note": "Feeds every acquire-first gap on the register."
+    }
+  ],
+  "signals": [],
+  "pilots": [],
+  "exclusions": [],
+  "readiness": {
+    "ready": false,
+    "verdict": "Not ready to hand off",
+    "open": [
+      {
+        "check": "Every cell scored — nothing silently dropped",
+        "level": "must",
+        "detail": "20 of 24 cells assessed"
+      },
+      {
+        "check": "Every score cites a source",
+        "level": "should",
+        "detail": "83% of scores cite at least one source"
+      },
+      {
+        "check": "Every score carries an evidence grade",
+        "level": "should",
+        "detail": "20 of 24 cells graded"
+      },
+      {
+        "check": "Direction known for most cells",
+        "level": "should",
+        "detail": "100% of directions unknown"
+      },
+      {
+        "check": "Anchor roles listed for every capability cluster",
+        "level": "should",
+        "detail": "6 of 6 have roles scored; 2 role(s) copied from another country still to confirm"
+      },
+      {
+        "check": "Baseline version saved",
+        "level": "must",
+        "detail": "Use “Save version” to freeze the baseline the scoreboard measures against"
+      },
+      {
+        "check": "A pilot decision for every capability cluster, with a reason for each exclusion",
+        "level": "must",
+        "detail": "0 of 6 decided"
+      },
+      {
+        "check": "At least one pilot named, with its process KPI",
+        "level": "must",
+        "detail": "No pilot chosen yet"
+      }
+    ]
+  },
+  "for_apps": {
+    "org_modeling": {
+      "how": "Paste strategy_text into the strategy box and enter design_criteria in Compare options. Upload the org file there; it is not part of this packet.",
+      "strategy_text": "Who we serve: Airlines, freight forwarders and food-service customers who need reliable turnarounds at scale.\nThe outcome we sell: Aircraft and cargo that leave on time, safely, with nothing left behind.\nThe profit formula: Paid per unit handled; margin comes from labour productivity and renewal pricing.\nThe moat: Licences, network breadth and judgement built over years in safety-critical work.\nThe scale logic: Each new station is cheaper to bring up once the operating routines are standard.\n\nDesign principles:\nP1 Decisions are made at the station, by one named role.\nP2 Standard work is written once and run everywhere.\nP3 AI takes the rule-based work; people keep the judgement.\nP4 Capability is built ahead of growth, not after it.\n\nCapability priorities (highest value exposure first):\nCAP-03 Technology, Data & AI — maturity 2.25/4, unknown, 30% of economic weight. Priority move: Scale the digital core + drive data standardisation + AI CoE globally.\nCAP-04 Commercial Leadership — maturity 2.25/4, unknown, 22% of economic weight. Priority move: Fill the commercial bench + activate global accounts + per-country growth plans.\nCAP-01 Gateway / Hub Services — maturity 2.75/4, unknown, 21% of economic weight. Priority move: Scale hub-of-the-future globally + close the safety-culture gap urgently.\nCAP-06 Human Capital & Enabling — maturity 1/4, unknown, 5% of economic weight. Priority move: Build people analytics + activate the engagement framework at scale.\nCAP-02 Food & Catering Solutions — maturity 3/4, unknown, 10% of economic weight. Priority move: Monetise waste-intelligence platform + arrest the cultural decline.\nCAP-05 Enterprise Leadership — maturity 3.25/4, unknown, 12% of economic weight. Priority move: Scale leadership development globally + close the bottom-quintile long tail.",
+      "design_criteria": [
+        {
+          "id": "installs_the_routines_in_a_new_unit_quic",
+          "ref": "DC-1",
+          "name": "Installs the routines in a new unit quickly",
+          "kind": "judged",
+          "weight": 25,
+          "description": "How fast the design gets the operating system running somewhere new"
+        },
+        {
+          "id": "clear_decision_rights_at_the_anchor_laye",
+          "ref": "DC-2",
+          "name": "Clear decision rights at the anchor layer",
+          "kind": "judged",
+          "weight": 20,
+          "description": "One named role makes each recurring decision"
+        },
+        {
+          "id": "protects_and_develops_judgement_in_compl",
+          "ref": "DC-3",
+          "name": "Protects and develops judgement in complex work",
+          "kind": "judged",
+          "weight": 15,
+          "description": "Human judgement is kept where the work needs it"
+        },
+        {
+          "id": "layers_added",
+          "ref": "DC-4",
+          "name": "Layers added",
+          "kind": "measured",
+          "weight": 15,
+          "metric": "layers",
+          "better": "lower"
+        },
+        {
+          "id": "annual_cost_change",
+          "ref": "DC-5",
+          "name": "Annual cost change",
+          "kind": "measured",
+          "weight": 15,
+          "metric": "total_cost",
+          "better": "lower"
+        },
+        {
+          "id": "disruption_people_affected",
+          "ref": "DC-6",
+          "name": "Disruption (people affected)",
+          "kind": "measured",
+          "weight": 10,
+          "metric": "people_affected_pct",
+          "better": "lower"
+        }
+      ],
+      "structure_lens": [
+        {
+          "ref": "CAP-01.Structure",
+          "cluster": "Gateway / Hub Services",
+          "level": "Established",
+          "status": "Established",
+          "grade": "indicated"
+        },
+        {
+          "ref": "CAP-02.Structure",
+          "cluster": "Food & Catering Solutions",
+          "level": "Emerging",
+          "status": "Taking hold",
+          "grade": "indicated"
+        },
+        {
+          "ref": "CAP-03.Structure",
+          "cluster": "Technology, Data & AI",
+          "level": "Emerging",
+          "status": "Taking hold",
+          "grade": "indicated"
+        },
+        {
+          "ref": "CAP-04.Structure",
+          "cluster": "Commercial Leadership",
+          "level": "Early",
+          "status": "Early",
+          "grade": "indicated"
+        },
+        {
+          "ref": "CAP-05.Structure",
+          "cluster": "Enterprise Leadership",
+          "level": "Established",
+          "status": "Established",
+          "grade": "indicated"
+        },
+        {
+          "ref": "CAP-06.Structure",
+          "cluster": "Human Capital & Enabling",
+          "level": "Absent",
+          "status": "Not yet assessed",
+          "grade": null
+        }
+      ]
+    },
+    "process_map_studio": {
+      "how": "Open one engagement per pilot. Put process_kpi on the scope card and use the prompts in the interviews.",
+      "engagements": []
+    },
+    "workbench": {
+      "how": "Create one engagement with this name and load the same org file. Start Task Intelligence with these roles.",
+      "engagement_name": "MERIDIANCA Meridian Group (fictional demo) — Caldera",
+      "roles": [
+        {
+          "ref": "RL-001",
+          "title": "Regional VP Cargo",
+          "cluster_ref": "CAP-01",
+          "route": "dual",
+          "status": "exists"
+        },
+        {
+          "ref": "RL-002",
+          "title": "Cargo & Pharma Manager (cold-chain certified)",
+          "cluster_ref": "CAP-01",
+          "route": "dual",
+          "status": "thin"
+        },
+        {
+          "ref": "RL-007",
+          "title": "Head, Analytics & AI",
+          "cluster_ref": "CAP-03",
+          "route": "critical",
+          "status": "thin"
+        },
+        {
+          "ref": "RL-008",
+          "title": "Head, Data Engineering & Platform",
+          "cluster_ref": "CAP-03",
+          "route": "critical",
+          "status": "absent"
+        },
+        {
+          "ref": "RL-010",
+          "title": "People Analytics & Workforce Planning Lead",
+          "cluster_ref": "CAP-03",
+          "route": "critical",
+          "status": "absent"
+        },
+        {
+          "ref": "RL-011",
+          "title": "Head of Pricing / Revenue Management",
+          "cluster_ref": "CAP-04",
+          "route": "critical",
+          "status": "absent"
+        },
+        {
+          "ref": "RL-012",
+          "title": "Global Head, Commercial Excellence",
+          "cluster_ref": "CAP-04",
+          "route": "critical",
+          "status": "absent"
+        },
+        {
+          "ref": "RL-013",
+          "title": "Bid & Solutions Architect",
+          "cluster_ref": "CAP-04",
+          "route": "critical",
+          "status": "absent"
+        },
+        {
+          "ref": "RL-014",
+          "title": "VP Global Account Management",
+          "cluster_ref": "CAP-04",
+          "route": "dual",
+          "status": "thin"
+        },
+        {
+          "ref": "RL-015",
+          "title": "Regional Managing Director",
+          "cluster_ref": "CAP-05",
+          "route": "dual",
+          "status": "exists"
+        },
+        {
+          "ref": "RL-017",
+          "title": "M&A / Integration Lead",
+          "cluster_ref": "CAP-05",
+          "route": "critical",
+          "status": "absent"
+        }
+      ]
+    }
+  }
+}

@@ -24,7 +24,7 @@ import math
 
 # Bump when the shape or meaning of calculated metrics changes, so cached
 # metrics from older uploads are recalculated instead of shown stale
-METRICS_VERSION = 5
+METRICS_VERSION = 6
 
 
 class MetricsCalculator:
@@ -66,6 +66,7 @@ class MetricsCalculator:
             "layer_analysis": self._layer_analysis(),
             "health_indicators": self._health_indicators(),
             "department_analysis": self._department_analysis(),
+            **self._country_analysis(),
             "data_quality": {"issues": self.data_issues[:20]}
         }
 
@@ -193,6 +194,7 @@ class MetricsCalculator:
             "work_type_basis": kind["basis"],
             "benchmark_range": [low, high],
             "status": status,
+            "country": self._country_of(manager),
         }
 
     def _cost_analysis(self) -> Dict:
@@ -321,18 +323,20 @@ class MetricsCalculator:
             "longest_chain": longest_chain,
         }
 
-    def _department_analysis(self) -> List[Dict]:
+    def _department_analysis(self, nodes: Optional[List[str]] = None) -> List[Dict]:
         """
         The same structural lenses per department: size, cost, managers, spans
         against benchmark, layers, the most common roles, and how many people
-        report to a manager in a different department.
+        report to a manager in a different department. `nodes` limits it to
+        some people (one country); shares are then of that group.
         """
+        nodes = list(self.graph.nodes()) if nodes is None else nodes
         assessments = {a["manager_id"]: a for a in self._span_of_control().get("manager_assessments", [])}
-        total_people = self._total_employees() or 1
-        total_cost = sum(self.graph.nodes[n].get("salary", 0) or 0 for n in self.graph.nodes()) or 0
+        total_people = len(nodes) or 1
+        total_cost = sum(self.graph.nodes[n].get("salary", 0) or 0 for n in nodes) or 0
 
         by_dept: Dict[str, List[str]] = {}
-        for n in self.graph.nodes():
+        for n in nodes:
             dept = str(self.graph.nodes[n].get("department") or "Unknown").strip() or "Unknown"
             by_dept.setdefault(dept, []).append(n)
 
@@ -385,26 +389,116 @@ class MetricsCalculator:
             })
         return sorted(result, key=lambda d: -d["headcount"])
 
+    def _country_of(self, node: str) -> str:
+        return str(self.graph.nodes[node].get("country") or "")
+
+    def _country_analysis(self) -> Dict:
+        """
+        The structural lenses per country, where a person's country is where
+        they work. Layers run from the top of the whole organization down to
+        the deepest person in the country (decision distance starts at the top);
+        a manager's span counts all their direct reports, wherever those work,
+        and the manager is listed under their own country. Empty when the file
+        has no Country column.
+        """
+        by_country: Dict[str, List[str]] = {}
+        for n in self.graph.nodes():
+            c = self._country_of(n)
+            if c:
+                by_country.setdefault(c, []).append(n)
+        if not by_country:
+            return {"country_analysis": [], "department_analysis_by_country": {}}
+
+        assessments = {a["manager_id"]: a for a in self._span_of_control().get("manager_assessments", [])}
+        rows = []
+        for country, people in by_country.items():
+            managers = [n for n in people if self.graph.out_degree(n) > 0]
+            spans = [self.graph.out_degree(n) for n in managers]
+            vs = {"below": 0, "within": 0, "above": 0}
+            for m in managers:
+                if m in assessments:
+                    vs[assessments[m]["status"]] += 1
+            layers = max((self._layer_of(n) for n in people), default=0)
+            singles = sum(1 for x in spans if x == 1)
+            cost = sum(self.graph.nodes[n].get("salary", 0) or 0 for n in people)
+            health = self._health_score(total=len(people), managers=len(managers), within=vs["within"],
+                                        below=vs["below"], above=vs["above"], actual_layers=layers, singles=singles)
+            rows.append({
+                "country": country,
+                "headcount": len(people),
+                "managers": len(managers),
+                "manager_ratio_pct": round(len(managers) / len(people) * 100, 1),
+                "layers": layers,
+                "median_span": round(statistics.median(spans), 2) if spans else 0.0,
+                "spans_vs_benchmark": vs,
+                "single_report_managers": singles,
+                "total_cost": round(cost, 0),
+                "health_score": health["health_score"],
+                "health_components": health["components"],
+            })
+        rows.sort(key=lambda r: (r["country"] == self.COUNTRY_NOT_STATED, -r["headcount"], r["country"]))
+
+        # Differences against the largest country, in words and a symbol (never colour alone)
+        ref = rows[0]
+        for r in rows:
+            r["differences"] = [] if r is ref else self._country_differences(r, ref)
+        return {
+            "country_analysis": rows,
+            "country_reference": ref["country"],
+            "department_analysis_by_country": {c: self._department_analysis(people) for c, people in by_country.items()},
+        }
+
+    COUNTRY_NOT_STATED = "Not stated"
+
+    @staticmethod
+    def _country_differences(r: Dict, ref: Dict) -> List[str]:
+        name = ref["country"]
+        words = {1: "one", 2: "two", 3: "three"}
+        out = []
+        d = r["layers"] - ref["layers"]
+        if d:
+            out.append(f"⚑ {words.get(abs(d), abs(d))} layer{'s' if abs(d) > 1 else ''} {'more' if d > 0 else 'fewer'} than {name}")
+        d = round(r["median_span"] - ref["median_span"], 1)
+        if abs(d) >= 1:
+            out.append(f"{'↑' if d > 0 else '↓'} median span {abs(d):g} {'wider' if d > 0 else 'narrower'} than {name}")
+        within = lambda x: round(x["spans_vs_benchmark"]["within"] / x["managers"] * 100) if x["managers"] else 0  # noqa: E731
+        d = within(r) - within(ref)
+        if abs(d) >= 10:
+            out.append(f"{'↑' if d > 0 else '↓'} {abs(d)} points {'more' if d > 0 else 'fewer'} managers within benchmark than {name}")
+        d = r["single_report_managers"] - ref["single_report_managers"]
+        if d:
+            out.append(f"{'↑' if d > 0 else '↓'} {abs(d)} {'more' if d > 0 else 'fewer'} single-report manager{'s' if abs(d) > 1 else ''} than {name}")
+        d = r["health_score"] - ref["health_score"]
+        if abs(d) >= 5:
+            out.append(f"{'↑' if d > 0 else '↓'} health {abs(d)} points {'higher' if d > 0 else 'lower'} than {name}")
+        return out
+
     # Weights of the health score components (must sum to 100)
     HEALTH_WEIGHTS = {"span_fit": 35, "layers": 25, "manager_ratio": 20, "single_report": 20}
 
     def _health_indicators(self) -> Dict:
+        """Structural health of the whole organization."""
+        span = self._span_of_control()
+        vs = span.get("distribution_vs_benchmark", {})
+        return self._health_score(
+            total=self._total_employees(),
+            managers=self._manager_statistics()["total_managers"],
+            within=vs.get("Within benchmark", 0), below=vs.get("Below benchmark", 0), above=vs.get("Above benchmark", 0),
+            actual_layers=self._layer_analysis()["total_layers"],
+            singles=span.get("single_report_managers", 0),
+        )
+
+    def _health_score(self, *, total: int, managers: int, within: int, below: int, above: int,
+                      actual_layers: int, singles: int) -> Dict:
         """
         Structural health as four visible components, each scored 0-100 with
         the value, the benchmark and the rule used, then weighted together.
+        Used for the whole organization and for each country.
         """
-        span = self._span_of_control()
-        mgr = self._manager_statistics()
-        layers = self._layer_analysis()
-        total = self._total_employees()
-        managers = mgr["total_managers"]
         components = []
 
         # 1. Span fit: share of managers within their benchmark
-        within = span.get("distribution_vs_benchmark", {}).get("Within benchmark", 0)
         span_fit = round(within / managers * 100) if managers else 100
-        below = span.get("distribution_vs_benchmark", {}).get("Below benchmark", 0)
-        above = span.get("distribution_vs_benchmark", {}).get("Above benchmark", 0)
         components.append({
             "key": "span_fit", "label": "Spans fit the work",
             "score": span_fit, "weight": self.HEALTH_WEIGHTS["span_fit"],
@@ -416,7 +510,6 @@ class MetricsCalculator:
         })
 
         # 2. Layers vs the minimum this headcount needs at a planning span
-        actual_layers = layers["total_layers"]
         needed = max(1, math.ceil(math.log(total, LAYER_PLANNING_SPAN)) + 1) if total > 1 else 1
         excess = max(0, actual_layers - needed)
         layer_score = max(0, 100 - excess * 20)
@@ -430,7 +523,7 @@ class MetricsCalculator:
         })
 
         # 3. Manager ratio vs the typical range
-        ratio = mgr["manager_ratio_pct"]
+        ratio = round(managers / total * 100, 1) if total else 0.0
         lo, hi = MANAGER_RATIO_RANGE
         distance = lo - ratio if ratio < lo else ratio - hi if ratio > hi else 0
         ratio_score = max(0, round(100 - distance * 4))
@@ -444,7 +537,6 @@ class MetricsCalculator:
         })
 
         # 4. Managers with a single direct report (classic layer-compression signal)
-        singles = span.get("single_report_managers", 0)
         single_pct = round(singles / managers * 100, 1) if managers else 0
         single_score = max(0, round(100 - single_pct * 3))
         components.append({
