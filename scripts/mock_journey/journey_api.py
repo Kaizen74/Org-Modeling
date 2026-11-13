@@ -3,7 +3,7 @@ API journey: every step of the workflow against the backend with the fake
 Claude (fake_claude_server.py), on the sample org from make_org.py.
 Expectations are computed independently from the CSV wherever possible.
 Needs a fresh database and no saved API key. Run by run_checks.sh step 5.
-Usage: python journey_api.py <api_base> <csv_path> <prompt_log> <compass_handoff.json>
+Usage: python journey_api.py <api_base> <csv_path> <prompt_log> <compass_handoff.json> <countries_fixture_dir>
 """
 import csv
 import io
@@ -12,7 +12,7 @@ import sys
 
 import httpx
 
-BASE, CSV_PATH, PROMPT_LOG, PACKET_PATH = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+BASE, CSV_PATH, PROMPT_LOG, PACKET_PATH, COUNTRIES_DIR = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 PACKET = json.load(open(PACKET_PATH))
 c = httpx.Client(base_url=BASE + "/api/v1", timeout=60)
 results = []
@@ -294,6 +294,64 @@ def s12():
     check("new project: Compass link and hypotheses gone", c.get("/compass").status_code == 404)
     check("new project: key kept", ok(c.get("/settings/claude-api-key/status"))["configured"])
 step("new project", s12)
+
+
+# 13. Roles and structure by country (the countries PRD acceptance flow, on its sample files)
+def s_countries():
+    import os
+    import re as _re
+    org = open(os.path.join(COUNTRIES_DIR, "meridian_org_by_country.csv"), "rb").read()
+    packets = {c: json.load(open(os.path.join(COUNTRIES_DIR, f"{c.lower()}_compass_handoff.json"))) for c in ("Arden", "Belmar", "Caldera")}
+    up = ok(c.post("/org-data/upload-csv", files={"file": ("meridian.csv", org, "text/csv")}))
+    check("countries: 84 people, no level mismatch", up["employee_count"] == 84 and not any("Level doesn't match" in w for w in up["validation_errors"]), up["validation_errors"])
+    rows = {r["country"]: r for r in ok(c.get("/metrics/latest"))["metrics"]["country_analysis"]}
+    check("countries: Arden 30, Belmar 26, Caldera 28", {k: v["headcount"] for k, v in rows.items()} == {"Arden": 30, "Belmar": 26, "Caldera": 28})
+    check("countries: layers 5, 5, 6", {k: v["layers"] for k, v in rows.items()} == {"Arden": 5, "Belmar": 5, "Caldera": 6})
+    check("countries: Caldera's extra layer stated in words", "⚑ one layer more than Arden" in rows["Caldera"]["differences"])
+
+    for name in ("Arden", "Belmar", "Caldera"):
+        pre = ok(c.post("/compass/preview", json={"packet": packets[name]}))
+        check(f"link: {name} matches its country by name", pre["country"]["target"] == name)
+        ok(c.post("/compass/import", json={"packet": packets[name]}))
+    st = ok(c.get("/compass"))
+    check("link: criteria and strategy from the first packet", st["strategy_draft"] == packets["Arden"]["for_apps"]["org_modeling"]["strategy_text"]
+          and [x.get("ref") for x in ok(c.get("/comparison"))["criteria"]] == [f"DC-{i}" for i in range(1, 7)])
+    again = ok(c.post("/compass/preview", json={"packet": packets["Belmar"]}))
+    check("link: Belmar again says it will be replaced", again["replaces"] and any("will replace" in w for w in again["warnings"]))
+    elsewhere = {**packets["Belmar"], "engagement": {**packets["Belmar"]["engagement"], "country": "Dorne"}}
+    check("link: country not in the file asks to choose", ok(c.post("/compass/preview", json={"packet": elsewhere}))["country"]["needs_choice"])
+    check("link: wrong format refused", ok(c.post("/compass/preview", json={"packet": {**packets["Belmar"], "format": "x"}}))["ok"] is False)
+
+    ok(c.post("/compass/roles/accept-exact"))
+    for ref in ("RL-010", "RL-012", "RL-017"):
+        ok(c.put("/compass/roles/match", json={"ref": ref, "titles": []}))
+    view = ok(c.get("/compass/roles"))
+    cell = lambda ref, ctry: next(x for x in next(r for r in view["roles"] if r["ref"] == ref)["cells"] if x["country"] == ctry)
+    table = {(ref, ctry): (cell(ref, ctry)["holders"], cell(ref, ctry)["compass_status"])
+             for ref in ("RL-011", "RL-004", "RL-018") for ctry in ("Arden", "Belmar", "Caldera")}
+    check("roles: acceptance table", table == {
+        ("RL-011", "Arden"): (0, "absent"), ("RL-011", "Belmar"): (1, "exists"), ("RL-011", "Caldera"): (0, "absent"),
+        ("RL-004", "Arden"): (1, "thin"), ("RL-004", "Belmar"): (0, "absent"), ("RL-004", "Caldera"): (2, "exists"),
+        ("RL-018", "Arden"): (0, "absent"), ("RL-018", "Belmar"): (0, "absent"), ("RL-018", "Caldera"): (1, "exists")}, table)
+    check("roles: Caldera RL-018 to confirm, flagged", cell("RL-018", "Caldera")["status_confirmed"] is False
+          and cell("RL-018", "Caldera")["flag"] == "Still to confirm in the Compass; the org file shows 1 person.")
+
+    ok(c.put("/compass/roles/reason", json={"ref": "RL-011", "country": "Belmar", "reason_class": "chosen", "compared_with": "Arden",
+        "text": "Created in 2023 when Belmar won its two largest renewal contracts; Arden leaves pricing to finance."}))
+    sample = json.load(open(os.path.join(COUNTRIES_DIR, "belmar_return_org_modeling.json")))
+    ret = ok(c.get("/compass/return", params={"link": "Belmar"}))
+    by = {f["ref"]: f for f in ret["findings"]}
+    check("export: Belmar file has the sample's header", set(ret) == set(sample) and ret["country"] == "Belmar" and ret["engagement_key"] == "MERIDIANBE")
+    check("export: baseline.layers is 5 layers", by["baseline.layers"]["figure"] == "5 layers" and by["baseline.layers"]["topic"] == "role_presence")
+    check("export: RL-011 with your reason", (by["RL-011"]["reason_class"], by["RL-011"].get("compared_with"), by["RL-011"]["figure"]) == ("chosen", "Arden", "1 person"))
+    roles_out = sorted(r for r, f in by.items() if f["kind"] == "role_reason")
+    check("export: every empty Belmar role, unknown where no reason", roles_out == ["RL-004", "RL-007", "RL-008", "RL-010", "RL-011", "RL-012", "RL-017", "RL-018"]
+          and all(by[r]["reason_class"] == "unknown" for r in roles_out if r != "RL-011"), roles_out)
+    dumped = json.dumps(ret) + c.get("/compass/return.txt", params={"link": "Belmar"}).text
+    check("export: no names, no Employee IDs", not _re.search(r"\b[A-Z]{2} Person \d{3}\b", dumped) and not _re.search(r"\bE\d{3}\b", dumped))
+    whole = ok(c.get("/compass/return"))
+    check("export: whole-organization file unchanged, country ''", whole["country"] == "" and not any(f["kind"] == "role_reason" for f in whole["findings"]))
+step("countries", s_countries)
 
 passed = sum(1 for r in results if r[1])
 for name, good, detail in results:

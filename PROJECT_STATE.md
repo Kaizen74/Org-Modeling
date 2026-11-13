@@ -5,12 +5,8 @@
 An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-*2026-11-13.* Building the owner's countries PRD (roles and structure by country), approved with "go" on the four suggested answers. Increments:
-- [x] 1. Country column (`Country` or `Country/Region`; blank → "Not stated") and per-country figures (layers from the top of the whole organization; spans count reports in any country)
-- [x] 2. By-country view; country filter on the department table and org chart
-- [x] 3. One Compass link per (upload, country), with migration
-- [x] 4. Compass roles screen (title matches, holders, reasons, flags)
-- [ ] 5. One findings file per country
+*2026-11-13.* Owner's countries PRD built (approved with "go" on the four suggested answers): Country column and by-country view; country filters on the department table and org chart; one Compass link per (upload, country) with migration; Compass roles screen (title matches, holders, Compass status, reasons, flags); one findings file per country. Sample files from the Capability Compass repository are test fixtures. `./run_checks.sh`: 123 backend tests, mock journey 110 backend + 25 browser checks, all green.
+Not done (by agreement or out of scope): AI-suggested title matches; per-country AI analysis; comparing processes between countries; a button to unlink a country's packet (re-import replaces it; a new project clears all).
 
 ## This session (2026-10-22) — approved plan, in order
 Phase 1 — Accuracy fixes

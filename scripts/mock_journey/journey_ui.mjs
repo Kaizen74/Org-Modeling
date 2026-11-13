@@ -1,11 +1,11 @@
 // Browser journey: a practitioner's full path through the UI, against the backend
 // with the fake Claude (fake_claude_server.py) and the sample org from make_org.py.
 // Run by run_checks.sh step 5 on a fresh database.
-// Usage: node journey_ui.mjs <frontend-url> <playwright-module> <csv> <compass_handoff.json> [screenshots-dir]
+// Usage: node journey_ui.mjs <frontend-url> <playwright-module> <csv> <compass_handoff.json> <countries_fixture_dir> [screenshots-dir]
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-const [base, pwPath, csvPath, packetPath, shots] = process.argv.slice(2);
+const [base, pwPath, csvPath, packetPath, countriesDir, shots] = process.argv.slice(2);
 const { chromium } = (await import(pwPath)).default;
 
 const browser = await chromium.launch();
@@ -253,6 +253,88 @@ await step('new project: confirm dialog clears everything', async () => {
   await page.waitForTimeout(1500);
   await go('/scenarios');
   await waitText(/No organization to design from/i);
+});
+
+// ---------------- Roles and structure by country (the countries PRD acceptance flow)
+
+await step('countries: upload, by-country view and filters', async () => {
+  await go('/upload');
+  await page.setInputFiles('input[type=file][accept=".csv"]', join(countriesDir, 'meridian_org_by_country.csv'));
+  await page.getByRole('button', { name: /Upload and analyze/ }).click();
+  await waitText(/84/);
+  await go('/metrics');
+  const t = await waitText(/The same lenses, country by country/i);
+  if (!/⚑ one layer more than Arden/.test(t)) throw new Error('Caldera layer difference not stated');
+  if (!/Salaries are read as one currency/.test(t)) throw new Error('currency note missing');
+  await page.getByLabel('Filter by country').first().selectOption('Belmar');
+  await waitText(/Departments in Belmar/);
+  await go('/org-chart');
+  await page.getByLabel('Filter by country').selectOption('Caldera');
+  await waitText(/Showing the 28 people who work in Caldera/);
+  await shot('11-countries');
+});
+
+await step('countries: three packets link by country; Belmar again says replace', async () => {
+  for (const c of ['arden', 'belmar', 'caldera']) {
+    await go('/upload');
+    await page.setInputFiles('[data-testid=compass-file]', join(countriesDir, `${c}_compass_handoff.json`));
+    const t = await waitText(/nothing is changed until you confirm/i);
+    const name = c[0].toUpperCase() + c.slice(1);
+    if (!new RegExp(`Links to ${name}\\.`).test(t)) throw new Error(`${name} not matched by name: ${(await page.getByTestId('link-target').innerText())}`);
+    await page.getByRole('button', { name: 'Confirm import' }).click();
+    await waitText(new RegExp(`Linked ${name} to engagement`));
+  }
+  await page.setInputFiles('[data-testid=compass-file]', join(countriesDir, 'belmar_compass_handoff.json'));
+  await waitText(/will be replaced/);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.locator('[data-testid=engagement-key]', { hasText: 'MERIDIAN · 3 countries' }).waitFor();
+});
+
+await step('countries: Compass roles screen matches the acceptance table', async () => {
+  await go('/compass-roles');
+  await page.getByRole('button', { name: /Accept 16 exact title matches/ }).click();
+  for (const ref of ['RL-010', 'RL-012', 'RL-017']) {
+    await page.locator(`[data-role="${ref}"]`).getByRole('button', { name: /Match…/ }).click();
+    await page.getByRole('button', { name: 'No job title in this file' }).click();
+    await page.locator(`[data-role="${ref}"]`, { hasText: 'No job title in this file' }).waitFor();
+  }
+  const cellText = async (ref, i) => (await page.locator(`[data-role="${ref}"] td`).nth(i + 1).innerText()).replace(/\s+/g, ' ');
+  const want = { 'RL-011': ['0 holders · Compass: Absent', '1 holder · Compass: Exists', '0 holders · Compass: Absent'],
+                 'RL-004': ['1 holder · Compass: Thin', '0 holders · Compass: Absent', '2 holders · Compass: Exists'],
+                 'RL-018': ['0 holders · Compass: Absent', '0 holders · Compass: Absent', '1 holder · To confirm'] };
+  for (const [ref, cells] of Object.entries(want)) {
+    for (let i = 0; i < 3; i++) {
+      const got = await cellText(ref, i);
+      if (!got.startsWith(cells[i])) throw new Error(`${ref} column ${i + 1}: "${got.slice(0, 80)}"`);
+    }
+  }
+  if (!(await cellText('RL-018', 2)).includes('Still to confirm in the Compass; the org file shows 1 person.')) throw new Error('RL-018 Caldera not flagged');
+  if (!(await cellText('RL-004', 1)).includes('Why is it missing? Not recorded.')) throw new Error('empty role is silent');
+  await shot('12-compass-roles');
+});
+
+await step('countries: record Belmar RL-011 reason, export Belmar file', async () => {
+  await page.locator('[data-role="RL-011"] td').nth(2).getByRole('button', { name: 'Record reason' }).click();
+  const editor = page.getByRole('region', { name: /Reason for RL-011 in Belmar/ });
+  await editor.getByRole('radio', { name: 'Chosen' }).click();
+  await editor.getByLabel('In one line').fill('Created in 2023 when Belmar won its two largest renewal contracts; Arden leaves pricing to finance.');
+  await editor.getByLabel('Compared with (optional)').selectOption('Arden');
+  await editor.getByRole('button', { name: 'Save reason' }).click();
+  await page.locator('[data-role="RL-011"]', { hasText: 'Chosen vs Arden' }).waitFor();
+
+  await go('/implementation');
+  await page.getByRole('group', { name: 'Which file to export' }).getByRole('button', { name: /Belmar · MERIDIANBE/ }).click();
+  await waitText(/Why Head of Pricing \/ Revenue Management exists in Belmar/);
+  const href = await page.getByRole('link', { name: /Download Belmar's file/ }).getAttribute('href');
+  const ret = await (await page.request.get(base + href)).json();
+  const byRef = Object.fromEntries(ret.findings.map((f) => [f.ref, f]));
+  if (ret.country !== 'Belmar' || ret.engagement_key !== 'MERIDIANBE') throw new Error('wrong header');
+  if (byRef['baseline.layers']?.figure !== '5 layers') throw new Error('Belmar layers wrong');
+  if (byRef['RL-011']?.reason_class !== 'chosen' || byRef['RL-011']?.compared_with !== 'Arden') throw new Error('RL-011 reason not exported as set on screen');
+  const empty = ['RL-004', 'RL-007', 'RL-008', 'RL-010', 'RL-012', 'RL-017', 'RL-018'];
+  if (!empty.every((r) => byRef[r]?.reason_class === 'unknown' && byRef[r]?.figure === '0 people')) throw new Error('empty Belmar roles missing');
+  if (/\b[A-Z]{2} Person \d{3}\b|\bE\d{3}\b/.test(JSON.stringify(ret))) throw new Error('name or Employee ID in the file');
+  await shot('13-belmar-export');
 });
 
 if (jsErrors.length) results.push(['no JavaScript errors', false, jsErrors.join(' | ').slice(0, 400)]); else results.push(['no JavaScript errors', true, '']);

@@ -269,3 +269,117 @@ async def test_roles_screen_without_packets_is_empty(client: AsyncClient, sample
     await client.post("/api/v1/org-data/upload-csv", files={"file": ("pax.csv", sample_csv_path.read_bytes(), "text/csv")})
     view = (await client.get("/api/v1/compass/roles")).json()
     assert view["roles"] == [] and view["links"] == []
+
+
+# ------------------------------------------------------------- one findings file per country
+
+import re
+
+SAMPLE_RETURN = json.loads((COUNTRIES / "belmar_return_org_modeling.json").read_text())
+BELMAR_REASON = {"ref": "RL-011", "country": "Belmar", "reason_class": "chosen", "compared_with": "Arden", "grade": None,
+                 "text": "Created in 2023 when Belmar won its two largest renewal contracts; Arden leaves pricing to finance."}
+
+
+async def _matched_and_reasoned(client):
+    await _three_linked(client)
+    await client.post("/api/v1/compass/roles/accept-exact")
+    for ref in ("RL-010", "RL-012", "RL-017"):
+        await client.put("/api/v1/compass/roles/match", json={"ref": ref, "titles": []})
+    await client.put("/api/v1/compass/roles/reason", json=BELMAR_REASON)
+
+
+@pytest.mark.asyncio
+async def test_belmar_file_has_the_shape_the_compass_expects(client: AsyncClient):
+    await _matched_and_reasoned(client)
+    r = await client.get("/api/v1/compass/return", params={"link": "Belmar"})
+    assert r.status_code == 200 and 'filename="MERIDIANBE_compass_return.json"' in r.headers["content-disposition"]
+    ret = r.json()
+    assert set(ret) == set(SAMPLE_RETURN)  # same header fields
+    assert (ret["format"], ret["format_version"], ret["source_app"], ret["engagement_key"], ret["country"]) == \
+        ("compass-return", "1.0", "org-modeling", "MERIDIANBE", "Belmar")
+    sample_fields = {k for f in SAMPLE_RETURN["findings"] for k in f}
+    for f in ret["findings"]:
+        assert set(f) <= sample_fields and {"ref", "kind", "title", "detail", "grade", "figure", "relates_to", "source_note", "topic"} <= set(f)
+    by = {f["ref"]: f for f in ret["findings"]}
+
+    layers = by["baseline.layers"]
+    assert (layers["kind"], layers["topic"], layers["figure"], layers["title"]) == \
+        ("structural_baseline", "role_presence", "5 layers", "Layers in the reporting chain (Belmar)")
+    assert "26 people in Belmar" in layers["source_note"]
+
+    rl11 = by["RL-011"]
+    sample11 = next(f for f in SAMPLE_RETURN["findings"] if f["ref"] == "RL-011")
+    assert rl11["title"] == sample11["title"] == "Why Head of Pricing / Revenue Management exists in Belmar"
+    assert (rl11["kind"], rl11["topic"], rl11["reason_class"], rl11["compared_with"], rl11["figure"], rl11["grade"]) == \
+        ("role_reason", "role_reason", "chosen", "Arden", "1 person", "indicated")
+    assert rl11["relates_to"] == ["RL-011", "CAP-04", "CAP-04.People"] == sample11["relates_to"]
+    assert rl11["detail"] == BELMAR_REASON["text"]
+    assert rl11["source_note"] == "Reason recorded by the designer; head-count from the uploaded org file."
+
+    # Every role nobody holds in Belmar is in the file, "unknown" where no reason is recorded
+    empty = ["RL-004", "RL-007", "RL-008", "RL-010", "RL-012", "RL-017", "RL-018"]
+    assert sorted(ref for ref, f in by.items() if f["kind"] == "role_reason") == sorted(["RL-011", *empty])
+    for ref in empty:
+        f = by[ref]
+        assert (f["figure"], f["reason_class"], f["detail"], f["grade"]) == ("0 people", "unknown", "Not recorded yet.", "hypothesis")
+        assert "compared_with" not in f and f["title"].endswith("is absent in Belmar")
+    assert by["RL-004"]["title"] == "Why Hub Duty Controller (disruption) is absent in Belmar"
+
+    # No names and no Employee IDs anywhere
+    text = json.dumps(ret) + (await client.get("/api/v1/compass/return.txt", params={"link": "Belmar"})).text
+    assert not re.search(r"\b[A-Z]{2} Person \d{3}\b", text) and not re.search(r"\bE\d{3}\b", text)
+
+
+@pytest.mark.asyncio
+async def test_country_grades_links_and_the_whole_organization_file(client: AsyncClient):
+    await _matched_and_reasoned(client)
+    # The designer's grade and links on a country finding are kept on that country's file only
+    await client.put("/api/v1/compass/grades", json={"ref": "RL-004", "grade": "confirmed", "country": "Belmar"})
+    data = (await client.put("/api/v1/compass/relates", json={"ref": "baseline.layers", "relates_to": ["CAP-05.Structure"], "country": "Belmar"})).json()
+    by = {f["ref"]: f for f in data["findings"]}
+    assert by["RL-004"]["grade"] == "confirmed" and by["baseline.layers"]["relates_to"] == ["CAP-05.Structure"]
+    caldera = {f["ref"]: f for f in (await client.get("/api/v1/compass/findings", params={"link": "Caldera"})).json()["findings"]}
+    assert caldera["baseline.layers"]["figure"] == "6 layers" and caldera["baseline.layers"]["relates_to"] == []
+    assert "RL-018" not in caldera  # Caldera has one person in it and no reason: nothing to say yet
+
+    whole = (await client.get("/api/v1/compass/return")).json()
+    assert whole["country"] == "" and whole["engagement_key"] == "MERIDIAN"
+    assert not any(f["kind"] == "role_reason" for f in whole["findings"])  # not repeated in the whole-organization file
+    assert next(f for f in whole["findings"] if f["ref"] == "baseline.layers")["figure"] == "6 layers"
+
+    text = (await client.get("/api/v1/compass/return.txt", params={"link": "Belmar"})).text
+    assert text.startswith("Org Modeling findings for MERIDIANBE (Belmar)")
+    assert "Reason: Chosen, compared with Arden" in text
+
+    # A country with no packet linked has no file
+    assert (await client.get("/api/v1/compass/return", params={"link": "Dorne"})).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_roles_not_matched_are_left_out_and_counted(client: AsyncClient):
+    await _three_linked(client)
+    data = (await client.get("/api/v1/compass/findings", params={"link": "Belmar"})).json()
+    assert data["left_out_not_matched"] == 19
+    assert [f["ref"] for f in data["findings"]] == ["baseline.layers", "baseline.spans", "baseline.health"]
+
+
+@pytest.mark.asyncio
+async def test_names_and_employee_ids_typed_into_a_reason_are_removed(client: AsyncClient):
+    await _matched_and_reasoned(client)
+    await client.put("/api/v1/compass/roles/reason", json={**BELMAR_REASON,
+        "text": "BE Person 031 (E031) created it; E031-B is not an ID; see also XE031."})
+    f = next(x for x in (await client.get("/api/v1/compass/findings", params={"link": "Belmar"})).json()["findings"] if x["ref"] == "RL-011")
+    assert "BE Person 031" not in f["detail"] and "(E031)" not in f["detail"]
+    assert "the Regional Managing Director ([an employee]) created it" in f["detail"]
+    assert "E031-B" in f["detail"] and "XE031" in f["detail"]  # only whole IDs are removed
+    # Figures are never touched
+    assert next(x for x in (await client.get("/api/v1/compass/findings", params={"link": "Belmar"})).json()["findings"]
+                if x["ref"] == "baseline.layers")["figure"] == "5 layers"
+
+
+def test_open_readiness_items_read_as_sentences():
+    from app.services.compass_service import validate_packet
+    _, warnings = validate_packet(PACKETS["Belmar"])
+    w = next(x for x in warnings if "not ready" in x)
+    assert "{" not in w and "'check'" not in w
+    assert "Baseline version saved (Use “Save version” to freeze the baseline the scoreboard measures against) — required" in w

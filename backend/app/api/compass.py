@@ -52,11 +52,13 @@ class HypothesisIn(BaseModel):
 class GradeIn(BaseModel):
     ref: str
     grade: Optional[str] = None  # None returns to the suggested grade
+    country: str = ""  # "" = a whole-organization finding; else a finding in that country's file
 
 
 class RelatesIn(BaseModel):
     ref: str
     relates_to: List[str] = []
+    country: str = ""
 
 
 async def latest_analysis(db: AsyncSession) -> OrgAnalysis:
@@ -123,12 +125,59 @@ async def findings_for(analysis: OrgAnalysis, eng: Optional[Engagement], db: Asy
         metrics, analysis.ai_analysis or {}, comp,
         (eng.hypotheses if eng else None) or [], (eng.grades if eng else None) or {}, (eng.relates if eng else None) or {},
     )
-    # People stay as counts or job titles in anything that leaves the app
-    names = name_map(analysis.raw_data["employees"])
+    return _scrubbed(analysis, findings)
+
+
+def _scrubbed(analysis: OrgAnalysis, findings: List[Dict]) -> List[Dict]:
+    """People stay as counts or job titles in anything that leaves the app: no names, no Employee IDs."""
+    employees = analysis.raw_data["employees"]
+    names = name_map(employees)
+    # Purely numeric or very short IDs can't identify anyone in a sentence, and would match figures
+    ids = sorted({str(e.get("employee_id") or "") for e in employees}, key=len, reverse=True)
+    ids = [i for i in ids if len(i) >= 3 and not i.isdigit() and i not in names]
     for f in findings:
         for field in ("title", "detail", "source_note"):
-            f[field] = without_names(f[field] or "", names)
+            text = without_names(f[field] or "", names)
+            for i in ids:
+                text = re.sub(rf"(?<![\w-]){re.escape(i)}(?![\w-])", "[an employee]", text)
+            f[field] = text
     return findings
+
+
+async def link_findings(analysis: OrgAnalysis, country: str, db: AsyncSession) -> Dict:
+    """One country's file: baseline on that country's people and why its Compass roles exist or are missing."""
+    link = await get_engagement(analysis, db, country=country)
+    if not country or not link or not link.packet:
+        raise HTTPException(status_code=404, detail=f"No Compass file is linked to {cs.link_label(country)}.")
+    metrics = await ensure_metrics(analysis, db)
+    row = next((r for r in metrics.get("country_analysis") or [] if r["country"] == country), None)
+    view = await _roles_view(analysis, db)
+    cells, left_out = [], 0
+    for r in view["roles"]:
+        cell = next((c for c in r["cells"] if c["country"] == country), None)
+        if not cell or not cell["in_packet"]:
+            continue
+        if cell["holders"] is None:
+            left_out += 1  # not matched to a job title yet: neither existing nor absent
+            continue
+        cells.append({"ref": r["ref"], "title": r["title"], "holders": cell["holders"], "reason": cell["reason"],
+                      "compass_status": cell["compass_status"], "status_confirmed": cell["status_confirmed"]})
+    clusters = {r["ref"]: r["cluster_ref"] for r in view["roles"]}
+    findings = cs.country_findings(country, row, cells, clusters, link.grades or {}, link.relates or {})
+    return {"link": {"country": country, "key": link.key, "label": cs.link_label(country)},
+            "findings": _scrubbed(analysis, findings), "left_out_not_matched": left_out}
+
+
+@router.get("/findings")
+async def get_link_findings(link: str = "", db: AsyncSession = Depends(get_session)):
+    """Findings for one link: a country's file, or ("") the whole organization's."""
+    analysis = await latest_analysis(db)
+    if not link:
+        whole = await get_engagement(analysis, db)
+        header = engagement_header(await linked(analysis, db))
+        return {"link": {"country": "", "key": header["key"] if header else None, "label": cs.link_label("")},
+                "findings": await findings_for(analysis, whole, db), "left_out_not_matched": 0}
+    return await link_findings(analysis, link, db)
 
 
 async def _state(analysis: OrgAnalysis, eng: Optional[Engagement], db: AsyncSession) -> Dict:
@@ -293,20 +342,33 @@ async def set_grade(request: GradeIn, db: AsyncSession = Depends(get_session)):
     if request.grade is not None and request.grade not in cs.GRADES:
         raise HTTPException(status_code=400, detail=f"Grade must be one of: {', '.join(cs.GRADES)}")
     analysis = await latest_analysis(db)
-    eng = await get_engagement(analysis, db, create=True)
+    eng = await _link_for_update(analysis, request.country, db)
     grades = {k: v for k, v in (eng.grades or {}).items() if k != request.ref}
     if request.grade:
         grades[request.ref] = request.grade
     eng.grades = grades
     await db.commit()
-    return await _state(analysis, eng, db)
+    return await _after_update(analysis, request.country, eng, db)
+
+
+async def _link_for_update(analysis: OrgAnalysis, country: str, db: AsyncSession) -> Engagement:
+    if not country:
+        return await get_engagement(analysis, db, create=True)
+    link = await get_engagement(analysis, db, country=country)
+    if not link or not link.packet:
+        raise HTTPException(status_code=404, detail=f"No Compass file is linked to {cs.link_label(country)}.")
+    return link
+
+
+async def _after_update(analysis: OrgAnalysis, country: str, eng: Engagement, db: AsyncSession) -> Dict:
+    return await _state(analysis, eng, db) if not country else await link_findings(analysis, country, db)
 
 
 @router.put("/relates")
 async def set_relates(request: RelatesIn, db: AsyncSession = Depends(get_session)):
     """Attach Compass IDs to a finding. Only IDs from the imported packet are accepted."""
     analysis = await latest_analysis(db)
-    eng = await get_engagement(analysis, db, create=True)
+    eng = await _link_for_update(analysis, request.country, db)
     valid = {r["ref"] for r in all_refs(await linked(analysis, db))}
     unknown = [r for r in request.relates_to if r not in valid]
     if unknown:
@@ -318,11 +380,16 @@ async def set_relates(request: RelatesIn, db: AsyncSession = Depends(get_session
         relates[request.ref] = list(dict.fromkeys(request.relates_to))
     eng.relates = relates
     await db.commit()
-    return await _state(analysis, eng, db)
+    return await _after_update(analysis, request.country, eng, db)
 
 
-async def _return(db: AsyncSession):
+async def _return(db: AsyncSession, link: str = ""):
     analysis = await latest_analysis(db)
+    if link:
+        data = await link_findings(analysis, link, db)
+        key = data["link"]["key"]
+        ret = cs.build_return(key, data["findings"], country=link)
+        return ret, re.sub(r"[^A-Za-z0-9_-]+", "_", key or link) + "_compass_return"
     eng = await get_engagement(analysis, db)
     header = engagement_header(await linked(analysis, db))
     key = header["key"] if header else None
@@ -332,15 +399,15 @@ async def _return(db: AsyncSession):
 
 
 @router.get("/return")
-async def return_file(db: AsyncSession = Depends(get_session)):
-    """compass-return v1.0: this app's findings in the shape the other apps read."""
-    ret, stem = await _return(db)
+async def return_file(link: str = "", db: AsyncSession = Depends(get_session)):
+    """compass-return v1.0: this app's findings for one link (a country, or "" for the whole organization)."""
+    ret, stem = await _return(db, link)
     return JSONResponse(ret, headers={"Content-Disposition": f'attachment; filename="{stem}.json"'})
 
 
 @router.get("/return.txt", response_class=PlainTextResponse)
-async def return_text(db: AsyncSession = Depends(get_session)):
-    ret, stem = await _return(db)
+async def return_text(link: str = "", db: AsyncSession = Depends(get_session)):
+    ret, stem = await _return(db, link)
     return PlainTextResponse(cs.return_as_text(ret), headers={"Content-Disposition": f'inline; filename="{stem}.txt"'})
 
 

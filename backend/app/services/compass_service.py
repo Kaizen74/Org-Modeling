@@ -26,7 +26,9 @@ GRADE_LABELS = {"confirmed": "Confirmed", "indicated": "Indicated", "hypothesis"
 # Suggested default only: the grade is the assessor's judgement
 EVIDENCE_TO_GRADE = {"OBSERVABLE": "confirmed", "PERCEPTUAL": "indicated", "MODEL-INFERRED": "hypothesis"}
 HYPOTHESIS_STATUSES = ["open", "supported", "refuted"]
-FINDING_KINDS = ["structural_baseline", "work_activity", "hypothesis", "option_score"]
+FINDING_KINDS = ["structural_baseline", "role_reason", "work_activity", "hypothesis", "option_score"]
+# Optional fields a finding carries when they apply (country files)
+OPTIONAL_FINDING_FIELDS = ("topic", "reason_class", "compared_with")
 
 
 def suggested_grade(evidence_class: Optional[str]) -> Optional[str]:
@@ -107,9 +109,21 @@ def validate_packet(packet) -> Tuple[List[str], List[str]]:
 
     readiness = packet.get("readiness") or {}
     if readiness.get("ready") is False:
-        open_items = "; ".join(str(o) for o in readiness.get("open") or [])
+        open_items = "; ".join(_readiness_item(o) for o in readiness.get("open") or [])
         warnings.append("The Compass marks this hand-off as not ready" + (f": {open_items}" if open_items else "."))
     return errors, warnings
+
+
+def _readiness_item(item) -> str:
+    """One open readiness item in plain words (the Compass writes either text or {check, level, detail})."""
+    if not isinstance(item, dict):
+        return str(item)
+    text = str(item.get("check") or "").strip()
+    if item.get("detail"):
+        text += f" ({item['detail']})" if text else str(item["detail"])
+    if item.get("level") == "must":
+        text += " — required"
+    return text
 
 
 def packet_criteria(packet: Dict) -> List[Dict]:
@@ -412,25 +426,97 @@ def collect_findings(metrics: Dict, ai_analysis: Dict, comparison: Optional[Dict
     return findings
 
 
-def build_return(engagement_key: Optional[str], findings: List[Dict]) -> Dict:
+def build_return(engagement_key: Optional[str], findings: List[Dict], country: str = "") -> Dict:
+    """compass-return 1.0; `country` is "" for the whole-organization file."""
     return {
         "format": RETURN_FORMAT, "format_version": "1.0",
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "source_app": SOURCE_APP, "engagement_key": engagement_key or "",
+        "country": country,
         "findings": [
             {"ref": f["ref"], "kind": f["kind"], "title": f["title"], "detail": f["detail"], "grade": f["grade"],
-             "figure": f["figure"], "relates_to": f["relates_to"], "source_note": f["source_note"]}
+             "figure": f["figure"], "relates_to": f["relates_to"], "source_note": f["source_note"],
+             **{k: f[k] for k in OPTIONAL_FINDING_FIELDS if f.get(k)}}
             for f in findings
         ],
     }
 
 
+ROLE_REASON_SOURCE = "Reason recorded by the designer; head-count from the uploaded org file."
+
+
+def country_findings(country: str, row: Optional[Dict], role_cells: List[Dict], cluster_ref: Dict[str, str],
+                     grades: Dict, relates: Dict) -> List[Dict]:
+    """
+    Findings for one country's file: the structural baseline computed on that
+    country's people (topic role_presence), and one role_reason finding per
+    Compass role that has a reason recorded here or nobody in it here.
+    role_cells: [{ref, title, holders, compass_status, status_confirmed, reason}] for roles
+    whose job-title match is confirmed (roles not matched yet are left out).
+    """
+    from .compass_roles import people, verb  # roles module depends on nothing here
+
+    out: List[Dict] = []
+    if row:
+        vs = row["spans_vs_benchmark"]
+        base = {"kind": "structural_baseline", "topic": "role_presence", "evidence_class": "OBSERVABLE",
+                "suggested_grade": "confirmed",
+                "source_note": f"Computed from the uploaded org file ({row['headcount']} people in {country})"}
+        out += [
+            {**base, "ref": "baseline.layers", "title": f"Layers in the reporting chain ({country})",
+             "detail": f"Counted from who reports to whom, for the people whose Country is {country}, "
+                       "from the top of the whole organization.",
+             "figure": f"{row['layers']} layers"},
+            {**base, "ref": "baseline.spans", "title": f"Managers within their span benchmark ({country})",
+             "detail": f"{vs['below']} below, {vs['above']} above; {row['single_report_managers']} managers have one "
+                       f"direct report. Median span {row['median_span']:g}. A manager's span counts reports in any country.",
+             "figure": f"{vs['within']} of {row['managers']} managers"},
+            {**base, "ref": "baseline.health", "title": f"Structural health score ({country})",
+             "detail": "Weighted from span fit, layers for this size, manager ratio and single-report managers, for this country's people.",
+             "figure": f"{row['health_score']} out of 100"},
+        ]
+    for c in role_cells:
+        reason = c.get("reason") or {}
+        recorded = bool(reason.get("text") or reason.get("reason_class") not in (None, "", "unknown"))
+        if not recorded and c["holders"] != 0:
+            continue
+        status = {"status": c["compass_status"], "confirmed": c["status_confirmed"] is not False} if c["compass_status"] else None
+        cluster = cluster_ref.get(c["ref"], "")
+        f = {
+            "ref": c["ref"], "kind": "role_reason", "topic": "role_reason",
+            "title": f"Why {c['title']} {verb(status, c['holders'])} in {country}",
+            "detail": reason.get("text") or "Not recorded yet.",
+            "reason_class": reason.get("reason_class") if reason.get("reason_class") in ("required", "chosen", "inherited") else "unknown",
+            "figure": people(c["holders"]),
+            "evidence_class": None,
+            "suggested_grade": "indicated" if reason.get("text") else "hypothesis",
+            "relates_to_default": [c["ref"], cluster, f"{cluster}.People"] if cluster else [c["ref"]],
+            "source_note": ROLE_REASON_SOURCE,
+        }
+        if reason.get("compared_with"):
+            f["compared_with"] = reason["compared_with"]
+        if reason.get("grade") in GRADES:
+            f["grade_from_reason"] = reason["grade"]
+        out.append(f)
+
+    for f in out:
+        mine = grades.get(f["ref"]) if grades.get(f["ref"]) in GRADES else f.pop("grade_from_reason", None)
+        f.pop("grade_from_reason", None)
+        f["grade"] = mine or f["suggested_grade"]
+        f["grade_set_by_you"] = bool(mine)
+        f["relates_to"] = list(relates[f["ref"]]) if f["ref"] in relates else f.pop("relates_to_default", [])
+        f.pop("relates_to_default", None)
+    return out
+
+
 def return_as_text(ret: Dict) -> str:
     """The same content as the return file, for reading or uploading as a document."""
-    kind_titles = {"structural_baseline": "Structural baseline", "work_activity": "Work activities",
-                   "hypothesis": "Operating-model hypotheses", "option_score": "Options compared"}
+    kind_titles = {"structural_baseline": "Structural baseline", "role_reason": "Compass roles: why they exist or are missing",
+                   "work_activity": "Work activities", "hypothesis": "Operating-model hypotheses", "option_score": "Options compared"}
+    reason_words = {"required": "Required", "chosen": "Chosen", "inherited": "Inherited", "unknown": "Not known yet"}
     key = ret.get("engagement_key")
-    lines = [f"Org Modeling findings for {key or 'this organization'}",
+    where = f" ({ret['country']})" if ret.get("country") else ""
+    lines = [f"Org Modeling findings for {key or 'this organization'}{where}",
              f"Format {ret['format']} {ret['format_version']}, generated {ret['generated_at']}", ""]
     for kind in FINDING_KINDS:
         items = [f for f in ret["findings"] if f["kind"] == kind]
@@ -441,6 +527,9 @@ def return_as_text(ret: Dict) -> str:
             ref = f"{key}:{f['ref']}" if key and kind == "hypothesis" else f["ref"]
             lines.append(f"[{ref}] {f['title']}" + (f" — {f['figure']}" if f["figure"] else ""))
             lines.append(f"  Grade: {GRADE_LABELS[f['grade']]}. Rests on: {f['source_note']}")
+            if f.get("reason_class"):
+                lines.append(f"  Reason: {reason_words[f['reason_class']]}"
+                             + (f", compared with {f['compared_with']}" if f.get("compared_with") else ""))
             if f["detail"]:
                 lines.append(f"  {f['detail']}")
             if f["relates_to"]:

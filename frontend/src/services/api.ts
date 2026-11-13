@@ -24,7 +24,8 @@ import type {
   Grade,
   Hypothesis,
   CompassRolesView,
-  ReasonClass
+  ReasonClass,
+  LinkFindings
 } from '../types';
 
 /** Whole organization when department is empty, otherwise one department. */
@@ -353,6 +354,13 @@ export const compassApi = {
   deleteHypothesis: async (ref: string): Promise<CompassState> => (await api.delete(`/compass/hypotheses/${ref}`)).data,
   setGrade: async (ref: string, grade: Grade | null): Promise<CompassState> => (await api.put('/compass/grades', { ref, grade })).data,
   setRelates: async (ref: string, relatesTo: string[]): Promise<CompassState> => (await api.put('/compass/relates', { ref, relates_to: relatesTo })).data,
+  /** One link's findings: a country's file, or "" for the whole organization's. */
+  findings: async (link: string): Promise<LinkFindings> => (await api.get('/compass/findings', { params: { link } })).data,
+  setLinkGrade: async (country: string, ref: string, grade: Grade | null): Promise<LinkFindings> =>
+    (await api.put('/compass/grades', { ref, grade, country })).data,
+  setLinkRelates: async (country: string, ref: string, relatesTo: string[]): Promise<LinkFindings> =>
+    (await api.put('/compass/relates', { ref, relates_to: relatesTo, country })).data,
+  returnUrl: (link: string, text = false) => `/api/v1/compass/return${text ? '.txt' : ''}${link ? `?link=${encodeURIComponent(link)}` : ''}`,
   roles: async (): Promise<CompassRolesView> => (await api.get('/compass/roles')).data,
   /** titles: [] = no job title in this file; null = back to "not matched yet". */
   setRoleMatch: async (ref: string, titles: string[] | null): Promise<CompassRolesView> =>

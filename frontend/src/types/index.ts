@@ -909,7 +909,10 @@ export interface Hypothesis {
 
 export interface SharedFinding {
   ref: string;
-  kind: 'structural_baseline' | 'work_activity' | 'hypothesis' | 'option_score';
+  kind: 'structural_baseline' | 'role_reason' | 'work_activity' | 'hypothesis' | 'option_score';
+  topic?: 'role_presence' | 'role_reason' | 'decision_right' | 'way_of_working';
+  reason_class?: ReasonClass;
+  compared_with?: string;
   title: string;
   detail: string;
   figure: string;
@@ -988,6 +991,13 @@ export interface CompassRolesView {
   grades: Grade[];
   file_countries: string[];
   accepted?: number;
+}
+
+/** Findings for one link: a country's file, or ("") the whole organization's. */
+export interface LinkFindings {
+  link: { country: string; key: string | null; label: string };
+  findings: SharedFinding[];
+  left_out_not_matched: number;
 }
 
 export interface CompassPreview {

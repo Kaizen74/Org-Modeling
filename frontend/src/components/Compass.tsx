@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { compassApi } from '../services/api';
-import type { CompassPreview, CompassState, Grade, Hypothesis, HypothesisStatus } from '../types';
+import type { CompassPreview, CompassState, Grade, Hypothesis, HypothesisStatus, LinkFindings, SharedFinding } from '../types';
 import { Callout, Chip, Section } from './ui';
 
 export const COMPASS_CHANGED = 'compass-changed';
@@ -363,39 +363,95 @@ export function HypothesisRegister({ state, onChange }: { state: CompassState; o
 // ------------------------------------------------------------------ findings to send back
 
 const KIND_LABEL: Record<string, string> = {
-  structural_baseline: 'Structural baseline', work_activity: 'Work activity', hypothesis: 'Hypothesis', option_score: 'Option score',
+  structural_baseline: 'Structural baseline', role_reason: 'Why a role exists or is missing', work_activity: 'Work activity',
+  hypothesis: 'Hypothesis', option_score: 'Option score',
 };
+const REASON_WORD: Record<string, string> = { required: 'Required', chosen: 'Chosen', inherited: 'Inherited', unknown: 'Not known yet' };
 
+/** The grade on one finding, for either kind of file. */
+function FindingGrade({ f, grades, labels, onChange }: {
+  f: SharedFinding; grades: Grade[]; labels: Record<Grade, string>; onChange: (g: Grade | null) => void;
+}) {
+  return (
+    <label className="inline-flex items-center gap-1.5 text-xs text-faint">
+      <span aria-hidden style={{ color: GRADE_COLOR[f.grade] }}>{GRADE_GLYPH[f.grade]}</span>
+      <select aria-label={`Grade for ${f.ref}`} className="rounded border border-hairline bg-white px-1.5 py-0.5 text-xs font-semibold text-ink"
+        value={f.grade} onChange={(e) => onChange(e.target.value === f.suggested_grade ? null : (e.target.value as Grade))}>
+        {grades.map((g) => <option key={g} value={g}>{labels[g]}{g === f.suggested_grade ? ' (suggested)' : ''}</option>)}
+      </select>
+      {f.grade_set_by_you && <span>set by you</span>}
+    </label>
+  );
+}
+
+/**
+ * "Findings for the Compass": choose the link to export — each linked country,
+ * or the whole organization — then grade, attach Compass IDs and download.
+ */
 export function FindingsRegister({ state, onChange }: { state: CompassState; onChange: (s: CompassState) => void }) {
   const [error, setError] = useState<string | null>(null);
-  const setRelates = async (ref: string, refs: string[]) => {
+  const countries = state.links.filter((l) => l.country);
+  const [link, setLink] = useState('');
+  const [data, setData] = useState<LinkFindings | null>(null);
+  useEffect(() => {
+    if (!link) { setData(null); return; }
+    compassApi.findings(link).then(setData).catch((e) => setError(detailOf(e, 'Could not load the findings.')));
+  }, [link]);
+
+  const findings = link ? data?.findings ?? [] : state.findings;
+  const key = link ? state.links.find((l) => l.country === link)?.key : state.engagement?.key;
+  const run = async (fn: () => Promise<void>) => {
     setError(null);
-    try { onChange(await compassApi.setRelates(ref, refs)); } catch (e) { setError(detailOf(e, 'Could not save the link.')); }
+    try { await fn(); } catch (e) { setError(detailOf(e, 'Could not save.')); }
   };
+  const setGrade = (ref: string, g: Grade | null) => run(async () => {
+    if (link) setData(await compassApi.setLinkGrade(link, ref, g));
+    else { onChange(await compassApi.setGrade(ref, g)); announce(); }
+  });
+  const setRelates = (ref: string, refs: string[]) => run(async () => {
+    if (link) setData(await compassApi.setLinkRelates(link, ref, refs));
+    else onChange(await compassApi.setRelates(ref, refs));
+  });
+
   return (
     <Section
-      eyebrow={`Findings to send back${state.engagement ? ` · ${state.engagement.key}` : ''}`}
+      eyebrow={`Findings for the Compass${key ? ` · ${key}` : ''}`}
       title="What this app found, in the shared language"
-      lede="Each finding carries a grade you can change and the Compass IDs it bears on. People appear as counts or job titles, never names."
+      lede="Each finding carries a grade you can change and the Compass IDs it bears on. People appear as counts or job titles, never names or Employee IDs."
       aside={
         <div className="flex flex-wrap gap-3">
-          <a className="btn btn-secondary" href={compassApi.returnJsonUrl} download>Download return file (JSON)</a>
-          <a className="btn btn-quiet" href={compassApi.returnTextUrl} target="_blank" rel="noreferrer">Readable text ↗</a>
+          <a className="btn btn-secondary" href={compassApi.returnUrl(link)} download>Download {link ? `${link}'s` : 'the'} file (JSON)</a>
+          <a className="btn btn-quiet" href={compassApi.returnUrl(link, true)} target="_blank" rel="noreferrer">Readable text ↗</a>
         </div>
       }
     >
+      {countries.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-2" role="group" aria-label="Which file to export">
+          <span className="label mb-0 mr-1">Export for</span>
+          <Chip active={link === ''} onClick={() => setLink('')}>Whole organization</Chip>
+          {countries.map((l) => <Chip key={l.country} active={link === l.country} onClick={() => setLink(l.country)}>{l.country} · {l.key}</Chip>)}
+        </div>
+      )}
+      {link && (
+        <p className="mb-4 text-sm text-secondary">
+          {link}'s file holds the structure computed on the people who work there and, for each Compass role, why it exists or is missing.
+          Work activities, hypotheses and option scores are about the whole organization and stay in its file.
+          {data && data.left_out_not_matched > 0 && <b className="text-ink"> {data.left_out_not_matched} role{data.left_out_not_matched === 1 ? ' is' : 's are'} left out until matched to a job title on the Compass roles screen.</b>}
+        </p>
+      )}
       {error && <div className="mb-4"><Callout label="Not saved" tone="attention">{error}</Callout></div>}
       <ul className="card divide-y divide-hairline p-0">
-        {state.findings.map((f) => (
+        {findings.map((f) => (
           <li key={f.ref} className="grid gap-x-6 gap-y-2 px-6 py-4 lg:grid-cols-[1fr_300px]" data-finding={f.ref}>
             <div className="min-w-0 text-sm">
               <p className="text-xs text-faint"><span className="tabular font-semibold text-primary-700">{f.ref}</span> · {KIND_LABEL[f.kind]}</p>
               <p className="font-medium text-ink">{f.title}{f.figure && <span className="font-normal text-secondary"> — {f.figure}</span>}</p>
+              {f.reason_class && <p className="mt-0.5 text-xs font-semibold text-ink">{REASON_WORD[f.reason_class]}{f.compared_with && <span className="font-normal text-secondary"> · compared with {f.compared_with}</span>}</p>}
               {f.detail && <p className="mt-0.5 text-secondary">{f.detail}</p>}
               <p className="mt-0.5 text-xs text-faint">Rests on: {f.source_note}</p>
             </div>
             <div className="space-y-2">
-              <GradeSelect findingRef={f.ref} suggested={f.suggested_grade} state={state} onChange={onChange} />
+              <FindingGrade f={f} grades={state.grades} labels={state.grade_labels} onChange={(g) => setGrade(f.ref, g)} />
               <div className="flex flex-wrap items-center gap-1.5">
                 {f.relates_to.map((r) => (
                   <button key={r} title="Remove" onClick={() => setRelates(f.ref, f.relates_to.filter((x) => x !== r))}
