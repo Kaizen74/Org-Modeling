@@ -27,12 +27,14 @@ router = APIRouter(prefix="/api/v1/compass", tags=["compass"])
 
 class ImportRequest(BaseModel):
     packet: Dict
+    link_country: Optional[str] = None  # where to link it when its country isn't in the file ("" = whole organization)
     replace_criteria: bool = False  # only needed when the preview says "ask"
     replace_strategy: bool = False
 
 
 class PreviewRequest(BaseModel):
     packet: Dict
+    link_country: Optional[str] = None
 
 
 class StrategyDraft(BaseModel):
@@ -63,14 +65,53 @@ async def latest_analysis(db: AsyncSession) -> OrgAnalysis:
     return analysis
 
 
-async def get_engagement(analysis: OrgAnalysis, db: AsyncSession, create: bool = False) -> Optional[Engagement]:
-    eng = (await db.execute(select(Engagement).where(Engagement.analysis_id == analysis.id))).scalar_one_or_none()
+async def get_engagement(analysis: OrgAnalysis, db: AsyncSession, create: bool = False, country: str = "") -> Optional[Engagement]:
+    """The link for one country; country "" is the whole organization (hypotheses, grades, strategy draft)."""
+    eng = (await db.execute(select(Engagement).where(
+        Engagement.analysis_id == analysis.id, Engagement.country == country))).scalar_one_or_none()
     if not eng and create:
-        eng = Engagement(analysis_id=analysis.id, hypotheses=[], hypothesis_seq=0, grades={}, relates={})
+        eng = Engagement(analysis_id=analysis.id, country=country, hypotheses=[], hypothesis_seq=0, grades={},
+                         relates={}, role_matches={}, role_match_log=[], role_reasons={})
         db.add(eng)
         await db.commit()
         await db.refresh(eng)
     return eng
+
+
+async def linked(analysis: OrgAnalysis, db: AsyncSession) -> List[Engagement]:
+    """Every link that has a Compass packet, in the order they were imported."""
+    rows = (await db.execute(select(Engagement).where(Engagement.analysis_id == analysis.id))).scalars().all()
+    return sorted([r for r in rows if r.packet], key=lambda r: r.imported_at or datetime.min)
+
+
+def file_countries(analysis: OrgAnalysis) -> List[str]:
+    return sorted({e.get("country") for e in (analysis.raw_data or {}).get("employees", []) if e.get("country")})
+
+
+def engagement_header(links: List[Engagement]) -> Optional[Dict]:
+    """
+    What the header and exports show: the whole-organization packet if one is
+    linked, else the frame (its key is the linked key that starts all others).
+    """
+    if not links:
+        return None
+    whole = next((l for l in links if not l.country), None)
+    if whole:
+        return {**cs.engagement_summary(whole.packet), "countries": [l.country for l in links if l.country]}
+    first = cs.engagement_summary(links[0].packet)
+    return {**first, "key": cs.frame_key([l.key for l in links]), "country": "",
+            "countries": [l.country for l in links if l.country]}
+
+
+def all_refs(links: List[Engagement]) -> List[Dict]:
+    """Compass IDs across every linked packet (the same frame gives the same IDs)."""
+    out, seen = [], set()
+    for l in links:
+        for r in cs.known_refs(l.packet):
+            if r["ref"] not in seen:
+                seen.add(r["ref"])
+                out.append(r)
+    return out
 
 
 async def findings_for(analysis: OrgAnalysis, eng: Optional[Engagement], db: AsyncSession) -> List[Dict]:
@@ -90,13 +131,21 @@ async def findings_for(analysis: OrgAnalysis, eng: Optional[Engagement], db: Asy
 
 
 async def _state(analysis: OrgAnalysis, eng: Optional[Engagement], db: AsyncSession) -> Dict:
-    packet = eng.packet if eng else None
+    """`eng` is the whole-organization link."""
+    links = await linked(analysis, db)
+    contexts = {l.country: cs.packet_context(l.packet) for l in links}
     return {
-        "engagement": cs.engagement_summary(packet),
-        "imported_at": eng.imported_at.isoformat() if eng and eng.imported_at else None,
+        "engagement": engagement_header(links),
+        "links": [{"country": l.country, "label": cs.link_label(l.country), "key": l.key,
+                   "imported_at": l.imported_at.isoformat() if l.imported_at else None,
+                   "ready": (l.packet.get("readiness") or {}).get("ready", True)} for l in links],
+        "file_countries": file_countries(analysis),
+        "imported_at": links[-1].imported_at.isoformat() if links and links[-1].imported_at else None,
         "strategy_draft": (eng.strategy_draft if eng else None) or "",
-        "context": cs.packet_context(packet),
-        "refs": cs.known_refs(packet) if packet else [],
+        "contexts": contexts,
+        # The whole organization's context, else the first linked country's
+        "context": contexts.get("") or (contexts[links[0].country] if links else cs.packet_context(None)),
+        "refs": all_refs(links),
         "hypotheses": (eng.hypotheses if eng else None) or [],
         "grades": cs.GRADES,
         "grade_labels": cs.GRADE_LABELS,
@@ -113,27 +162,33 @@ async def get_state(db: AsyncSession = Depends(get_session)):
     return await _state(analysis, await get_engagement(analysis, db), db)
 
 
-async def _preview(packet: Dict, analysis: OrgAnalysis, eng: Optional[Engagement], db: AsyncSession) -> Dict:
+async def _preview(packet: Dict, link_country: Optional[str], analysis: OrgAnalysis, db: AsyncSession) -> Dict:
+    whole = await get_engagement(analysis, db)
     _, comparison = await comparison_context(db)
-    current_strategy = (eng.strategy_draft if eng else None) or analysis.strategy_context or ""
+    current_strategy = (whole.strategy_draft if whole else None) or analysis.strategy_context or ""
+    links = {l.country: l.packet for l in await linked(analysis, db)}
     return cs.preview_import(packet, comparison.criteria or [], comparison.judgments or {}, current_strategy,
-                             eng.key if eng else None)
+                             file_countries=file_countries(analysis), chosen_link=link_country, links=links)
 
 
 @router.post("/preview")
 async def preview(request: PreviewRequest, db: AsyncSession = Depends(get_session)):
     """What importing this file would create or change. Applies nothing."""
     analysis = await latest_analysis(db)
-    return await _preview(request.packet, analysis, await get_engagement(analysis, db), db)
+    return await _preview(request.packet, request.link_country, analysis, db)
 
 
 @router.post("/import")
 async def import_packet(request: ImportRequest, db: AsyncSession = Depends(get_session)):
     analysis = await latest_analysis(db)
-    eng = await get_engagement(analysis, db, create=True)
-    plan = await _preview(request.packet, analysis, eng, db)
+    plan = await _preview(request.packet, request.link_country, analysis, db)
     if not plan["ok"]:
         raise HTTPException(status_code=400, detail=" ".join(plan["errors"]))
+    if plan["country"]["needs_choice"]:
+        raise HTTPException(status_code=400, detail=plan["country"]["note"])
+    target = plan["country"]["target"]
+    whole = await get_engagement(analysis, db, create=True)
+    link = whole if target == "" else await get_engagement(analysis, db, create=True, country=target)
 
     applied = []
     _, comparison = await comparison_context(db)
@@ -145,23 +200,31 @@ async def import_packet(request: ImportRequest, db: AsyncSession = Depends(get_s
         applied.append("Your comparison criteria were kept")
     elif action == "invalid":
         applied.append("The file's criteria were not used: " + "; ".join(plan["criteria"]["problems"]))
+    elif action == "different":
+        applied.append("Comparison criteria kept from the first Compass file (this file's differ)")
 
     action = plan["strategy"]["action"]
     if action == "set" or (action == "ask" and request.replace_strategy):
-        eng.strategy_draft = plan["strategy"]["incoming"]
+        whole.strategy_draft = plan["strategy"]["incoming"]
         applied.append("Strategy text pre-filled on the archetype page")
     elif action == "ask":
         applied.append("Your strategy text was kept")
+    elif action == "different":
+        applied.append("Strategy text kept from the first Compass file (this file's differs)")
 
-    eng.key = request.packet["engagement"]["key"]
-    eng.packet = request.packet
-    eng.imported_at = datetime.utcnow()
-    # Links to IDs that are not in the new packet would point nowhere
-    valid = {r["ref"] for r in cs.known_refs(request.packet)}
-    eng.relates = {k: [r for r in v if r in valid] for k, v in (eng.relates or {}).items()}
+    link.key = request.packet["engagement"]["key"]
+    link.packet = request.packet
+    link.imported_at = datetime.utcnow()
+    # Reasons for roles this packet no longer has would point nowhere
+    roles = {r.get("ref") for r in request.packet.get("roles") or []}
+    link.role_reasons = {k: v for k, v in (link.role_reasons or {}).items() if k in roles}
+    await db.flush()
+    # Links on whole-organization findings to IDs no linked packet has would point nowhere
+    valid = {r["ref"] for r in all_refs(await linked(analysis, db))}
+    whole.relates = {k: [r for r in v if r in valid] for k, v in (whole.relates or {}).items()}
     await db.commit()
-    applied.append(f"Linked to engagement {eng.key}")
-    return {"applied": applied, "warnings": plan["warnings"], **await _state(analysis, eng, db)}
+    applied.append(f"{'Replaced the link' if plan['replaces'] else 'Linked'} {cs.link_label(target)} to engagement {link.key}")
+    return {"applied": applied, "warnings": plan["warnings"], **await _state(analysis, whole, db)}
 
 
 @router.put("/strategy-draft")
@@ -243,7 +306,7 @@ async def set_relates(request: RelatesIn, db: AsyncSession = Depends(get_session
     """Attach Compass IDs to a finding. Only IDs from the imported packet are accepted."""
     analysis = await latest_analysis(db)
     eng = await get_engagement(analysis, db, create=True)
-    valid = {r["ref"] for r in cs.known_refs(eng.packet)} if eng.packet else set()
+    valid = {r["ref"] for r in all_refs(await linked(analysis, db))}
     unknown = [r for r in request.relates_to if r not in valid]
     if unknown:
         raise HTTPException(status_code=400, detail=(
@@ -260,8 +323,10 @@ async def set_relates(request: RelatesIn, db: AsyncSession = Depends(get_session
 async def _return(db: AsyncSession):
     analysis = await latest_analysis(db)
     eng = await get_engagement(analysis, db)
-    ret = cs.build_return(eng.key if eng else None, await findings_for(analysis, eng, db))
-    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", (eng.key if eng and eng.key else analysis.name or "org")) + "_org_modeling_return"
+    header = engagement_header(await linked(analysis, db))
+    key = header["key"] if header else None
+    ret = cs.build_return(key, await findings_for(analysis, eng, db))
+    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", (key or analysis.name or "org")) + "_org_modeling_return"
     return ret, stem
 
 

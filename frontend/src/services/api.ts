@@ -340,9 +340,11 @@ export const aiDispositionApi = {
 type HypothesisInput = Pick<Hypothesis, 'statement' | 'refuted_by' | 'status' | 'note'>;
 export const compassApi = {
   get: async (): Promise<CompassState> => (await api.get('/compass')).data,
-  preview: async (packet: unknown): Promise<CompassPreview> => (await api.post('/compass/preview', { packet })).data,
-  importPacket: async (packet: unknown, replaceCriteria: boolean, replaceStrategy: boolean): Promise<CompassState> =>
-    (await api.post('/compass/import', { packet, replace_criteria: replaceCriteria, replace_strategy: replaceStrategy })).data,
+  /** linkCountry: where to link a packet whose country isn't in the file ("" = whole organization). */
+  preview: async (packet: unknown, linkCountry?: string): Promise<CompassPreview> =>
+    (await api.post('/compass/preview', { packet, link_country: linkCountry })).data,
+  importPacket: async (packet: unknown, replaceCriteria: boolean, replaceStrategy: boolean, linkCountry?: string): Promise<CompassState> =>
+    (await api.post('/compass/import', { packet, replace_criteria: replaceCriteria, replace_strategy: replaceStrategy, link_country: linkCountry })).data,
   saveStrategyDraft: async (text: string): Promise<void> => { await api.put('/compass/strategy-draft', { text }); },
   addHypothesis: async (h: HypothesisInput): Promise<CompassState> => (await api.post('/compass/hypotheses', h)).data,
   updateHypothesis: async (ref: string, h: HypothesisInput): Promise<CompassState> => (await api.put(`/compass/hypotheses/${ref}`, h)).data,

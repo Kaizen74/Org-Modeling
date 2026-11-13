@@ -881,6 +881,17 @@ export interface CompassEngagement {
   scope?: string;
   generated_at?: string;
   format_version?: string;
+  country?: string; // the country the packet's workspace covers; "" for group-wide
+  countries?: string[]; // countries with a linked packet (header summary)
+}
+
+/** One Compass packet linked to this upload: a country, or "" for the whole organization. */
+export interface CompassLink {
+  country: string;
+  label: string;
+  key: string;
+  imported_at: string | null;
+  ready: boolean;
 }
 
 export interface CompassContextData {
@@ -912,9 +923,12 @@ export interface SharedFinding {
 
 export interface CompassState {
   engagement: CompassEngagement | null;
+  links: CompassLink[];
+  file_countries: string[];
   imported_at: string | null;
   strategy_draft: string;
   context: CompassContextData;
+  contexts: Record<string, CompassContextData>;
   refs: Array<{ ref: string; label: string }>;
   hypotheses: Hypothesis[];
   grades: Grade[];
@@ -932,7 +946,9 @@ export interface CompassPreview {
   errors: string[];
   warnings: string[];
   engagement?: CompassEngagement;
-  criteria?: { action: 'set' | 'ask' | 'same' | 'none' | 'invalid'; note: string; incoming: ComparisonCriterion[]; problems: string[]; current_count: number };
-  strategy?: { action: 'set' | 'ask' | 'same' | 'none'; note: string; incoming: string; current: string };
+  country?: { named: string; matched: string | null; target: string | null; needs_choice: boolean; choices: string[]; note: string };
+  replaces?: boolean;
+  criteria?: { action: 'set' | 'ask' | 'same' | 'different' | 'none' | 'invalid'; note: string; incoming: ComparisonCriterion[]; problems: string[]; current_count: number };
+  strategy?: { action: 'set' | 'ask' | 'same' | 'different' | 'none'; note: string; incoming: string; current: string };
   context?: { structure_findings: number; clusters: number; ids: number };
 }

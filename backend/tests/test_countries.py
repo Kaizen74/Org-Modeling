@@ -84,3 +84,103 @@ async def test_metrics_api_returns_countries(client: AsyncClient):
     assert [c["country"] for c in m["country_analysis"]] == ["Arden", "Caldera", "Belmar"]
     org = (await client.get("/api/v1/org-data/latest")).json()
     assert org["hierarchy"]["data"]["country"] == "Arden"
+
+
+# ------------------------------------------------------------- one Compass link per country
+
+import copy
+import json
+
+PACKETS = {c: json.loads((COUNTRIES / f"{c.lower()}_compass_handoff.json").read_text()) for c in ("Arden", "Belmar", "Caldera")}
+
+
+async def _upload_countries(client):
+    r = await client.post("/api/v1/org-data/upload-csv", files={"file": ("org.csv", ORG.read_bytes(), "text/csv")})
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_three_packets_link_to_their_countries(client: AsyncClient):
+    await _upload_countries(client)
+    pre = (await client.post("/api/v1/compass/preview", json={"packet": PACKETS["Arden"]})).json()
+    assert pre["country"]["target"] == "Arden" and not pre["replaces"]
+    assert pre["criteria"]["action"] == "set" and pre["strategy"]["action"] == "set"
+    await client.post("/api/v1/compass/import", json={"packet": PACKETS["Arden"]})
+
+    # Later packets: criteria and strategy come from the first; the preview says same or different
+    pre = (await client.post("/api/v1/compass/preview", json={"packet": PACKETS["Belmar"]})).json()
+    assert pre["country"]["target"] == "Belmar"
+    assert pre["criteria"]["action"] == "same" and pre["strategy"]["action"] == "different"
+    assert any("not ready" in w for w in pre["warnings"])  # Belmar's readiness is false: a warning, not a block
+    await client.post("/api/v1/compass/import", json={"packet": PACKETS["Belmar"]})
+    state = (await client.post("/api/v1/compass/import", json={"packet": PACKETS["Caldera"]})).json()
+
+    assert [(l["country"], l["key"]) for l in state["links"]] == [("Arden", "MERIDIAN"), ("Belmar", "MERIDIANBE"), ("Caldera", "MERIDIANCA")]
+    assert state["engagement"]["key"] == "MERIDIAN"  # the frame's key
+    assert state["strategy_draft"] == PACKETS["Arden"]["for_apps"]["org_modeling"]["strategy_text"]
+    assert set(state["contexts"]) == {"Arden", "Belmar", "Caldera"}
+    assert "Strategy text kept from the first Compass file (this file's differs)" in state["applied"]
+
+    # Importing Belmar again says it will be replaced, and nothing changes until confirmed
+    again = (await client.post("/api/v1/compass/preview", json={"packet": PACKETS["Belmar"]})).json()
+    assert again["replaces"] and any("will replace" in w for w in again["warnings"])
+    assert len((await client.get("/api/v1/compass")).json()["links"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_country_not_in_file_and_different_frame(client: AsyncClient):
+    await _upload_countries(client)
+    other = copy.deepcopy(PACKETS["Belmar"])
+    other["engagement"].update(country="Dorne", key="MERIDIANDO")
+    pre = (await client.post("/api/v1/compass/preview", json={"packet": other})).json()
+    assert pre["country"]["needs_choice"] and "'Dorne'" in pre["country"]["note"]
+    assert pre["country"]["choices"] == ["Arden", "Belmar", "Caldera", ""]
+    r = await client.post("/api/v1/compass/import", json={"packet": other})
+    assert r.status_code == 400 and "Choose where to link it" in r.json()["detail"]
+    bad = await client.post("/api/v1/compass/import", json={"packet": other, "link_country": "Narnia"})
+    assert bad.status_code == 400 and "not a country in the uploaded org file" in bad.json()["detail"]
+    ok = (await client.post("/api/v1/compass/import", json={"packet": other, "link_country": ""})).json()
+    assert [l["label"] for l in ok["links"]] == ["Whole organization"]
+    assert ok["engagement"]["key"] == "MERIDIANDO"
+
+    changed = copy.deepcopy(PACKETS["Caldera"])
+    changed["roles"][0]["ref"] = "RL-901"
+    pre = (await client.post("/api/v1/compass/preview", json={"packet": changed})).json()
+    assert any("different frame" in w and "may not mean the same thing" in w for w in pre["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_packet_with_country_and_file_without_country_column(client: AsyncClient, sample_csv_path):
+    await client.post("/api/v1/org-data/upload-csv", files={"file": ("pax.csv", sample_csv_path.read_bytes(), "text/csv")})
+    pre = (await client.post("/api/v1/compass/preview", json={"packet": PACKETS["Arden"]})).json()
+    assert pre["country"]["needs_choice"] and pre["country"]["choices"] == [""]
+    done = (await client.post("/api/v1/compass/import", json={"packet": PACKETS["Arden"], "link_country": ""})).json()
+    assert done["links"][0]["label"] == "Whole organization" and done["engagement"]["key"] == "MERIDIAN"
+
+
+def test_existing_link_becomes_the_whole_organization_link(tmp_path):
+    """A database made before countries keeps its link, hypotheses and grades."""
+    from sqlalchemy import create_engine, text, inspect
+    from app.models.database import Base
+    from app.models.upgrades import upgrade_engagements
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        Base.metadata.create_all(conn, tables=[t for name, t in Base.metadata.tables.items() if name != "engagements"])
+        conn.execute(text(
+            "CREATE TABLE engagements (id VARCHAR(36) PRIMARY KEY, analysis_id VARCHAR(36) NOT NULL, key VARCHAR(100), "
+            "packet JSON, imported_at DATETIME, strategy_draft TEXT, hypotheses JSON, hypothesis_seq INTEGER, grades JSON, "
+            "relates JSON, created_at DATETIME, updated_at DATETIME)"))
+        conn.execute(text("CREATE UNIQUE INDEX ix_engagements_analysis_id ON engagements (analysis_id)"))
+        conn.execute(text(
+            "INSERT INTO engagements VALUES ('e1', 'a1', 'MERIDIAN', '{\"format\": \"compass-handoff\"}', NULL, 'My strategy', "
+            "'[{\"ref\": \"H1\"}]', 1, '{\"H1\": \"indicated\"}', '{}', NULL, NULL)"))
+    with engine.begin() as conn:
+        assert upgrade_engagements(conn) is True
+        assert upgrade_engagements(conn) is False  # safe to run again
+    with engine.begin() as conn:
+        row = conn.execute(text("SELECT country, key, strategy_draft, hypotheses, grades, role_matches FROM engagements")).one()
+        assert tuple(row) == ("", "MERIDIAN", "My strategy", '[{"ref": "H1"}]', '{"H1": "indicated"}', "{}")
+        # Two links on one upload are now allowed when their countries differ
+        conn.execute(text("INSERT INTO engagements (id, analysis_id, country) VALUES ('e2', 'a1', 'Belmar')"))
+        assert "engagements_before_countries" not in inspect(conn).get_table_names()

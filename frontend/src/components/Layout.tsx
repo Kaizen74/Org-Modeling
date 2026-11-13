@@ -65,7 +65,7 @@ export default function Layout({ children }: LayoutProps) {
 
   // Engagement key from an imported Capability Compass hand-off, shown on every page
   useEffect(() => {
-    const load = () => compassApi.get().then((s) => setEngagementKey(s.engagement?.key ?? null)).catch(() => setEngagementKey(null));
+    const load = () => compassApi.get().then((s) => setEngagementKey(s.engagement ? `${s.engagement.key}${s.links.length > 1 ? ` · ${s.links.length} links` : ''}` : null)).catch(() => setEngagementKey(null));
     load();
     window.addEventListener(COMPASS_CHANGED, load);
     return () => window.removeEventListener(COMPASS_CHANGED, load);

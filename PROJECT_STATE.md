@@ -8,7 +8,7 @@ An Organizational Design Analyzer for an OD practitioner: upload an org-structur
 *2026-11-13.* Building the owner's countries PRD (roles and structure by country), approved with "go" on the four suggested answers. Increments:
 - [x] 1. Country column (`Country` or `Country/Region`; blank → "Not stated") and per-country figures (layers from the top of the whole organization; spans count reports in any country)
 - [x] 2. By-country view; country filter on the department table and org chart
-- [ ] 3. One Compass link per (upload, country), with migration
+- [x] 3. One Compass link per (upload, country), with migration
 - [ ] 4. Compass roles screen (title matches, holders, reasons, flags)
 - [ ] 5. One findings file per country
 

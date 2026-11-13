@@ -1,6 +1,6 @@
 """SQLAlchemy models for the Org Design Analyzer."""
 
-from sqlalchemy import Column, String, Float, Integer, DateTime, Text, JSON, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, DateTime, Text, JSON, ForeignKey, UniqueConstraint
 from datetime import datetime
 import uuid
 
@@ -99,15 +99,21 @@ class AIDisposition(Base):
 
 class Engagement(Base):
     """
-    Shared-workflow record for one upload: the imported Capability Compass packet
-    (optional), the strategy text waiting to be used, operating-model hypotheses,
-    and the shared evidence grades / Compass links set on findings.
+    Shared-workflow link between one upload and one Capability Compass workspace.
+
+    One row per (upload, country). The row with country "" is the whole
+    organization: it holds the strategy text waiting to be used, operating-model
+    hypotheses, the grades and Compass links set on whole-organization findings,
+    and the Compass-role to job-title matches. A country row holds that
+    country's hand-off packet and the reasons recorded for its anchor roles.
     """
     __tablename__ = "engagements"
+    __table_args__ = (UniqueConstraint("analysis_id", "country", name="uq_engagement_analysis_country"),)
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    analysis_id = Column(String(36), ForeignKey("org_analyses.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
-    key = Column(String(100))  # Compass engagement key, e.g. "MERIDIAN"; None when no packet was imported
+    analysis_id = Column(String(36), ForeignKey("org_analyses.id", ondelete="CASCADE"), nullable=False, index=True)
+    country = Column(String(100), nullable=False, default="", server_default="")  # "" = whole organization
+    key = Column(String(100))  # Compass engagement key, e.g. "MERIDIANBE"; None when no packet was imported
     packet = Column(JSON)  # the compass-handoff file as received
     imported_at = Column(DateTime)
     strategy_draft = Column(Text)  # pre-fills the strategy box on the archetype page
@@ -115,6 +121,9 @@ class Engagement(Base):
     hypothesis_seq = Column(Integer, default=0)  # last number used; never reused
     grades = Column(JSON, default=dict)  # {finding ref: confirmed|indicated|hypothesis} — the assessor's overrides
     relates = Column(JSON, default=dict)  # {finding ref: [Compass IDs]}
+    role_matches = Column(JSON, default=dict)  # whole organization: {RL ref: [job titles]}, confirmed by the designer
+    role_match_log = Column(JSON, default=list)  # whole organization: [{at, ref, before, after}]
+    role_reasons = Column(JSON, default=dict)  # country: {RL ref: {reason_class, text, compared_with, grade}}
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

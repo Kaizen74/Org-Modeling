@@ -146,6 +146,7 @@ def engagement_summary(packet: Optional[Dict]) -> Optional[Dict]:
     e = packet.get("engagement") or {}
     return {
         "key": e.get("key"), "name": e.get("name"), "organisation": e.get("organisation"),
+        "country": packet_country(packet),
         "industry": e.get("industry"), "scope": e.get("scope"),
         "generated_at": packet.get("generated_at"), "format_version": packet.get("format_version"),
     }
@@ -156,48 +157,140 @@ def _same_criteria(a: List[Dict], b: List[Dict]) -> bool:
     return core(a) == core(b)
 
 
-def preview_import(packet: Dict, current_criteria: List[Dict], judgments: Dict,
-                   current_strategy: str, current_key: Optional[str]) -> Dict:
-    """What an import would create or change. Applies nothing."""
+def packet_country(packet: Dict) -> str:
+    """The country a packet's workspace covers ("" for a group-wide workspace)."""
+    return str((packet.get("engagement") or {}).get("country") or "").strip()
+
+
+def match_country(value: str, file_countries: List[str]) -> Optional[str]:
+    """The file's spelling of a country, matched without regard to case; None if absent."""
+    v = (value or "").strip().lower()
+    return next((c for c in file_countries if c.lower() == v), None) if v else None
+
+
+def frame_refs(packet: Dict) -> Tuple[set, set]:
+    return ({c.get("ref") for c in packet.get("clusters") or []}, {r.get("ref") for r in packet.get("roles") or []})
+
+
+def frame_key(keys: List[str]) -> str:
+    """
+    The frame's key: country keys are the frame key plus a country code
+    (MERIDIAN, MERIDIANBE, MERIDIANCA), so it is the linked key that starts all
+    the others. Falls back to the first key when no key starts the others.
+    """
+    keys = [k for k in keys if k]
+    if not keys:
+        return ""
+    for k in sorted(keys, key=len):
+        if all(o.startswith(k) for o in keys):
+            return k
+    return keys[0]
+
+
+def link_label(country: str) -> str:
+    return country or "Whole organization"
+
+
+def preview_import(packet: Dict, current_criteria: List[Dict], judgments: Dict, current_strategy: str,
+                   *, file_countries: Optional[List[str]] = None, chosen_link: Optional[str] = None,
+                   links: Optional[Dict[str, Dict]] = None) -> Dict:
+    """
+    What an import would create or change. Applies nothing.
+
+    `links` maps each already-linked country ("" = whole organization) to its
+    packet. A packet links to the country it names, matched to the file's
+    Country column; when there is no match the designer picks one
+    (`chosen_link`, "" for the whole organization). Design criteria and
+    strategy text come from the first packet linked; a later packet never
+    overwrites them.
+    """
     errors, warnings = validate_packet(packet)
     if errors:
         return {"ok": False, "errors": errors, "warnings": warnings}
+    links = links or {}
+    file_countries = file_countries or []
+
+    # Which link this packet goes to
+    named = packet_country(packet)
+    matched = match_country(named, file_countries)
+    if chosen_link is not None:
+        if chosen_link and chosen_link not in file_countries:
+            return {"ok": False, "errors": [f"'{chosen_link}' is not a country in the uploaded org file."], "warnings": warnings}
+        target, needs_choice = chosen_link, False
+    elif matched:
+        target, needs_choice = matched, False
+    elif not named and not file_countries:
+        target, needs_choice = "", False  # group-wide packet, file without countries: the whole organization
+    else:
+        target, needs_choice = None, True
+    if needs_choice:
+        note = (f"The file names the country '{named}', which is not in the org file's Country column." if named
+                else "The file does not name a country.")
+        country = {"named": named, "matched": None, "target": None, "needs_choice": True,
+                   "choices": file_countries + [""], "note": note + " Choose where to link it."}
+    else:
+        country = {"named": named, "matched": matched, "target": target, "needs_choice": False,
+                   "choices": file_countries + [""],
+                   "note": f"Links to {link_label(target)}." + (" Chosen by you." if chosen_link is not None and target != matched else "")}
+
+    replaces = target is not None and target in links
+    if replaces:
+        old = (links[target].get("engagement") or {}).get("key")
+        warnings.append(f"A Compass file is already linked to {link_label(target)} ({old}); importing will replace it.")
+
+    others = {c: p for c, p in links.items() if c != target}
+    clusters, roles = frame_refs(packet)
+    for c, other in others.items():
+        oc, orl = frame_refs(other)
+        if oc != clusters or orl != roles:
+            warnings.append(
+                f"This file comes from a different frame than the one linked to {link_label(c)}: "
+                "its cluster or role IDs differ, so these IDs may not mean the same thing."
+            )
+            break
 
     incoming = packet_criteria(packet)
     problems = validate_criteria(incoming) if incoming else []
-    scored = sum(len(v or {}) for v in (judgments or {}).values())
-    if not incoming:
-        criteria_action, criteria_note = "none", "The file carries no design criteria; yours stay as they are."
-    elif problems:
-        criteria_action, criteria_note = "invalid", "The file's design criteria can't be used; yours stay as they are."
-    elif _same_criteria(incoming, current_criteria):
-        criteria_action, criteria_note = "same", "Your comparison criteria already match the file."
-    elif _same_criteria(current_criteria, DEFAULT_CRITERIA) and not scored:
-        criteria_action, criteria_note = "set", "Replaces the app's starting criteria, which you have not changed."
-    else:
-        criteria_action = "ask"
-        criteria_note = "You have changed the comparison criteria" + (
-            f" and scored {scored} cell{'s' if scored != 1 else ''}" if scored else "") + \
-            ". Replacing them is your choice; scores for criteria that disappear stop counting."
-
     strategy = packet_strategy(packet)
     current_strategy = (current_strategy or "").strip()
-    if not strategy:
-        strategy_action, strategy_note = "none", "The file carries no strategy text."
-    elif strategy == current_strategy:
-        strategy_action, strategy_note = "same", "The strategy text already matches the file."
-    elif not current_strategy:
-        strategy_action, strategy_note = "set", "Pre-fills the strategy box on the archetype page; you can edit it before running."
+    if others:
+        # A later packet never overwrites criteria or strategy; say whether they agree
+        criteria_action = "same" if _same_criteria(incoming, current_criteria) else "different"
+        criteria_note = ("Your comparison criteria already match the file." if criteria_action == "same" else
+                         "The file's design criteria differ from yours. They are not used: criteria come from the first Compass file linked.")
+        strategy_action = "same" if not strategy or strategy == current_strategy else "different"
+        strategy_note = ("The strategy text matches." if strategy_action == "same" else
+                         "The file's strategy text differs from yours. It is not used: strategy comes from the first Compass file linked.")
     else:
-        strategy_action, strategy_note = "ask", "You already have strategy text. Replacing it is your choice."
+        scored = sum(len(v or {}) for v in (judgments or {}).values())
+        if not incoming:
+            criteria_action, criteria_note = "none", "The file carries no design criteria; yours stay as they are."
+        elif problems:
+            criteria_action, criteria_note = "invalid", "The file's design criteria can't be used; yours stay as they are."
+        elif _same_criteria(incoming, current_criteria):
+            criteria_action, criteria_note = "same", "Your comparison criteria already match the file."
+        elif _same_criteria(current_criteria, DEFAULT_CRITERIA) and not scored:
+            criteria_action, criteria_note = "set", "Replaces the app's starting criteria, which you have not changed."
+        else:
+            criteria_action = "ask"
+            criteria_note = "You have changed the comparison criteria" + (
+                f" and scored {scored} cell{'s' if scored != 1 else ''}" if scored else "") + \
+                ". Replacing them is your choice; scores for criteria that disappear stop counting."
+        if not strategy:
+            strategy_action, strategy_note = "none", "The file carries no strategy text."
+        elif strategy == current_strategy:
+            strategy_action, strategy_note = "same", "The strategy text already matches the file."
+        elif not current_strategy:
+            strategy_action, strategy_note = "set", "Pre-fills the strategy box on the archetype page; you can edit it before running."
+        else:
+            strategy_action, strategy_note = "ask", "You already have strategy text. Replacing it is your choice."
 
-    key = packet["engagement"]["key"]
-    if current_key and current_key != key:
-        warnings.append(f"This upload is linked to engagement '{current_key}'; importing links it to '{key}' instead.")
     context = packet_context(packet)
     return {
         "ok": True, "errors": [], "warnings": warnings,
         "engagement": engagement_summary(packet),
+        "country": country,
+        "replaces": replaces,
         "criteria": {"action": criteria_action, "note": criteria_note, "incoming": incoming,
                      "problems": problems, "current_count": len(current_criteria or [])},
         "strategy": {"action": strategy_action, "note": strategy_note, "incoming": strategy,

@@ -85,8 +85,14 @@ export function CompassImport({ onImported }: { onImported?: (s: CompassState) =
   const [replaceStrategy, setReplaceStrategy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string[] | null>(null);
+  // Where to link a packet whose country isn't in the file (undefined = follow the packet's own country)
+  const [linkCountry, setLinkCountry] = useState<string | undefined>(undefined);
 
-  const reset = () => { setPacket(null); setPreview(null); setReplaceCriteria(false); setReplaceStrategy(false); };
+  const reset = () => { setPacket(null); setPreview(null); setReplaceCriteria(false); setReplaceStrategy(false); setLinkCountry(undefined); };
+  const choose_link = async (c: string) => {
+    setLinkCountry(c);
+    try { setPreview(await compassApi.preview(packet, c)); } catch (e) { setError(detailOf(e, 'The file could not be checked.')); }
+  };
 
   const choose = async (file?: File) => {
     if (!file) return;
@@ -109,7 +115,7 @@ export function CompassImport({ onImported }: { onImported?: (s: CompassState) =
   const confirm = async () => {
     setBusy(true);
     try {
-      const state = await compassApi.importPacket(packet, replaceCriteria, replaceStrategy);
+      const state = await compassApi.importPacket(packet, replaceCriteria, replaceStrategy, linkCountry);
       setDone(state.applied ?? []);
       reset();
       onImported?.(state);
@@ -153,6 +159,25 @@ export function CompassImport({ onImported }: { onImported?: (s: CompassState) =
           )}
 
           <dl className="mt-5 space-y-5 text-sm">
+            {preview.country && (
+              <div>
+                <dt className="font-semibold text-ink">Country</dt>
+                <dd className="mt-1 text-secondary" data-testid="link-target">
+                  {preview.country.named ? <>The file covers <b className="text-ink">{preview.country.named}</b>. </> : null}
+                  {preview.country.note}
+                </dd>
+                {(preview.country.needs_choice || linkCountry !== undefined) && (
+                  <dd className="mt-2">
+                    <select className="input w-auto py-1.5" aria-label="Link this file to" value={linkCountry ?? ''}
+                      onChange={(e) => choose_link(e.target.value === '__none' ? '' : e.target.value)}>
+                      {linkCountry === undefined && <option value="">Choose a country…</option>}
+                      {preview.country.choices.map((c) => <option key={c || '__none'} value={c || '__none'}>{c || 'Whole organization'}</option>)}
+                    </select>
+                  </dd>
+                )}
+                {preview.replaces && <dd className="mt-1 font-semibold text-primary-700">The file linked there now will be replaced.</dd>}
+              </div>
+            )}
             <div>
               <dt className="font-semibold text-ink">Comparison criteria</dt>
               <dd className="mt-1 text-secondary">{preview.criteria?.note}</dd>
@@ -193,7 +218,9 @@ export function CompassImport({ onImported }: { onImported?: (s: CompassState) =
           </dl>
 
           <div className="mt-6 flex gap-3">
-            <button className="btn btn-primary" onClick={confirm} disabled={busy}>{busy ? 'Importing…' : 'Confirm import'}</button>
+            <button className="btn btn-primary" onClick={confirm} disabled={busy || !!preview.country?.needs_choice}>
+              {busy ? 'Importing…' : preview.replaces ? 'Confirm and replace' : 'Confirm import'}
+            </button>
             <button className="btn btn-quiet" onClick={reset} disabled={busy}>Cancel</button>
           </div>
         </div>
@@ -206,18 +233,30 @@ export function CompassImport({ onImported }: { onImported?: (s: CompassState) =
 
 export function CompassContext({ state }: { state: CompassState | null }) {
   const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
   if (!state?.engagement) return null;
-  const { structure_lens, clusters } = state.context;
+  const linkCountries = Object.keys(state.contexts ?? {});
+  const shown = picked !== null && picked in (state.contexts ?? {}) ? picked : linkCountries[0] ?? '';
+  const link = state.links?.find((l) => l.country === shown);
+  const { structure_lens, clusters } = state.contexts?.[shown] ?? state.context;
   return (
     <section className="card mb-10 p-0" aria-label="What the Compass found">
       <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left">
         <span>
-          <span className="eyebrow mb-1 block">Read-only context · {state.engagement.key}</span>
+          <span className="eyebrow mb-1 block">Read-only context · {link?.key ?? state.engagement.key}</span>
           <span className="font-display text-[20px] font-bold text-ink">What the Compass found</span>
           <span className="mt-0.5 block text-sm text-secondary">Evidence to test against the structure. It never sets or changes a score here.</span>
         </span>
         <span className="font-display text-2xl text-primary-600" aria-hidden>{open ? '–' : '+'}</span>
       </button>
+      {open && linkCountries.length > 1 && (
+        <div className="hairline-t flex flex-wrap items-center gap-2 px-6 py-3">
+          <span className="label mb-0 mr-1">Country</span>
+          {linkCountries.map((c) => (
+            <Chip key={c || '__whole'} active={c === shown} onClick={() => setPicked(c)}>{c || 'Whole organization'}</Chip>
+          ))}
+        </div>
+      )}
       {open && (
         <div className="hairline-t grid gap-8 px-6 py-5 lg:grid-cols-2">
           <div>
