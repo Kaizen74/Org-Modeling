@@ -353,6 +353,87 @@ def s_countries():
     check("export: whole-organization file unchanged, country ''", whole["country"] == "" and not any(f["kind"] == "role_reason" for f in whole["findings"]))
 step("countries", s_countries)
 
+
+# 14. Structure numbers for the Compass (metrics, unit column, manager types, broken lines, role families)
+def s_structure():
+    import csv as _csv
+    import os
+    import re as _re
+    sample = json.load(open(os.path.join(COUNTRIES_DIR, "belmar_return_org_modeling.json")))
+    sample_by = {f["ref"]: f for f in sample["findings"]}
+    private = _re.compile(r"\b[A-Z]{2} Person \d{3}\b|\bE\d{3}\b")
+    spans = {"median_span", "spans_within", "spans_below", "spans_above"}
+
+    ret = ok(c.get("/compass/return", params={"link": "Belmar"}))
+    by = {f["ref"]: f for f in ret["findings"]}
+    m = by["baseline.layers"]["metrics"]
+    expected = {"headcount": 26, "managers": 9, "manager_ratio_pct": 34.6, "layers": 5, "median_span": 2, "spans_within": 1,
+                "spans_below": 8, "spans_above": 0, "single_report_managers": 2, "total_cost": 2263000}
+    check("numbers: Belmar metrics exactly as the PRD", {k: m.get(k) for k in expected} == expected and isinstance(m.get("health_score"), int), m)
+    check("numbers: same metrics on all three baseline findings", by["baseline.spans"]["metrics"] == m == by["baseline.health"]["metrics"])
+    check("numbers: sample's metrics keys, plus health and supervisors",
+          set(sample_by["baseline.layers"]["metrics"]) <= set(m) and set(m) - set(sample_by["baseline.layers"]["metrics"]) == {"health_score", "supervisors_no_reports"})
+    check("numbers: cost source in source_note", by["baseline.layers"]["source_note"].endswith("People cost is the Salary column for 26 people."))
+    text = c.get("/compass/return.txt", params={"link": "Belmar"}).text
+    check("numbers: figures line in readable text", "Head-count 26 · managers 9 (34.6%) · layers 5 · median span 2 · 1 of 9 managers within benchmark · people cost 2,263,000 (base salary)" in text)
+    whole = {f["ref"]: f for f in ok(c.get("/compass/return"))["findings"]}
+    check("numbers: whole-organization metrics", whole["baseline.layers"]["metrics"]["headcount"] == 84 and whole["baseline.layers"]["metrics"]["total_cost"] == 9270000)
+
+    met = ok(c.get("/metrics/latest"))["metrics"]
+    belmar = next(r for r in met["country_analysis"] if r["country"] == "Belmar")
+    shift = next(a for a in met["span_of_control"]["manager_assessments"] if a["manager_id"] == "E050")
+    check("types: Shift Supervisor suggested as Supervisor", (shift["manager_type"], shift["manager_type_status"]) == ("supervisor", "suggested"))
+    check("types: Belmar managers without a confirmed type", belmar["manager_types"]["managers_without_confirmed_type"] == 9)
+    after = ok(c.put("/structure/manager-type", json={"employee_id": "E034", "manager_type": "specialist_lead"}))["metrics"]
+    check("types: a confirmed type changes the judgement", next(r for r in after["country_analysis"] if r["country"] == "Belmar")["spans_vs_benchmark"]["within"] == 2)
+    ok(c.put("/structure/manager-type", json={"employee_id": "E034", "manager_type": None}))
+    check("settings: invalid range refused", c.put("/structure/settings", json={"type_ranges": {"coach": [9, 2]}}).status_code == 400)
+    check("settings: reset to starting points", ok(c.post("/structure/settings/reset"))["type_ranges"]["supervisor"] == [10, 20])
+
+    titles = [t["title"] for t in ok(c.get("/structure/families"))["titles"]]
+    for name, rule in [("Load control", lambda t: t.startswith("Load Control")), ("Ramp handling", lambda t: t in ("Ramp Agent", "Shift Supervisor")),
+                       ("Pricing and revenue management", lambda t: "Pricing" in t), ("Analytics and AI", lambda t: "Analytics" in t),
+                       ("Disruption control", lambda t: "Duty Controller" in t), ("Finance", lambda t: t.startswith("Finance "))]:
+        fam = ok(c.post("/structure/families", json={"name": name, "titles": [t for t in titles if rule(t)]}))
+    ok(c.put("/structure/families/RF-03/reason", json={"unit": "Belmar", "reason_class": "chosen", "compared_with": "Arden",
+                                                       "text": "Created in 2023 when Belmar won its two largest renewal contracts."}))
+    fam = {f["ref"]: f for f in ok(c.get("/structure/families"))["families"]}
+    check("families: RF-01 to RF-06 in confirmation order", list(fam) == [f"RF-0{i}" for i in range(1, 7)])
+    check("families: across units", (fam["RF-03"]["presence"], fam["RF-03"]["only_in"], fam["RF-04"]["presence"], fam["RF-05"]["presence"]) == ("only", "Belmar", "some", "some")
+          and {fam[r]["presence"] for r in ("RF-01", "RF-02", "RF-06")} == {"every"})
+    ret = ok(c.get("/compass/return", params={"link": "Belmar"}))
+    ours = {f["ref"]: f for f in ret["findings"] if f["kind"] == "role_family"}
+    check("families: Belmar head-counts 2, 5, 1, 0, 0, 2", [ours[r]["metrics"]["headcount"] for r in sorted(ours)] == [2, 5, 1, 0, 0, 2])
+    check("families: field for field as the Compass sample", ours == {r: f for r, f in sample_by.items() if f["kind"] == "role_family"})
+    check("privacy: no names or Employee IDs in Belmar's file", not private.search(json.dumps(ret) + c.get("/compass/return.txt", params={"link": "Belmar"}).text))
+    v = ok(c.post("/structure/families/RF-05/merge", json={"with_ref": "RF-04"}))
+    check("families: merge keeps the older ID", v["kept"] == "RF-04" and "RF-05" not in {f["ref"] for f in v["families"]})
+
+    # Station header, then the broken file (both replace the upload)
+    org = open(os.path.join(COUNTRIES_DIR, "meridian_org_by_country.csv")).read()
+    up = ok(c.post("/org-data/upload-csv", files={"file": ("stations.csv", org.replace(",Country,", ",Station,", 1).encode(), "text/csv")}))
+    rows = {r["country"]: r for r in ok(c.get("/metrics/latest"))["metrics"]["country_analysis"]}
+    check("unit: Station header reads as the unit, same figures", up["metadata"]["unit_label"] == "Station" and
+          {k: (v["headcount"], v["layers"], v["total_cost"]) for k, v in rows.items()} == {"Arden": (30, 5, 4921000), "Belmar": (26, 5, 2263000), "Caldera": (28, 6, 2086000)})
+    ok(c.post("/compass/import", json={"packet": json.load(open(os.path.join(COUNTRIES_DIR, "belmar_compass_handoff.json")))}))
+    check("unit: exported file still says country", ok(c.get("/compass/return", params={"link": "Belmar"}))["country"] == "Belmar")
+
+    data = list(_csv.DictReader(io.StringIO(org)))
+    for r in data:
+        if r["Country"] == "Belmar" and r["Job Title"] == "Ramp Agent":
+            r["Line Manager"] = r["Line Manager ID"] = ""
+    out = io.StringIO()
+    w = _csv.DictWriter(out, fieldnames=list(data[0]), lineterminator="\n")
+    w.writeheader()
+    w.writerows(data)
+    ok(c.post("/org-data/upload-csv", files={"file": ("broken.csv", out.getvalue().encode(), "text/csv")}))
+    ok(c.post("/compass/import", json={"packet": json.load(open(os.path.join(COUNTRIES_DIR, "belmar_compass_handoff.json")))}))
+    lines = next(r for r in ok(c.get("/metrics/latest"))["metrics"]["country_analysis"] if r["country"] == "Belmar")["reporting_lines"]
+    check("broken lines: Belmar warning", lines["incomplete"] and lines["text"].startswith("Reporting lines look incomplete in Belmar"))
+    bm = {f["ref"]: f for f in ok(c.get("/compass/return", params={"link": "Belmar"}))["findings"]}["baseline.layers"]["metrics"]
+    check("broken lines: export has supervisors_no_reports and no span keys", bm["supervisors_no_reports"] >= 1 and not spans & set(bm), bm)
+step("structure numbers", s_structure)
+
 passed = sum(1 for r in results if r[1])
 for name, good, detail in results:
     print(("PASS  " if good else "FAIL  ") + name + (f"\n        {detail}" if not good else ""))

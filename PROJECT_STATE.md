@@ -5,14 +5,8 @@
 An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-*2026-11-25.* Building the owner's "structure numbers" PRD (approved with "go as suggested": frontline supervisory words + loose people for broken lines; family reasons per family per unit; no AI suggestions; no-manager units omit median_span and spans_*). Increments:
-- [x] 1. Numbers-only `metrics` on country and whole-organization baseline findings; cost source in source_note; figures line in readable text
-- [x] 2. Base-salary note; unit column (Station, Asset, Business unit, Unit)
-- [x] 3. Unit warnings (small unit, cost incomplete, managers in other units)
-- [x] 4. Manager types with editable span ranges
-- [x] 5. Broken reporting lines
-- [x] 6. Role families (screen, RF IDs, across-units view, export)
-- [ ] 7. Mock journey, checks, docs
+*2026-11-25.* Owner's "structure numbers" PRD built (approved "go as suggested"): numbers-only `metrics` on baseline findings (country and whole organization), cost source note, figures line; unit column (Station, Asset, Business unit, Unit); base-salary note; unit warnings; manager types with editable ranges; broken reporting lines; role families (RF-nn) with roles across units and role_family findings. `./run_checks.sh`: 143 backend tests, mock journey 131 backend + 30 browser checks, all green.
+Not done (by agreement or out of scope): AI suggestions for types or families (section 5: nothing sent to an AI); estimating on-costs, non-manpower cost or revenue; the whole-organization file carries no role_family findings (families are per unit).
 
 ## This session (2026-10-22) — approved plan, in order
 Phase 1 — Accuracy fixes
