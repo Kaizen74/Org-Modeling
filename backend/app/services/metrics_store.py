@@ -12,23 +12,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.models import OrgAnalysis, GradeSalary
 from .metrics_service import MetricsCalculator, METRICS_VERSION
+from .structure_settings import calculator_inputs, signature
 
 
-def is_current(metrics: Dict) -> bool:
-    """True when cached metrics were produced by the current engine version."""
-    return bool(metrics) and metrics.get("metrics_version") == METRICS_VERSION
+def is_current(metrics: Dict, inputs_signature: str = None) -> bool:
+    """True when cached metrics were produced by the current engine and, if given, the same inputs."""
+    return bool(metrics) and metrics.get("metrics_version") == METRICS_VERSION and \
+        (inputs_signature is None or metrics.get("inputs_signature") == inputs_signature)
 
 
 def enrich_employees_with_grade_salary(employees: List[Dict], grades: List[GradeSalary]) -> List[Dict]:
-    """Fill a missing or zero salary from the grade table's median for that grade."""
+    """
+    Fill a missing or zero salary from the grade table's median for that grade,
+    and record where each salary came from (`salary_source`: "file", "grade" or
+    "" when neither has one), so people cost can say how it was made.
+    """
     grade_salary_map = {g.grade: g.median_salary for g in grades}
     enriched = []
     for emp in employees:
         emp_copy = emp.copy()
-        if not emp_copy.get("salary"):
-            grade = emp_copy.get("grade", "")
-            if grade in grade_salary_map:
-                emp_copy["salary"] = grade_salary_map[grade]
+        if emp_copy.get("salary"):
+            emp_copy["salary_source"] = "file"
+        elif grade_salary_map.get(emp_copy.get("grade", "")):
+            emp_copy["salary"] = grade_salary_map[emp_copy["grade"]]
+            emp_copy["salary_source"] = "grade"
+        else:
+            emp_copy["salary_source"] = ""
         enriched.append(emp_copy)
     return enriched
 
@@ -39,8 +48,14 @@ async def load_grades(db: AsyncSession) -> List[GradeSalary]:
 
 
 async def ensure_metrics(analysis: OrgAnalysis, db: AsyncSession, force: bool = False) -> Dict:
-    """Return current metrics for an upload, recalculating and caching when needed."""
-    if not force and is_current(analysis.metrics):
+    """
+    Return current metrics for an upload, recalculating and caching when needed:
+    after an engine change, or when manager types, span ranges or supervisory
+    words changed since they were calculated.
+    """
+    inputs = await calculator_inputs(analysis, db)
+    sig = signature(inputs)
+    if not force and is_current(analysis.metrics, sig):
         return analysis.metrics
 
     employees = analysis.raw_data.get("employees", []) if analysis.raw_data else []
@@ -48,7 +63,10 @@ async def ensure_metrics(analysis: OrgAnalysis, db: AsyncSession, force: bool = 
     grade_order = {g.grade: g.display_order for g in grades}
     employees = enrich_employees_with_grade_salary(employees, grades)
 
-    metrics = MetricsCalculator(employees=employees, grade_order=grade_order).calculate_all_metrics()
+    metrics = MetricsCalculator(employees=employees, grade_order=grade_order, **inputs).calculate_all_metrics()
+    metrics["inputs_signature"] = sig
+    # The unit column's word for screens ("Station" → "By station"); exports keep the field name `country`
+    metrics["unit_label"] = (analysis.raw_data or {}).get("unit_label") or ("Country" if metrics.get("country_analysis") else "")
     analysis.metrics = metrics
     await db.commit()
     return metrics

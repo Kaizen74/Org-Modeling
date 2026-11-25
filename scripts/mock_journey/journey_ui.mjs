@@ -79,7 +79,7 @@ await step('overview: health score and departments', async () => {
 await step('structure: managers vs benchmark, Level mismatch', async () => {
   await go('/metrics');
   await waitText(/Every manager against the benchmark for their work/);
-  await waitText(/Frontline operational/);  // team leads tagged Operational get 10–20
+  await waitText(/suggested from Work Type Operational/);  // Operational team leads start as suggested Supervisors (10–20)
   const lv = await waitText(/Level values? disagrees? with the reporting chain/i);
   if (!/Mei Lin \(Level 3, actually layer 4\)/.test(lv)) throw new Error('Mei Lin mismatch not listed');
   if (/Finance Exec \d \(Level/.test(lv)) throw new Error('people under an unresolved manager listed as Level mismatches');
@@ -335,6 +335,104 @@ await step('countries: record Belmar RL-011 reason, export Belmar file', async (
   if (!empty.every((r) => byRef[r]?.reason_class === 'unknown' && byRef[r]?.figure === '0 people')) throw new Error('empty Belmar roles missing');
   if (/\b[A-Z]{2} Person \d{3}\b|\bE\d{3}\b/.test(JSON.stringify(ret))) throw new Error('name or Employee ID in the file');
   await shot('13-belmar-export');
+});
+
+// ---------------- Structure numbers for the Compass: manager types, settings, role families, broken lines
+
+await step('structure: unit view shows types, base salary; a type set on screen recounts Belmar', async () => {
+  await go('/metrics');
+  const t = await waitText(/Median span by manager type/);
+  if (!/Managers without a confirmed type/.test(t) || !/Base salary only\. Overtime, benefits and employer contributions are not included\./.test(t)) throw new Error('type rows or base-salary note missing');
+  await page.getByLabel('Filter by country').first().selectOption('Belmar');
+  await page.getByLabel('Manager type for BE Person 034').selectOption('specialist_lead');
+  const row = page.locator('tr', { hasText: 'Managers within their span benchmark' });
+  await row.filter({ hasText: '2 of 9' }).waitFor({ timeout: 10000 });
+  await page.getByLabel('Manager type for BE Person 034').selectOption('');
+  await row.filter({ hasText: '1 of 9' }).waitFor({ timeout: 10000 });
+});
+
+await step('settings: span ranges and supervisory words saved, then reset', async () => {
+  await go('/settings');
+  await waitText(/Span ranges by manager type/);
+  await page.getByLabel('Supervisor from').fill('2');
+  await page.getByRole('button', { name: 'Save structure settings' }).click();
+  await waitText(/Saved\. Spans are recalculated/);
+  await page.getByLabel('Supervisor from').fill('30');
+  await page.getByRole('button', { name: 'Save structure settings' }).click();
+  await waitText(/Supervisor: the range must run/);
+  await page.getByRole('button', { name: 'Reset to starting points' }).click();
+  await waitText(/Back to the starting ranges and words/);
+  if ((await page.getByLabel('Supervisor from').inputValue()) !== '10') throw new Error('reset did not restore 10');
+});
+
+await step('role families: confirm six from suggestions, why RF-03 is only in Belmar', async () => {
+  await go('/role-families');
+  await waitText(/Suggested from shared key words/i);
+  const plan = [['Load control', 'Load control'], ['Ramp', 'Ramp handling'], ['Pricing', 'Pricing and revenue management'],
+                ['Analytics & AI', 'Analytics and AI'], ['Hub duty', 'Disruption control'], ['Finance', 'Finance']];
+  for (const [suggested, name] of plan) {
+    const row = page.locator(`[data-suggestion="${suggested}"]`);
+    await row.getByLabel(`Family name for ${suggested}`).fill(name);
+    await row.getByRole('button', { name: 'Confirm family' }).click();
+    await page.locator('[data-family]', { has: page.locator(`input[value="${name}"]`) }).waitFor();
+  }
+  await page.getByLabel('Add a job title to RF-02').selectOption('Shift Supervisor');
+  await page.locator('[data-family="RF-02"]', { hasText: 'Shift Supervisor' }).waitFor();
+  const across = (ref) => page.locator(`[data-across="${ref}"]`);
+  await across('RF-03').filter({ hasText: 'Only in Belmar' }).waitFor();
+  for (const ref of ['RF-04', 'RF-05']) await across(ref).filter({ hasText: 'In some' }).waitFor();
+  for (const ref of ['RF-01', 'RF-02', 'RF-06']) await across(ref).filter({ hasText: 'In every country' }).waitFor();
+  await across('RF-03').locator('td').nth(2).getByRole('button', { name: 'Why?' }).click();
+  const editor = page.getByRole('region', { name: 'Why RF-03 in Belmar' });
+  await editor.getByRole('radio', { name: 'Chosen' }).click();
+  await editor.getByLabel('In one sentence').fill('Created in 2023 when Belmar won its two largest renewal contracts.');
+  await editor.getByLabel('Compared with (optional)').selectOption('Arden');
+  await editor.getByRole('button', { name: 'Save reason' }).click();
+  await across('RF-03').filter({ hasText: 'Chosen vs Arden' }).waitFor();
+  await shot('14-role-families');
+});
+
+await step('role families: Belmar export matches the Compass sample field for field', async () => {
+  await go('/implementation');
+  await page.getByRole('group', { name: 'Which file to export' }).getByRole('button', { name: /Belmar · MERIDIANBE/ }).click();
+  await waitText(/Pricing and revenue management/);
+  const href = await page.getByRole('link', { name: /Download Belmar's file/ }).getAttribute('href');
+  const ret = await (await page.request.get(base + href)).json();
+  const sample = JSON.parse(readFileSync(join(countriesDir, 'belmar_return_org_modeling.json'), 'utf8'));
+  const pick = (r) => Object.fromEntries(r.findings.filter((f) => f.kind === 'role_family').map((f) => [f.ref, f]));
+  const ours = pick(ret), theirs = pick(sample);
+  const canon = (o) => JSON.stringify(o, Object.keys(o).sort());
+  for (const ref of Object.keys(theirs)) {
+    if (!ours[ref]) throw new Error(`${ref} missing`);
+    for (const k of Object.keys(theirs[ref])) if (JSON.stringify(ours[ref][k]) !== JSON.stringify(theirs[ref][k])) throw new Error(`${ref}.${k}: ${JSON.stringify(ours[ref][k])} vs ${JSON.stringify(theirs[ref][k])}`);
+    if (Object.keys(ours[ref]).length !== Object.keys(theirs[ref]).length) throw new Error(`${ref} has extra fields: ${canon(ours[ref])}`);
+  }
+  const m = ret.findings.find((f) => f.ref === 'baseline.layers').metrics;
+  if (m.total_cost !== 2263000 || m.median_span !== 2 || m.spans_within !== 1) throw new Error(`metrics wrong: ${JSON.stringify(m)}`);
+  if (/\b[A-Z]{2} Person \d{3}\b|\bE\d{3}\b/.test(JSON.stringify(ret))) throw new Error('name or Employee ID in the file');
+});
+
+await step('broken lines: blanked Ramp Agents hide Belmar spans and name the people', async () => {
+  const rows = readFileSync(join(countriesDir, 'meridian_org_by_country.csv'), 'utf8').trim().split('\n');
+  const head = rows[0].split(',');
+  const col = (n) => head.indexOf(n);
+  const fixed = rows.map((line, i) => {
+    if (!i) return line;
+    const cells = line.split(',');
+    if (cells[col('Country')] === 'Belmar' && cells[col('Job Title')] === 'Ramp Agent') { cells[col('Line Manager')] = ''; cells[col('Line Manager ID')] = ''; }
+    return cells.join(',');
+  });
+  const broken = join(mkdtempSync(join(tmpdir(), 'broken-')), 'broken.csv');
+  writeFileSync(broken, fixed.join('\n') + '\n');
+  await go('/upload');
+  await page.setInputFiles('input[type=file][accept=".csv"]', broken);
+  await page.getByRole('button', { name: /Upload and analyze/ }).click();
+  await waitText(/84/);
+  await go('/metrics');
+  const t = await waitText(/Reporting lines look incomplete in Belmar/);
+  if (!/hidden: reporting lines incomplete/.test(t)) throw new Error('Belmar spans not hidden');
+  if (!/BE Person 05\d · Ramp Agent — no line manager/.test(t)) throw new Error('people concerned not listed');
+  await shot('15-broken-lines');
 });
 
 if (jsErrors.length) results.push(['no JavaScript errors', false, jsErrors.join(' | ').slice(0, 400)]); else results.push(['no JavaScript errors', true, '']);

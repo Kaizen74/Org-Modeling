@@ -128,6 +128,23 @@ class Engagement(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class StructureInputs(Base):
+    """
+    The designer's structural inputs for one upload: manager types set on screen
+    and role families (RF-nn), with the reasons a family is or isn't in a unit.
+    """
+    __tablename__ = "structure_inputs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    analysis_id = Column(String(36), ForeignKey("org_analyses.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    manager_types = Column(JSON, default=dict)  # {employee_id: manager type key}, confirmed by the designer
+    families = Column(JSON, default=list)  # [{ref, name, titles, relates_to, retired, merged_into, confirmed_at}]
+    family_seq = Column(Integer, default=0)  # last RF number used; never reused
+    family_reasons = Column(JSON, default=dict)  # {RF ref: {unit: {reason_class, text, compared_with}}}
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Setting(Base):
     """Application settings key-value store."""
     __tablename__ = "settings"

@@ -20,6 +20,7 @@ const stages: Array<{ number: string; title: string; items: Array<{ name: string
       { name: 'Org chart', href: '/org-chart', hint: 'Reporting lines' },
       { name: 'Work activities', href: '/work-activities', hint: 'What the work is' },
       { name: 'Compass roles', href: '/compass-roles', hint: 'Which roles exist where, and why' },
+      { name: 'Role families', href: '/role-families', hint: 'Common or unique roles across units' },
     ],
   },
   {

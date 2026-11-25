@@ -19,6 +19,9 @@ import type {
   Disposition,
   DispositionPayload,
   ImplementationPlan,
+  StructureSettings,
+  RoleFamiliesView,
+  ManagerTypeKey,
   CompassState,
   CompassPreview,
   Grade,
@@ -370,4 +373,30 @@ export const compassApi = {
     (await api.put('/compass/roles/reason', r)).data,
   returnJsonUrl: '/api/v1/compass/return',
   returnTextUrl: '/api/v1/compass/return.txt',
+};
+
+// Structure inputs: span ranges per manager type and supervisory words (app-wide), manager types per upload
+export const structureApi = {
+  settings: async (): Promise<StructureSettings> => (await api.get('/structure/settings')).data,
+  saveSettings: async (data: { type_ranges?: Partial<Record<ManagerTypeKey, [number, number]>>; supervisory_words?: string[] }): Promise<StructureSettings> =>
+    (await api.put('/structure/settings', data)).data,
+  resetSettings: async (): Promise<StructureSettings> => (await api.post('/structure/settings/reset')).data,
+  /** null clears the type set on screen (back to the suggestion, or none). */
+  setManagerType: async (employeeId: string, managerType: ManagerTypeKey | null): Promise<{ metrics: OrgMetrics }> =>
+    (await api.put('/structure/manager-type', { employee_id: employeeId, manager_type: managerType })).data,
+  confirmSuggestedTypes: async (): Promise<{ confirmed: number; metrics: OrgMetrics }> =>
+    (await api.post('/structure/manager-types/confirm-suggested')).data,
+};
+
+// Role families: group every job title once for the whole org file; RF-nn never reused
+export const familiesApi = {
+  get: async (): Promise<RoleFamiliesView> => (await api.get('/structure/families')).data,
+  confirm: async (name: string, titles: string[]): Promise<RoleFamiliesView> => (await api.post('/structure/families', { name, titles })).data,
+  update: async (ref: string, change: { name?: string; titles?: string[]; relates_to?: string[] }): Promise<RoleFamiliesView> =>
+    (await api.put(`/structure/families/${ref}`, change)).data,
+  merge: async (ref: string, withRef: string): Promise<RoleFamiliesView> => (await api.post(`/structure/families/${ref}/merge`, { with_ref: withRef })).data,
+  retire: async (ref: string): Promise<RoleFamiliesView> => (await api.post(`/structure/families/${ref}/retire`)).data,
+  /** reasonClass null clears the reason for that unit. */
+  setReason: async (ref: string, unit: string, reasonClass: ReasonClass | null, text: string, comparedWith: string): Promise<RoleFamiliesView> =>
+    (await api.put(`/structure/families/${ref}/reason`, { unit, reason_class: reasonClass, text, compared_with: comparedWith })).data,
 };

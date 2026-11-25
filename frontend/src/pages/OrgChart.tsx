@@ -12,7 +12,7 @@ import type { Node, Edge, NodeProps } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { orgDataApi, metricsApi } from '../services/api';
 import type { HierarchyNode, ManagerSpanAssessment } from '../types';
-import { PageHeader, Chip, BenchmarkPill, EmptyState, Loading, formatMoney } from '../components/ui';
+import { PageHeader, Chip, BenchmarkPill, EmptyState, Loading, formatMoney, unitWords } from '../components/ui';
 
 type Overlay = 'department' | 'country' | 'span' | 'cost' | 'grade';
 
@@ -195,6 +195,7 @@ function OrgChartInner() {
   const [error, setError] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay>('department');
   const [country, setCountry] = useState('');
+  const [unit, setUnit] = useState(unitWords());
   const [flags, setFlags] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -210,6 +211,7 @@ function OrgChartInner() {
           setError('No reporting lines found in this upload.');
           return;
         }
+        setUnit(unitWords(metrics?.metrics.unit_label));
         const assessments = new Map(
           (metrics?.metrics.span_of_control.manager_assessments ?? []).map((a) => [a.manager_id, a])
         );
@@ -261,7 +263,7 @@ function OrgChartInner() {
         case 'department':
           return { stripe: departmentColors.get(p.department) ?? OTHER_COLOR, label: p.department };
         case 'country':
-          return { stripe: countryColors.get(p.country) ?? OTHER_COLOR, label: p.country || 'Country not stated' };
+          return { stripe: countryColors.get(p.country) ?? OTHER_COLOR, label: p.country || 'Not stated' };
         case 'grade':
           return { stripe: gradeColors.get(p.grade) ?? OTHER_COLOR, label: `Grade ${p.grade}` };
         case 'cost':
@@ -398,14 +400,14 @@ function OrgChartInner() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <span className="label mb-0 mr-1">Colour by</span>
-        {([['department', 'Department'], ['country', 'Country'], ['span', 'Span vs benchmark'], ['cost', 'Team cost'], ['grade', 'Grade']] as const)
+        {([['department', 'Department'], ['country', unit.title], ['span', 'Span vs benchmark'], ['cost', 'Team cost'], ['grade', 'Grade']] as const)
           .filter(([k]) => k !== 'country' || countries.length > 0)
           .map(([k, label]) => (
             <Chip key={k} active={overlay === k} onClick={() => setOverlay(k)}>{label}</Chip>
           ))}
         {countries.length > 0 && (
-          <select value={country} onChange={(e) => showCountry(e.target.value)} className="input ml-3 w-auto py-1.5 text-sm" aria-label="Filter by country">
-            <option value="">All countries</option>
+          <select value={country} onChange={(e) => showCountry(e.target.value)} className="input ml-3 w-auto py-1.5 text-sm" aria-label={`Filter by ${unit.lower}`}>
+            <option value="">All {unit.plural}</option>
             {countries.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         )}
@@ -428,7 +430,7 @@ function OrgChartInner() {
       {country && (
         <p className="mb-3 text-sm text-secondary" role="status">
           Showing the {people.filter((p) => p.country === country).length} people who work in {country}, with every team that contains one open.
-          People elsewhere are faded, so reporting lines that cross countries stay visible.
+          People elsewhere are faded, so reporting lines that cross {unit.plural} stay visible.
         </p>
       )}
 
@@ -462,7 +464,7 @@ function OrgChartInner() {
           <dl className="mt-5 divide-y divide-hairline border-y border-hairline text-sm">
             {[
               ['Department', selected.department || '—'],
-              ...(selected.country ? [['Country', selected.country] as [string, string]] : []),
+              ...(selected.country ? [[unit.title, selected.country] as [string, string]] : []),
               ['Grade', selected.grade || '—'],
               ['Layer', selected.layer || '—'],
               ['Direct reports', selected.span],

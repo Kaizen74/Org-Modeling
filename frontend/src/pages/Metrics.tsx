@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { metricsApi } from '../services/api';
-import type { OrgMetrics, ManagerSpanAssessment, CountryMetrics } from '../types';
+import { metricsApi, structureApi } from '../services/api';
+import type { OrgMetrics, ManagerSpanAssessment, CountryMetrics, ManagerTypeKey } from '../types';
 import {
   PageHeader,
   Section,
@@ -16,9 +16,17 @@ import {
   StatusPill,
   scoreStatus,
   formatMoney,
+  unitWords,
+  BASE_SALARY_NOTE,
 } from '../components/ui';
 
 type SpanFilter = 'all' | 'below' | 'within' | 'above';
+
+const TYPE_LABELS: Record<ManagerTypeKey, string> = {
+  supervisor: 'Supervisor', coach: 'Coach', coordinator: 'Coordinator', specialist_lead: 'Specialist lead', leader_of_leaders: 'Leader of leaders',
+};
+
+const SPAN_ROWS = new Set(['Median span', 'Managers within their span benchmark', 'Median span by manager type']);
 
 /** Countries side by side: one column per country, the same measures down the rows. */
 function CountryTable({ countries, reference }: { countries: CountryMetrics[]; reference?: string }) {
@@ -29,8 +37,13 @@ function CountryTable({ countries, reference }: { countries: CountryMetrics[]; r
     ['Median span', (c) => c.median_span || '–'],
     ['Managers within their span benchmark', (c) => `${c.spans_vs_benchmark.within} of ${c.managers}`],
     ['Single-report managers', (c) => c.single_report_managers],
-    ['People cost', (c) => formatMoney(c.total_cost)],
+    ['People cost (base salary)', (c) => formatMoney(c.total_cost)],
     ['Structural health', (c) => <span className="inline-flex items-center gap-2">{c.health_score}<StatusPill status={scoreStatus(c.health_score)} /></span>],
+    ['Median span by manager type', (c) => {
+      const types = Object.values(c.manager_types?.by_type ?? {});
+      return types.length ? <span className="text-xs font-normal">{types.map((t) => <span key={t.label} className="block">{t.label} {t.median_span} <span className="text-faint">({t.managers})</span></span>)}</span> : <span className="text-faint">–</span>;
+    }],
+    ['Managers without a confirmed type', (c) => c.manager_types ? <>{c.manager_types.managers_without_confirmed_type}{c.manager_types.managers_suggested_type ? <span className="block text-xs font-normal text-faint">{c.manager_types.managers_suggested_type} suggested</span> : null}</> : '–'],
   ];
   return (
     <div className="card overflow-x-auto p-0">
@@ -45,7 +58,12 @@ function CountryTable({ countries, reference }: { countries: CountryMetrics[]; r
           {rows.map(([label, cell]) => (
             <tr key={label} className="hairline-b">
               <td className="px-6 py-2.5 text-ink">{label}</td>
-              {countries.map((c) => <td key={c.country} className="tabular px-4 py-2.5 text-right font-semibold text-ink">{cell(c)}</td>)}
+              {countries.map((c) => (
+                <td key={c.country} className="tabular px-4 py-2.5 text-right font-semibold text-ink">
+                  {/* Spans built on broken reporting lines mislead: hidden for that unit, layers kept with the warning */}
+                  {c.reporting_lines?.incomplete && SPAN_ROWS.has(label) ? <span className="text-xs font-normal text-faint">hidden: reporting lines incomplete</span> : cell(c)}
+                </td>
+              ))}
             </tr>
           ))}
           <tr className="align-top">
@@ -106,6 +124,13 @@ export default function Metrics() {
     }
   };
 
+  const setType = async (id: string, type: ManagerTypeKey | null) => {
+    setMetrics((await structureApi.setManagerType(id, type)).metrics);
+  };
+  const confirmSuggested = async () => {
+    setMetrics((await structureApi.confirmSuggestedTypes()).metrics);
+  };
+
   const assessments = useMemo<ManagerSpanAssessment[]>(
     () => metrics?.span_of_control.manager_assessments ?? [],
     [metrics]
@@ -132,6 +157,7 @@ export default function Metrics() {
   const within = vs['Within benchmark'];
   const above = vs['Above benchmark'];
   const countries = metrics.country_analysis ?? [];
+  const unit = unitWords(metrics.unit_label);
   const depts = (countryFilter && metrics.department_analysis_by_country?.[countryFilter]) || metrics.department_analysis || [];
   const layers = metrics.layer_analysis;
   const layerRows = Object.entries(layers.by_level)
@@ -149,8 +175,8 @@ export default function Metrics() {
   const layersComponent = metrics.health_indicators.components?.find((c) => c.key === 'layers');
   const n = (k: number) => String(k + (countries.length ? 1 : 0)).padStart(2, '0');
   const countrySelect = countries.length > 0 && (
-    <select value={countryFilter} onChange={(e) => { setCountryFilter(e.target.value); setDeptFilter(''); }} className="input w-auto py-1.5 text-sm" aria-label="Filter by country">
-      <option value="">All countries</option>
+    <select value={countryFilter} onChange={(e) => { setCountryFilter(e.target.value); setDeptFilter(''); }} className="input w-auto py-1.5 text-sm" aria-label={`Filter by ${unit.lower}`}>
+      <option value="">All {unit.plural}</option>
       {countries.map((c) => <option key={c.country} value={c.country}>{c.country}</option>)}
     </select>
   );
@@ -171,7 +197,7 @@ export default function Metrics() {
       <PageHeader
         eyebrow="01 · Diagnose — structure"
         title={headline}
-        lede={`Managers tagged Operational in the Work Type column are judged against 10–20 direct reports; all other managers against 5–10. Average span ${span.average_span.toFixed(1)}, median ${span.median_span}.`}
+        lede={`Each manager is compared with the span range for their manager type (ranges in Settings). A manager with no type keeps the Work Type rule: Operational 10–20, others 5–10. Average span ${span.average_span.toFixed(1)}, median ${span.median_span}.`}
         actions={
           <>
             <button onClick={handleRecalculate} disabled={recalculating} className="btn btn-quiet">
@@ -191,11 +217,21 @@ export default function Metrics() {
           value={layers.total_layers}
           sub={layers.declared_layers && layers.declared_layers !== layers.total_layers ? `Level column says ${layers.declared_layers}` : 'in the reporting chain'}
         />
-        <StatTile label="Cost per person" value={formatMoney(metrics.cost_analysis.average_cost_per_employee)} sub={`${formatMoney(metrics.cost_analysis.total_cost)} in total`} />
+        <StatTile label="Cost per person" value={formatMoney(metrics.cost_analysis.average_cost_per_employee)} sub={<span title={BASE_SALARY_NOTE}>{formatMoney(metrics.cost_analysis.total_cost)} in total · base salary only</span>} />
       </div>
 
       {/* Spans */}
       <Section eyebrow="01 · Spans" title="Every manager against the benchmark for their work">
+        {!countries.length && metrics.reporting_lines?.incomplete && (
+          <div className="mb-5" data-testid="broken-lines">
+            <Callout label="Reporting lines" tone="attention">
+              <p>{metrics.reporting_lines.text}</p>
+              <ul className="mt-1 space-y-0.5 text-xs">
+                {metrics.reporting_lines.people.slice(0, 12).map((p) => <li key={p.employee_id}>{p.name} · {p.job_title} — {p.why}</li>)}
+              </ul>
+            </Callout>
+          </div>
+        )}
         {managers > 0 && (
           <div className="card mb-4">
             <div className="flex h-3 w-full overflow-hidden rounded-full" role="img" aria-label={`${below} below, ${within} within, ${above} above benchmark`}>
@@ -224,6 +260,11 @@ export default function Metrics() {
               {f === 'all' ? `All managers (${assessments.length})` : `${f[0].toUpperCase()}${f.slice(1)} (${assessments.filter((a) => a.status === f).length})`}
             </Chip>
           ))}
+          {!!metrics.span_of_control.manager_types?.managers_suggested_type && (
+            <button className="btn btn-quiet py-1 text-xs" onClick={confirmSuggested}>
+              Confirm {metrics.span_of_control.manager_types.managers_suggested_type} suggested type{metrics.span_of_control.manager_types.managers_suggested_type === 1 ? '' : 's'}
+            </button>
+          )}
           {countrySelect && <span className="ml-auto">{countrySelect}</span>}
           {depts.length > 1 && (
             <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className={`input w-auto py-1.5 text-sm ${countrySelect ? '' : 'ml-auto'}`} aria-label="Filter by department">
@@ -253,10 +294,19 @@ export default function Metrics() {
                     <p className="text-xs text-faint">{a.job_title}</p>
                   </td>
                   <td className="px-4 py-3 text-secondary">{a.department}</td>
-                  <td className="px-4 py-3 text-secondary" title={`Why: ${a.work_type_basis}`}>
-                    {a.work_type === 'operational' ? 'Frontline operational' : 'Other'}
+                  <td className="px-4 py-3 text-secondary" title={`Why: ${a.manager_type_basis || a.work_type_basis}`}>
+                    <select className="rounded border border-hairline bg-white px-1.5 py-0.5 text-xs text-ink" aria-label={`Manager type for ${a.manager}`}
+                      value={a.manager_type ?? ''} onChange={(e) => setType(a.manager_id, (e.target.value || null) as ManagerTypeKey | null)}>
+                      <option value="">No type</option>
+                      {(Object.keys(TYPE_LABELS) as ManagerTypeKey[]).map((k) => <option key={k} value={k}>{TYPE_LABELS[k]}</option>)}
+                    </select>
+                    {a.manager_type_status === 'suggested' && <span className="ml-1.5 text-xs font-semibold text-[color:var(--color-score-amber)]">suggested</span>}
+                    {a.manager_type_status === 'confirmed' && <span className="ml-1.5 text-xs text-faint">confirmed</span>}
+                    {!a.manager_type && <span className="block text-xs text-faint">{a.work_type === 'operational' ? 'Frontline operational' : 'Other'} (Work Type rule)</span>}
                     {/* The default is explained under the table; show the basis only where a tag set it */}
-                    {!a.work_type_basis.startsWith('not tagged') && <span className="block text-xs text-faint">{a.work_type_basis}</span>}
+                    {a.manager_type
+                      ? <span className="block text-xs text-faint">{a.manager_type_basis}</span>
+                      : !a.work_type_basis.startsWith('not tagged') && <span className="block text-xs text-faint">{a.work_type_basis}</span>}
                   </td>
                   <td className="tabular px-4 py-3 text-right font-semibold text-ink">{a.span}</td>
                   <td className="tabular px-4 py-3 text-right text-secondary">{a.benchmark_range[0]}–{a.benchmark_range[1]}</td>
@@ -275,23 +325,44 @@ export default function Metrics() {
           </button>
         )}
         <p className="mt-3 text-xs text-faint">
-          Tag frontline operational managers “Operational” in the Work Type column of your CSV to judge them against 10–20; untagged managers are judged against 5–10.
+          Each manager is compared with the span range for their type (ranges in Settings; starting points, not targets). A manager with no type keeps the Work Type rule:
+          “Operational” 10–20, others 5–10. Operational managers start as suggested Supervisors until you confirm.
         </p>
       </Section>
 
       {/* Countries */}
       {countries.length > 0 && (
         <Section
-          eyebrow="02 · By country"
-          title="The same lenses, country by country"
-          lede="A person's country is where they work. Differences are stated against the largest country."
+          eyebrow={`02 · By ${unit.lower}`}
+          title={`The same lenses, ${unit.lower} by ${unit.lower}`}
+          lede={`A person's ${unit.lower} is where they work. Differences are stated against the largest ${unit.lower}.`}
         >
           <CountryTable countries={countries} reference={metrics.country_reference} />
+          {countries.filter((c) => c.reporting_lines?.incomplete).map((c) => (
+            <div key={c.country} className="mt-4" data-testid="broken-lines">
+              <Callout label={`Reporting lines · ${c.country}`} tone="attention">
+                <p>{c.reporting_lines!.text}</p>
+                <p className="mt-2 text-xs">Fix these in the org file at source (names are shown here only, never exported):</p>
+                <ul className="mt-1 space-y-0.5 text-xs">
+                  {c.reporting_lines!.people.map((p) => <li key={p.employee_id}>{p.name} · {p.job_title} — {p.why}</li>)}
+                </ul>
+              </Callout>
+            </div>
+          ))}
+          {countries.some((c) => c.warnings?.length) && (
+            <div className="mt-4 space-y-2" data-testid="unit-warnings">
+              {countries.filter((c) => c.warnings?.length).map((c) => (
+                <Callout key={c.country} label={`Check ${c.country}`} tone="developing">
+                  <ul className="space-y-0.5">{c.warnings!.map((w) => <li key={w.key}>{w.text}</li>)}</ul>
+                </Callout>
+              ))}
+            </div>
+          )}
           <p className="mt-3 text-xs text-faint">
-            Layers for a country are counted from the top of the whole organization down to its deepest person: decision distance starts at the top.
-            A manager's span counts all their direct reports, wherever those people work, and the manager is listed under their own country.
+            Layers for a {unit.lower} are counted from the top of the whole organization down to its deepest person: decision distance starts at the top.
+            A manager's span counts all their direct reports, wherever those people work, and the manager is listed under their own {unit.lower}.
           </p>
-          <p className="mt-1 text-xs text-faint">Salaries are read as one currency; convert before uploading if countries are paid in different currencies.</p>
+          <p className="mt-1 text-xs text-faint">People cost: {BASE_SALARY_NOTE} Salaries are read as one currency; convert before uploading if {unit.plural} are paid in different currencies.</p>
         </Section>
       )}
 
@@ -300,7 +371,7 @@ export default function Metrics() {
         <Section
           eyebrow={`${n(2)} · Departments`}
           title={countryFilter ? `Departments in ${countryFilter}` : 'The same lenses, department by department'}
-          lede={countryFilter ? 'People who work in this country only; shares are of this country.' : 'Sorted by size. Bars start at zero.'}
+          lede={countryFilter ? `People who work in this ${unit.lower} only; shares are of this ${unit.lower}.` : 'Sorted by size. Bars start at zero.'}
           aside={countrySelect || undefined}
         >
           <div className="card overflow-x-auto p-0">
@@ -392,6 +463,7 @@ export default function Metrics() {
 
       {/* Cost */}
       <Section eyebrow={`${n(4)} · Cost`} title={`${formatMoney(metrics.cost_analysis.total_cost)} annual people cost`}>
+        <p className="-mt-3 mb-5 text-sm text-faint">{BASE_SALARY_NOTE}</p>
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="card">
             <p className="label">Cost by layer</p>

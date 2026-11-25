@@ -80,6 +80,24 @@ SPAN_TARGETS = {
                   "between McKinsey's supervisor/facilitator archetypes (8-15) and operational benchmarks (15-25)",
     },
 }
+# Manager types: spans are compared like for like within a type of manager work.
+# The ranges are starting points, not targets; the owner edits them in Settings.
+MANAGER_TYPES = {
+    "supervisor": {"label": "Supervisor", "range": (10, 20),
+                   "description": "Frontline; mostly operational reports"},
+    "coach": {"label": "Coach", "range": (6, 10),
+              "description": "Develops a team of skilled people"},
+    "coordinator": {"label": "Coordinator", "range": (8, 15),
+                    "description": "Schedules and connects work across teams"},
+    "specialist_lead": {"label": "Specialist lead", "range": (3, 6),
+                        "description": "Leads a small expert team while doing expert work"},
+    "leader_of_leaders": {"label": "Leader of leaders", "range": (4, 8),
+                          "description": "Leads other managers"},
+}
+# Words in a job title that mark a supervisory role (whole words or phrases, any case).
+# Frontline words only by default: Manager, Head or Lead are often specialist titles.
+DEFAULT_SUPERVISORY_WORDS = ["Supervisor", "Team lead", "Team leader", "Shift lead", "Foreman"]
+
 # Work Type values that mark a manager as frontline operational
 OPERATIONAL_WORK_TYPES = {"operational", "operations", "frontline", "front line", "front-line"}
 MANAGER_RATIO_RANGE = (15, 25)  # % of workforce in people-manager roles

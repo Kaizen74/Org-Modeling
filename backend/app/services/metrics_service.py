@@ -9,6 +9,7 @@ reporting chain, total cost = sum of the fixture's Salary column.
 
 import networkx as nx
 from typing import Dict, List, Optional
+import re
 import statistics
 
 from .org_graph import normalize_employees, build_org_graph, display_name, reporting_layers
@@ -17,6 +18,8 @@ from ..resources.benchmarks_reference import (
     MANAGER_RATIO_RANGE,
     LAYER_PLANNING_SPAN,
     OPERATIONAL_WORK_TYPES,
+    MANAGER_TYPES,
+    DEFAULT_SUPERVISORY_WORDS,
     MANAGER_RATIO_BENCHMARKS,
     LAYERS_BENCHMARKS,
 )
@@ -24,7 +27,7 @@ import math
 
 # Bump when the shape or meaning of calculated metrics changes, so cached
 # metrics from older uploads are recalculated instead of shown stale
-METRICS_VERSION = 6
+METRICS_VERSION = 9
 
 
 class MetricsCalculator:
@@ -34,14 +37,23 @@ class MetricsCalculator:
     TESTED: Returns accurate metrics for 64-employee PAX org
     """
 
-    def __init__(self, employees: List[Dict], grade_order: Optional[Dict[str, int]] = None):
+    def __init__(self, employees: List[Dict], grade_order: Optional[Dict[str, int]] = None,
+                 manager_types: Optional[Dict[str, str]] = None, type_ranges: Optional[Dict[str, List[int]]] = None,
+                 supervisory_words: Optional[List[str]] = None):
         """
         Initialize calculator with employee data.
 
         Args:
             employees: List of employee dictionaries
             grade_order: Map of grade -> numeric order (1 = highest)
+            manager_types: {employee_id: type} set on screen by the designer (confirmed)
+            type_ranges: {type: [low, high]} span range per manager type (Settings)
+            supervisory_words: words in a job title that mark a supervisory role (Settings)
         """
+        self.manager_type_overrides = dict(manager_types or {})
+        self.type_ranges = {k: tuple(v["range"]) for k, v in MANAGER_TYPES.items()}
+        self.type_ranges.update({k: tuple(v) for k, v in (type_ranges or {}).items() if k in MANAGER_TYPES})
+        self.supervisory_words = list(DEFAULT_SUPERVISORY_WORDS if supervisory_words is None else supervisory_words)
         # Keyed by Employee ID; records saved before IDs were resolved are
         # resolved here by name, so older uploads still work
         self.employees, self.data_issues = normalize_employees(employees)
@@ -67,6 +79,7 @@ class MetricsCalculator:
             "health_indicators": self._health_indicators(),
             "department_analysis": self._department_analysis(),
             **self._country_analysis(),
+            "reporting_lines": self._reporting_lines(list(self.graph.nodes()), "the organization"),
             "data_quality": {"issues": self.data_issues[:20]}
         }
 
@@ -141,6 +154,7 @@ class MetricsCalculator:
                 "manager_assessments": [],
                 "distribution_vs_benchmark": {"Below benchmark": 0, "Within benchmark": 0, "Above benchmark": 0},
                 "single_report_managers": 0,
+                "manager_types": self._spans_by_type([]),
             }
 
         total_managers = len(spans)
@@ -164,6 +178,7 @@ class MetricsCalculator:
             "manager_assessments": sorted(assessments, key=lambda a: (a["status"] != "below", a["span"])),
             "distribution_vs_benchmark": vs_benchmark,
             "single_report_managers": sum(1 for s in spans if s == 1),
+            "manager_types": self._spans_by_type(list(by_manager)),
         }
 
     def _manager_work_type(self, manager: str) -> Dict:
@@ -179,10 +194,29 @@ class MetricsCalculator:
             return {"work_type": "knowledge", "basis": f"Work Type column says '{declared}'"}
         return {"work_type": "knowledge", "basis": "not tagged Operational in the Work Type column"}
 
+    def _manager_type(self, node: str) -> Dict:
+        """
+        A manager's type and how it was set: on screen or in the Manager type
+        column (confirmed), or suggested from Work Type "Operational" → Supervisor
+        until confirmed. Only people with direct reports get a suggestion.
+        """
+        chosen = self.manager_type_overrides.get(node)
+        if chosen in MANAGER_TYPES:
+            return {"type": chosen, "status": "confirmed", "basis": "set on screen"}
+        column = str(self.graph.nodes[node].get("manager_type") or "")
+        if column in MANAGER_TYPES:
+            return {"type": column, "status": "confirmed", "basis": "Manager type column"}
+        if self.graph.out_degree(node) > 0 and \
+                str(self.graph.nodes[node].get("work_type") or "").strip().lower() in OPERATIONAL_WORK_TYPES:
+            return {"type": "supervisor", "status": "suggested", "basis": "suggested from Work Type Operational"}
+        return {"type": "", "status": "", "basis": ""}
+
     def _assess_manager_span(self, manager: str) -> Dict:
         span = self.graph.out_degree(manager)
         kind = self._manager_work_type(manager)
-        low, high = SPAN_TARGETS[kind["work_type"]]["range"]
+        mtype = self._manager_type(manager)
+        # Compared like for like within the manager's type; a manager without one keeps the Work Type rule
+        low, high = self.type_ranges[mtype["type"]] if mtype["type"] else SPAN_TARGETS[kind["work_type"]]["range"]
         status = "below" if span < low else "above" if span > high else "within"
         return {
             "manager_id": manager,
@@ -195,6 +229,9 @@ class MetricsCalculator:
             "benchmark_range": [low, high],
             "status": status,
             "country": self._country_of(manager),
+            "manager_type": mtype["type"],
+            "manager_type_status": mtype["status"],
+            "manager_type_basis": mtype["basis"],
         }
 
     def _cost_analysis(self) -> Dict:
@@ -230,7 +267,8 @@ class MetricsCalculator:
             "total_cost": round(total_cost, 0),
             "average_cost_per_employee": round(total_cost / total_emp, 0) if total_emp > 0 else 0,
             "by_level": by_level,
-            "by_grade": by_grade
+            "by_grade": by_grade,
+            "sources": self._cost_sources(list(self.graph.nodes())),
         }
 
     def _grade_gap_analysis(self) -> Dict:
@@ -389,6 +427,81 @@ class MetricsCalculator:
             })
         return sorted(result, key=lambda d: -d["headcount"])
 
+    def _is_supervisory(self, node: str) -> bool:
+        """A job title with a supervisory word (whole word or phrase, any case), or a confirmed manager type."""
+        if self._manager_type(node)["status"] == "confirmed":
+            return True
+        title = str(self.graph.nodes[node].get("job_title") or "")
+        return any(re.search(rf"(?<!\w){re.escape(w.strip())}(?!\w)", title, re.IGNORECASE)
+                   for w in self.supervisory_words if w.strip())
+
+    def _main_top(self) -> Optional[str]:
+        """The top of the organization: the person with no manager who has the most people below them."""
+        if getattr(self, "_top_cache", False) is False:
+            roots = [n for n in self.graph.nodes() if self.graph.in_degree(n) == 0]
+            self._top_cache = max(roots, key=lambda r: (len(nx.descendants(self.graph, r)), r)) if roots else None
+        return self._top_cache
+
+    def _reporting_lines(self, people: List[str], where: str) -> Dict:
+        """
+        Signs that reporting lines are broken among these people: supervisory
+        roles with nobody reporting to them, and people with no line manager
+        who aren't the top of the organization. When they are too many, spans
+        and layers here are not reliable: spans are hidden and left out of exports.
+        Names are listed for the screen only; exports use the counts.
+        """
+        top = self._main_top()
+        no_reports = [n for n in people if self.graph.out_degree(n) == 0 and self._is_supervisory(n)]
+        loose = [n for n in people if self.graph.in_degree(n) == 0 and n != top]
+        managers = sum(1 for n in people if self.graph.out_degree(n) > 0)
+        incomplete = len(no_reports) * 4 > managers + len(no_reports) or bool(loose)
+        text = ""
+        if incomplete:
+            parts = []
+            if no_reports:
+                parts.append(f"{len(no_reports)} supervisory role{'s have' if len(no_reports) != 1 else ' has'} nobody reporting to {'them' if len(no_reports) != 1 else 'it'}")
+            if loose:
+                parts.append(f"{len(loose)} {'people have' if len(loose) != 1 else 'person has'} no line manager although not the top of the organization")
+            text = f"Reporting lines look incomplete in {where}: {' and '.join(parts)}. Spans and layers here are not reliable."
+        person = lambda n, why: {"employee_id": n, "name": display_name(self.graph, n),  # noqa: E731
+                                 "job_title": self.graph.nodes[n].get("job_title", ""), "why": why}
+        return {
+            "supervisors_no_reports": len(no_reports),
+            "people_without_manager": len(loose),
+            "incomplete": incomplete,
+            "text": text,
+            "people": [person(n, "nobody reports to them") for n in no_reports] + [person(n, "no line manager") for n in loose],
+        }
+
+    def _spans_by_type(self, managers: List[str]) -> Dict:
+        """Median span per manager type (confirmed or suggested), and how many managers have no confirmed type."""
+        groups: Dict[str, List[int]] = {}
+        confirmed = suggested = 0
+        for m in managers:
+            t = self._manager_type(m)
+            confirmed += t["status"] == "confirmed"
+            suggested += t["status"] == "suggested"
+            if t["type"]:
+                groups.setdefault(t["type"], []).append(self.graph.out_degree(m))
+        return {
+            "by_type": {k: {"label": MANAGER_TYPES[k]["label"], "managers": len(v), "median_span": round(statistics.median(v), 2),
+                            "range": list(self.type_ranges[k])}
+                        for k, v in sorted(groups.items(), key=lambda kv: list(MANAGER_TYPES).index(kv[0]))},
+            "managers_confirmed_type": confirmed,
+            "managers_suggested_type": suggested,
+            "managers_without_confirmed_type": len(managers) - confirmed,
+        }
+
+    def _cost_sources(self, nodes: List[str]) -> Dict[str, int]:
+        """How many people's salary came from the Salary column, the grade table, or neither."""
+        out = {"file": 0, "grade": 0, "none": 0}
+        for n in nodes:
+            src = self.graph.nodes[n].get("salary_source")
+            if src is None:  # not filled through the grade table: the Salary column is all there is
+                src = "file" if self.graph.nodes[n].get("salary") else ""
+            out[src or "none"] += 1
+        return out
+
     def _country_of(self, node: str) -> str:
         return str(self.graph.nodes[node].get("country") or "")
 
@@ -433,7 +546,11 @@ class MetricsCalculator:
                 "spans_vs_benchmark": vs,
                 "single_report_managers": singles,
                 "total_cost": round(cost, 0),
+                "cost_sources": self._cost_sources(people),
                 "health_score": health["health_score"],
+                "warnings": self._unit_warnings(people, managers),
+                "manager_types": self._spans_by_type(managers),
+                "reporting_lines": self._reporting_lines(people, country),
                 "health_components": health["components"],
             })
         rows.sort(key=lambda r: (r["country"] == self.COUNTRY_NOT_STATED, -r["headcount"], r["country"]))
@@ -449,6 +566,32 @@ class MetricsCalculator:
         }
 
     COUNTRY_NOT_STATED = "Not stated"
+    SMALL_UNIT = 10  # below this, spans and layers are not meaningful
+
+    def _unit_warnings(self, people: List[str], managers: List[str]) -> List[Dict]:
+        """
+        When a unit's numbers would mislead, in words: `text` for the screen and
+        `short` to join into one sentence in the exported spans finding.
+        """
+        out = []
+        n = len(people)
+        if n < self.SMALL_UNIT:
+            out.append({"key": "small_unit",
+                        "text": f"Only {n} {'person' if n == 1 else 'people'}: spans and layers are not meaningful at this size.",
+                        "short": f"only {n} {'person' if n == 1 else 'people'}, so spans and layers are not meaningful"})
+        missing = self._cost_sources(people)["none"]
+        if missing * 4 > n:
+            out.append({"key": "cost_incomplete",
+                        "text": f"{missing} of {n} people have no salary and no grade-table match: people cost is incomplete.",
+                        "short": f"people cost is incomplete ({missing} of {n} have no salary)"})
+        here = self._country_of(people[0]) if people else ""
+        outward = [m for m in managers
+                   if sum(1 for r in self.graph.successors(m) if self._country_of(r) != here) * 2 > self.graph.out_degree(m)]
+        if managers and len(outward) * 2 > len(managers):
+            out.append({"key": "managers_elsewhere",
+                        "text": f"{len(outward)} of {len(managers)} managers here mostly manage people in other units: spans here are inflated or deflated.",
+                        "short": f"{len(outward)} of {len(managers)} managers mostly manage people in other units, so spans are inflated or deflated"})
+        return out
 
     @staticmethod
     def _country_differences(r: Dict, ref: Dict) -> List[str]:

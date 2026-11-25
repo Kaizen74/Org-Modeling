@@ -21,9 +21,10 @@ class OrgCSVParser:
     """
 
     REQUIRED_COLUMNS = ["Name", "Job Title", "Grade", "Level", "Line Manager"]
-    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Line Manager ID", "Salary", "Work Activities", "Job Description", "Work Type", "Country"]
-    # Other headers accepted for an optional column
-    COLUMN_ALIASES = {"Country/Region": "Country"}
+    OPTIONAL_COLUMNS = ["Department", "Employee ID", "Line Manager ID", "Salary", "Work Activities", "Job Description", "Work Type", "Country", "Manager type"]
+    # The comparison unit: the first of these headers present (any letter case) is read
+    # as the unit. Exports keep the field name `country`; screens use the header's word.
+    UNIT_HEADERS = ["Country", "Country/Region", "Station", "Asset", "Business unit", "Unit"]
     # A person whose Country cell is blank is shown in their own group, never dropped
     COUNTRY_NOT_STATED = "Not stated"
 
@@ -85,7 +86,10 @@ class OrgCSVParser:
         self.graph = build_org_graph(employees)
 
         # Detect structural issues
-        structural_errors = (resolution_issues + self._detect_issues())[:10]
+        unknown_types = sorted(getattr(self, "unknown_manager_types", set()))
+        type_notes = [f"Manager type not recognised: {', '.join(unknown_types[:5])}. Use Supervisor, Coach, Coordinator, "
+                      "Specialist lead or Leader of leaders; those people have no type until one is set."] if unknown_types else []
+        structural_errors = (getattr(self, "unit_notes", []) + type_notes + resolution_issues + self._detect_issues())[:10]
 
         # Calculate metadata
         metadata = self._calculate_metadata(employees)
@@ -150,10 +154,43 @@ class OrgCSVParser:
             errors.append(f"Missing required columns: {', '.join(missing)}")
         return errors
 
+    def _pick_unit_column(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Read the first unit header present as the Country column, and remember its word."""
+        self.unit_label = ""
+        self.unit_notes: List[str] = []
+        by_lower = {str(c).strip().lower(): c for c in df.columns}
+        found = [(h, by_lower[h.lower()]) for h in self.UNIT_HEADERS if h.lower() in by_lower]
+        if not found:
+            return df
+        header, column = found[0]
+        # "Country/Region" reads as "Country" on screen; others keep their own word
+        self.unit_label = "Country" if header == "Country/Region" else header
+        if len(found) > 1:
+            self.unit_notes.append(
+                f"Several unit columns found ({', '.join(str(c) for _, c in found)}); "
+                f"'{column}' is used as the unit. Remove or rename the others to use a different one.")
+        others = [c for _, c in found[1:]]
+        df = df.drop(columns=others)
+        return df.rename(columns={column: "Country"})
+
+    def _manager_type_value(self, value) -> str:
+        """A Manager type cell as a type key ("Specialist lead" → specialist_lead); unknown words are reported."""
+        from ..resources.benchmarks_reference import MANAGER_TYPES
+        text = "" if value is None or pd.isna(value) else str(value).strip()
+        if not text or text.lower() in ("nan", "none"):
+            return ""
+        norm = text.lower().replace("-", " ").replace("_", " ")
+        for key, t in MANAGER_TYPES.items():
+            if norm in (t["label"].lower(), key.replace("_", " ")):
+                return key
+        self.unknown_manager_types = getattr(self, "unknown_manager_types", set()) | {text}
+        return ""
+
     def _clean_data(self) -> pd.DataFrame:
         """Clean and normalize the data."""
         df = self.df.copy()
-        df = df.rename(columns={a: c for a, c in self.COLUMN_ALIASES.items() if a in df.columns and c not in df.columns})
+        df = self._pick_unit_column(df)
+        df = df.rename(columns={c: "Manager type" for c in df.columns if str(c).strip().lower() == "manager type"})
 
         # Strip whitespace from string columns
         for col in df.select_dtypes(include=["object"]).columns:
@@ -226,6 +263,7 @@ class OrgCSVParser:
                 "manager_id": str(row["Line Manager ID"]).strip() if "Line Manager ID" in row and pd.notna(row["Line Manager ID"]) else None,
                 "work_type": str(row["Work Type"]).strip().lower() if "Work Type" in row and pd.notna(row["Work Type"]) and str(row["Work Type"]).strip().lower() not in ("", "nan") else "",
                 "country": str(row["Country"]) if "Country" in row else "",
+                "manager_type": self._manager_type_value(row.get("Manager type")),
                 "work_activities": str(row.get("Work Activities", "")).strip() if pd.notna(row.get("Work Activities", "")) else "",
                 "job_description": str(row.get("Job Description", "")).strip() if pd.notna(row.get("Job Description", "")) else ""
             })
@@ -310,6 +348,7 @@ class OrgCSVParser:
             "organizational_layers": max_level,
             "total_salary_cost": round(total_salary, 2),
             "countries": sorted({emp["country"] for emp in employees if emp.get("country")}),
+            "unit_label": getattr(self, "unit_label", ""),
         }
 
     def get_employees_by_manager(self) -> Dict[str, List[str]]:

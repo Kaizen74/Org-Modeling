@@ -17,7 +17,44 @@
         "CAP-05.Structure"
       ],
       "source_note": "Computed from the uploaded org file (26 people in Belmar)",
-      "topic": "role_presence"
+      "topic": "role_presence",
+      "metrics": {
+        "headcount": 26,
+        "managers": 9,
+        "manager_ratio_pct": 34.6,
+        "layers": 5,
+        "median_span": 2,
+        "spans_within": 1,
+        "spans_below": 8,
+        "spans_above": 0,
+        "single_report_managers": 2,
+        "total_cost": 2263000
+      }
+    },
+    {
+      "ref": "baseline.spans",
+      "kind": "structural_baseline",
+      "title": "Managers within their span benchmark (Belmar)",
+      "detail": "8 below, 0 above; 2 managers have one direct report. Median span 2. A manager's span counts reports in any country.",
+      "grade": "confirmed",
+      "figure": "1 of 9 managers",
+      "relates_to": [
+        "CAP-05.Structure"
+      ],
+      "source_note": "Computed from the uploaded org file (26 people in Belmar)",
+      "topic": "role_presence",
+      "metrics": {
+        "headcount": 26,
+        "managers": 9,
+        "manager_ratio_pct": 34.6,
+        "layers": 5,
+        "median_span": 2,
+        "spans_within": 1,
+        "spans_below": 8,
+        "spans_above": 0,
+        "single_report_managers": 2,
+        "total_cost": 2263000
+      }
     },
     {
       "ref": "RL-011",
@@ -69,6 +106,98 @@
       "topic": "role_reason",
       "reason_class": "inherited",
       "compared_with": "Arden"
+    },
+    {
+      "ref": "RF-01",
+      "kind": "role_family",
+      "title": "Load control",
+      "detail": "",
+      "grade": "confirmed",
+      "figure": "2 people",
+      "relates_to": [],
+      "source_note": "Grouped from job titles in the uploaded org file (26 people in Belmar).",
+      "topic": "role_presence",
+      "metrics": {
+        "headcount": 2,
+        "job_titles": 1
+      }
+    },
+    {
+      "ref": "RF-02",
+      "kind": "role_family",
+      "title": "Ramp handling",
+      "detail": "",
+      "grade": "confirmed",
+      "figure": "5 people",
+      "relates_to": [],
+      "source_note": "Grouped from job titles in the uploaded org file (26 people in Belmar).",
+      "topic": "role_presence",
+      "metrics": {
+        "headcount": 5,
+        "job_titles": 2
+      }
+    },
+    {
+      "ref": "RF-03",
+      "kind": "role_family",
+      "title": "Pricing and revenue management",
+      "detail": "Created in 2023 when Belmar won its two largest renewal contracts.",
+      "grade": "confirmed",
+      "figure": "1 person",
+      "relates_to": [],
+      "source_note": "Grouped from job titles in the uploaded org file (26 people in Belmar).",
+      "topic": "role_presence",
+      "metrics": {
+        "headcount": 1,
+        "job_titles": 1
+      },
+      "reason_class": "chosen",
+      "compared_with": "Arden"
+    },
+    {
+      "ref": "RF-04",
+      "kind": "role_family",
+      "title": "Analytics and AI",
+      "detail": "",
+      "grade": "confirmed",
+      "figure": "0 people",
+      "relates_to": [],
+      "source_note": "Grouped from job titles in the uploaded org file (26 people in Belmar).",
+      "topic": "role_presence",
+      "metrics": {
+        "headcount": 0,
+        "job_titles": 0
+      }
+    },
+    {
+      "ref": "RF-05",
+      "kind": "role_family",
+      "title": "Disruption control",
+      "detail": "",
+      "grade": "confirmed",
+      "figure": "0 people",
+      "relates_to": [],
+      "source_note": "Grouped from job titles in the uploaded org file (26 people in Belmar).",
+      "topic": "role_presence",
+      "metrics": {
+        "headcount": 0,
+        "job_titles": 0
+      }
+    },
+    {
+      "ref": "RF-06",
+      "kind": "role_family",
+      "title": "Finance",
+      "detail": "",
+      "grade": "confirmed",
+      "figure": "2 people",
+      "relates_to": [],
+      "source_note": "Grouped from job titles in the uploaded org file (26 people in Belmar).",
+      "topic": "role_presence",
+      "metrics": {
+        "headcount": 2,
+        "job_titles": 2
+      }
     }
   ]
 }
