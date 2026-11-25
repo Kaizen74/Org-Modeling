@@ -12,11 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.models import OrgAnalysis, GradeSalary
 from .metrics_service import MetricsCalculator, METRICS_VERSION
+from .structure_settings import calculator_inputs, signature
 
 
-def is_current(metrics: Dict) -> bool:
-    """True when cached metrics were produced by the current engine version."""
-    return bool(metrics) and metrics.get("metrics_version") == METRICS_VERSION
+def is_current(metrics: Dict, inputs_signature: str = None) -> bool:
+    """True when cached metrics were produced by the current engine and, if given, the same inputs."""
+    return bool(metrics) and metrics.get("metrics_version") == METRICS_VERSION and \
+        (inputs_signature is None or metrics.get("inputs_signature") == inputs_signature)
 
 
 def enrich_employees_with_grade_salary(employees: List[Dict], grades: List[GradeSalary]) -> List[Dict]:
@@ -46,8 +48,14 @@ async def load_grades(db: AsyncSession) -> List[GradeSalary]:
 
 
 async def ensure_metrics(analysis: OrgAnalysis, db: AsyncSession, force: bool = False) -> Dict:
-    """Return current metrics for an upload, recalculating and caching when needed."""
-    if not force and is_current(analysis.metrics):
+    """
+    Return current metrics for an upload, recalculating and caching when needed:
+    after an engine change, or when manager types, span ranges or supervisory
+    words changed since they were calculated.
+    """
+    inputs = await calculator_inputs(analysis, db)
+    sig = signature(inputs)
+    if not force and is_current(analysis.metrics, sig):
         return analysis.metrics
 
     employees = analysis.raw_data.get("employees", []) if analysis.raw_data else []
@@ -55,7 +63,8 @@ async def ensure_metrics(analysis: OrgAnalysis, db: AsyncSession, force: bool = 
     grade_order = {g.grade: g.display_order for g in grades}
     employees = enrich_employees_with_grade_salary(employees, grades)
 
-    metrics = MetricsCalculator(employees=employees, grade_order=grade_order).calculate_all_metrics()
+    metrics = MetricsCalculator(employees=employees, grade_order=grade_order, **inputs).calculate_all_metrics()
+    metrics["inputs_signature"] = sig
     # The unit column's word for screens ("Station" → "By station"); exports keep the field name `country`
     metrics["unit_label"] = (analysis.raw_data or {}).get("unit_label") or ("Country" if metrics.get("country_analysis") else "")
     analysis.metrics = metrics

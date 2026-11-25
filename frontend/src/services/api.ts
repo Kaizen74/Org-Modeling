@@ -19,6 +19,8 @@ import type {
   Disposition,
   DispositionPayload,
   ImplementationPlan,
+  StructureSettings,
+  ManagerTypeKey,
   CompassState,
   CompassPreview,
   Grade,
@@ -370,4 +372,17 @@ export const compassApi = {
     (await api.put('/compass/roles/reason', r)).data,
   returnJsonUrl: '/api/v1/compass/return',
   returnTextUrl: '/api/v1/compass/return.txt',
+};
+
+// Structure inputs: span ranges per manager type and supervisory words (app-wide), manager types per upload
+export const structureApi = {
+  settings: async (): Promise<StructureSettings> => (await api.get('/structure/settings')).data,
+  saveSettings: async (data: { type_ranges?: Partial<Record<ManagerTypeKey, [number, number]>>; supervisory_words?: string[] }): Promise<StructureSettings> =>
+    (await api.put('/structure/settings', data)).data,
+  resetSettings: async (): Promise<StructureSettings> => (await api.post('/structure/settings/reset')).data,
+  /** null clears the type set on screen (back to the suggestion, or none). */
+  setManagerType: async (employeeId: string, managerType: ManagerTypeKey | null): Promise<{ metrics: OrgMetrics }> =>
+    (await api.put('/structure/manager-type', { employee_id: employeeId, manager_type: managerType })).data,
+  confirmSuggestedTypes: async (): Promise<{ confirmed: number; metrics: OrgMetrics }> =>
+    (await api.post('/structure/manager-types/confirm-suggested')).data,
 };

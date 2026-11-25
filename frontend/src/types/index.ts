@@ -50,6 +50,27 @@ export interface ManagerSpanAssessment {
   benchmark_range: [number, number];
   status: 'below' | 'within' | 'above';
   country?: string; // where the manager works; empty when the file has no Country column
+  manager_type?: ManagerTypeKey | '';
+  manager_type_status?: 'confirmed' | 'suggested' | '';
+  manager_type_basis?: string;
+}
+
+export type ManagerTypeKey = 'supervisor' | 'coach' | 'coordinator' | 'specialist_lead' | 'leader_of_leaders';
+
+/** Median span per manager type, and how many managers have no confirmed type. */
+export interface ManagerTypeSummary {
+  by_type: Partial<Record<ManagerTypeKey, { label: string; managers: number; median_span: number; range: [number, number] }>>;
+  managers_confirmed_type: number;
+  managers_suggested_type: number;
+  managers_without_confirmed_type: number;
+}
+
+export interface StructureSettings {
+  type_ranges: Record<ManagerTypeKey, [number, number]>;
+  supervisory_words: string[];
+  manager_types: Array<{ key: ManagerTypeKey; label: string; description: string; starting_range: [number, number] }>;
+  default_supervisory_words: string[];
+  note: string;
 }
 
 export interface SpanOfControl {
@@ -62,6 +83,7 @@ export interface SpanOfControl {
   manager_assessments?: ManagerSpanAssessment[];
   distribution_vs_benchmark?: Record<'Below benchmark' | 'Within benchmark' | 'Above benchmark', number>;
   single_report_managers?: number;
+  manager_types?: ManagerTypeSummary;
 }
 
 export interface CostAnalysis {
@@ -191,6 +213,7 @@ export interface CountryMetrics {
   differences: string[]; // against the largest country, in words and a symbol
   cost_sources?: { file: number; grade: number; none: number }; // where each person's salary came from
   warnings?: Array<{ key: string; text: string; short: string }>; // when this unit's numbers would mislead
+  manager_types?: ManagerTypeSummary;
 }
 
 // Key gap can be a string or an object with detailed info

@@ -17,6 +17,8 @@ from ..resources.benchmarks_reference import (
     MANAGER_RATIO_RANGE,
     LAYER_PLANNING_SPAN,
     OPERATIONAL_WORK_TYPES,
+    MANAGER_TYPES,
+    DEFAULT_SUPERVISORY_WORDS,
     MANAGER_RATIO_BENCHMARKS,
     LAYERS_BENCHMARKS,
 )
@@ -24,7 +26,7 @@ import math
 
 # Bump when the shape or meaning of calculated metrics changes, so cached
 # metrics from older uploads are recalculated instead of shown stale
-METRICS_VERSION = 7
+METRICS_VERSION = 8
 
 
 class MetricsCalculator:
@@ -34,14 +36,23 @@ class MetricsCalculator:
     TESTED: Returns accurate metrics for 64-employee PAX org
     """
 
-    def __init__(self, employees: List[Dict], grade_order: Optional[Dict[str, int]] = None):
+    def __init__(self, employees: List[Dict], grade_order: Optional[Dict[str, int]] = None,
+                 manager_types: Optional[Dict[str, str]] = None, type_ranges: Optional[Dict[str, List[int]]] = None,
+                 supervisory_words: Optional[List[str]] = None):
         """
         Initialize calculator with employee data.
 
         Args:
             employees: List of employee dictionaries
             grade_order: Map of grade -> numeric order (1 = highest)
+            manager_types: {employee_id: type} set on screen by the designer (confirmed)
+            type_ranges: {type: [low, high]} span range per manager type (Settings)
+            supervisory_words: words in a job title that mark a supervisory role (Settings)
         """
+        self.manager_type_overrides = dict(manager_types or {})
+        self.type_ranges = {k: tuple(v["range"]) for k, v in MANAGER_TYPES.items()}
+        self.type_ranges.update({k: tuple(v) for k, v in (type_ranges or {}).items() if k in MANAGER_TYPES})
+        self.supervisory_words = list(DEFAULT_SUPERVISORY_WORDS if supervisory_words is None else supervisory_words)
         # Keyed by Employee ID; records saved before IDs were resolved are
         # resolved here by name, so older uploads still work
         self.employees, self.data_issues = normalize_employees(employees)
@@ -141,6 +152,7 @@ class MetricsCalculator:
                 "manager_assessments": [],
                 "distribution_vs_benchmark": {"Below benchmark": 0, "Within benchmark": 0, "Above benchmark": 0},
                 "single_report_managers": 0,
+                "manager_types": self._spans_by_type([]),
             }
 
         total_managers = len(spans)
@@ -164,6 +176,7 @@ class MetricsCalculator:
             "manager_assessments": sorted(assessments, key=lambda a: (a["status"] != "below", a["span"])),
             "distribution_vs_benchmark": vs_benchmark,
             "single_report_managers": sum(1 for s in spans if s == 1),
+            "manager_types": self._spans_by_type(list(by_manager)),
         }
 
     def _manager_work_type(self, manager: str) -> Dict:
@@ -179,10 +192,29 @@ class MetricsCalculator:
             return {"work_type": "knowledge", "basis": f"Work Type column says '{declared}'"}
         return {"work_type": "knowledge", "basis": "not tagged Operational in the Work Type column"}
 
+    def _manager_type(self, node: str) -> Dict:
+        """
+        A manager's type and how it was set: on screen or in the Manager type
+        column (confirmed), or suggested from Work Type "Operational" → Supervisor
+        until confirmed. Only people with direct reports get a suggestion.
+        """
+        chosen = self.manager_type_overrides.get(node)
+        if chosen in MANAGER_TYPES:
+            return {"type": chosen, "status": "confirmed", "basis": "set on screen"}
+        column = str(self.graph.nodes[node].get("manager_type") or "")
+        if column in MANAGER_TYPES:
+            return {"type": column, "status": "confirmed", "basis": "Manager type column"}
+        if self.graph.out_degree(node) > 0 and \
+                str(self.graph.nodes[node].get("work_type") or "").strip().lower() in OPERATIONAL_WORK_TYPES:
+            return {"type": "supervisor", "status": "suggested", "basis": "suggested from Work Type Operational"}
+        return {"type": "", "status": "", "basis": ""}
+
     def _assess_manager_span(self, manager: str) -> Dict:
         span = self.graph.out_degree(manager)
         kind = self._manager_work_type(manager)
-        low, high = SPAN_TARGETS[kind["work_type"]]["range"]
+        mtype = self._manager_type(manager)
+        # Compared like for like within the manager's type; a manager without one keeps the Work Type rule
+        low, high = self.type_ranges[mtype["type"]] if mtype["type"] else SPAN_TARGETS[kind["work_type"]]["range"]
         status = "below" if span < low else "above" if span > high else "within"
         return {
             "manager_id": manager,
@@ -195,6 +227,9 @@ class MetricsCalculator:
             "benchmark_range": [low, high],
             "status": status,
             "country": self._country_of(manager),
+            "manager_type": mtype["type"],
+            "manager_type_status": mtype["status"],
+            "manager_type_basis": mtype["basis"],
         }
 
     def _cost_analysis(self) -> Dict:
@@ -390,6 +425,25 @@ class MetricsCalculator:
             })
         return sorted(result, key=lambda d: -d["headcount"])
 
+    def _spans_by_type(self, managers: List[str]) -> Dict:
+        """Median span per manager type (confirmed or suggested), and how many managers have no confirmed type."""
+        groups: Dict[str, List[int]] = {}
+        confirmed = suggested = 0
+        for m in managers:
+            t = self._manager_type(m)
+            confirmed += t["status"] == "confirmed"
+            suggested += t["status"] == "suggested"
+            if t["type"]:
+                groups.setdefault(t["type"], []).append(self.graph.out_degree(m))
+        return {
+            "by_type": {k: {"label": MANAGER_TYPES[k]["label"], "managers": len(v), "median_span": round(statistics.median(v), 2),
+                            "range": list(self.type_ranges[k])}
+                        for k, v in sorted(groups.items(), key=lambda kv: list(MANAGER_TYPES).index(kv[0]))},
+            "managers_confirmed_type": confirmed,
+            "managers_suggested_type": suggested,
+            "managers_without_confirmed_type": len(managers) - confirmed,
+        }
+
     def _cost_sources(self, nodes: List[str]) -> Dict[str, int]:
         """How many people's salary came from the Salary column, the grade table, or neither."""
         out = {"file": 0, "grade": 0, "none": 0}
@@ -447,6 +501,7 @@ class MetricsCalculator:
                 "cost_sources": self._cost_sources(people),
                 "health_score": health["health_score"],
                 "warnings": self._unit_warnings(people, managers),
+                "manager_types": self._spans_by_type(managers),
                 "health_components": health["components"],
             })
         rows.sort(key=lambda r: (r["country"] == self.COUNTRY_NOT_STATED, -r["headcount"], r["country"]))

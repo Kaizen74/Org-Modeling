@@ -196,9 +196,83 @@ async def test_warnings_go_into_the_spans_detail_as_one_sentence(client: AsyncCl
     await client.post("/api/v1/compass/import", json={"packet": dorne})
     spans = by_ref((await client.get("/api/v1/compass/return", params={"link": "Dorne"})).json())["baseline.spans"]
     assert spans["detail"].startswith("1 below, 0 above; 0 managers have one direct report. Median span 3. "
-                                      "A manager's span counts reports in any country. Check:")  # existing wording kept, sentence added
+                                      "A manager's span counts reports in any country. 1 manager without a confirmed type. Check:")
     assert re.search(r"Check: only 4 people, so spans and layers are not meaningful; people cost is incomplete \(2 of 4 have no salary\)\.$", spans["detail"])
     # The sample org file's units are all 26+ people with full salaries: no warnings, detail unchanged
     await upload(client)
     await link(client, "Belmar")
     assert "Check:" not in by_ref(await belmar_file(client))["baseline.spans"]["detail"]
+
+
+# ------------------------------------------------------------- 4. manager types
+
+def _belmar_row(metrics):
+    return next(r for r in metrics["country_analysis"] if r["country"] == "Belmar")
+
+
+@pytest.mark.asyncio
+async def test_types_suggested_from_work_type_and_counted(client: AsyncClient):
+    await upload(client)
+    m = (await client.get("/api/v1/metrics/latest")).json()["metrics"]
+    shift = next(a for a in m["span_of_control"]["manager_assessments"] if a["manager_id"] == "E050")
+    assert (shift["job_title"], shift["manager_type"], shift["manager_type_status"]) == ("Shift Supervisor", "supervisor", "suggested")
+    types = _belmar_row(m)["manager_types"]
+    assert types["managers_without_confirmed_type"] == 9 and types["managers_suggested_type"] == 4
+    assert types["by_type"]["supervisor"]["managers"] == 4
+    # A suggested Supervisor is judged on 10-20, as the Work Type rule did: test 1's figures don't move
+    assert _belmar_row(m)["spans_vs_benchmark"] == {"below": 8, "within": 1, "above": 0}
+    await link(client, "Belmar")
+    detail = by_ref(await belmar_file(client))["baseline.spans"]["detail"]
+    assert "Median span by type: Supervisor 2.5; 9 managers without a confirmed type." in detail
+
+
+@pytest.mark.asyncio
+async def test_type_set_on_screen_changes_the_judgement_and_scenarios_follow(client: AsyncClient):
+    await upload(client)
+    # Head of Commercial (3 reports) confirmed as a Specialist lead: 3-6, so within
+    r = await client.put("/api/v1/structure/manager-type", json={"employee_id": "E034", "manager_type": "specialist_lead"})
+    m = r.json()["metrics"]
+    a = next(x for x in m["span_of_control"]["manager_assessments"] if x["manager_id"] == "E034")
+    assert (a["manager_type_status"], a["benchmark_range"], a["status"]) == ("confirmed", [3, 6], "within")
+    assert _belmar_row(m)["spans_vs_benchmark"]["within"] == 2
+    assert (await client.get("/api/v1/metrics/latest")).json()["metrics"]["inputs_signature"] == m["inputs_signature"]
+    # A scenario with no moves is judged with the same types: same spans as today
+    sc = (await client.post("/api/v1/scenarios", json={"name": "No change"})).json()
+    assert sc["scenario"]["spans_within_benchmark"] == sc["baseline"]["spans_within_benchmark"]
+    # Confirm every suggestion at once
+    done = (await client.post("/api/v1/structure/manager-types/confirm-suggested")).json()
+    assert done["confirmed"] >= 4
+    assert _belmar_row(done["metrics"])["manager_types"]["managers_without_confirmed_type"] == 4
+    # Clearing goes back to the suggestion or nothing; bad input is refused in plain words
+    assert (await client.put("/api/v1/structure/manager-type", json={"employee_id": "E034", "manager_type": "boss"})).status_code == 400
+    assert (await client.put("/api/v1/structure/manager-type", json={"employee_id": "E999", "manager_type": "coach"})).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_span_ranges_are_editable_in_settings(client: AsyncClient):
+    await upload(client)
+    s = (await client.get("/api/v1/structure/settings")).json()
+    assert s["type_ranges"]["supervisor"] == [10, 20] and s["type_ranges"]["specialist_lead"] == [3, 6]
+    assert "Starting points, not targets" in s["note"]
+    bad = await client.put("/api/v1/structure/settings", json={"type_ranges": {"supervisor": [12, 4]}})
+    assert bad.status_code == 400 and "Supervisor" in bad.json()["detail"]
+    await client.put("/api/v1/structure/settings", json={"type_ranges": {"supervisor": [2, 20]}})
+    # The suggested Supervisors (spans 2-4 in Belmar) now fall within: metrics recalculate by themselves
+    assert _belmar_row((await client.get("/api/v1/metrics/latest")).json()["metrics"])["spans_vs_benchmark"]["within"] == 5
+    assert (await client.post("/api/v1/structure/settings/reset")).json()["type_ranges"]["supervisor"] == [10, 20]
+    assert _belmar_row((await client.get("/api/v1/metrics/latest")).json()["metrics"])["spans_vs_benchmark"]["within"] == 1
+
+
+def test_manager_type_column_any_case_and_unknown_values():
+    from app.parsers.csv_parser import OrgCSVParser
+    from app.services.metrics_service import MetricsCalculator
+    csv = ("Name,Job Title,Grade,Level,Line Manager,Employee ID,manager TYPE\n"
+           "Ana,CEO,G1,1,Top of Org,E1,Leader of leaders\n"
+           "Bo,Lead,G2,2,Ana,E2,specialist-lead\n"
+           "Cy,Boss,G2,2,Ana,E3,Boss\n"
+           "Di,Analyst,G5,3,Bo,E4,\n")
+    result = OrgCSVParser(io.BytesIO(csv.encode())).parse()
+    assert [e["manager_type"] for e in result["employees"]] == ["leader_of_leaders", "specialist_lead", "", ""]
+    assert any("Manager type not recognised: Boss" in w for w in result["validation_errors"])
+    a = {x["manager_id"]: x for x in MetricsCalculator(employees=result["employees"]).calculate_all_metrics()["span_of_control"]["manager_assessments"]}
+    assert (a["E1"]["manager_type_basis"], a["E1"]["benchmark_range"]) == ("Manager type column", [4, 8])

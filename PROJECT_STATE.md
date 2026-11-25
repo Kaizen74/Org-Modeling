@@ -9,7 +9,7 @@ An Organizational Design Analyzer for an OD practitioner: upload an org-structur
 - [x] 1. Numbers-only `metrics` on country and whole-organization baseline findings; cost source in source_note; figures line in readable text
 - [x] 2. Base-salary note; unit column (Station, Asset, Business unit, Unit)
 - [x] 3. Unit warnings (small unit, cost incomplete, managers in other units)
-- [ ] 4. Manager types with editable span ranges
+- [x] 4. Manager types with editable span ranges
 - [ ] 5. Broken reporting lines
 - [ ] 6. Role families (screen, RF IDs, across-units view, export)
 - [ ] 7. Mock journey, checks, docs

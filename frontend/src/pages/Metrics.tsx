@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { metricsApi } from '../services/api';
-import type { OrgMetrics, ManagerSpanAssessment, CountryMetrics } from '../types';
+import { metricsApi, structureApi } from '../services/api';
+import type { OrgMetrics, ManagerSpanAssessment, CountryMetrics, ManagerTypeKey } from '../types';
 import {
   PageHeader,
   Section,
@@ -22,6 +22,10 @@ import {
 
 type SpanFilter = 'all' | 'below' | 'within' | 'above';
 
+const TYPE_LABELS: Record<ManagerTypeKey, string> = {
+  supervisor: 'Supervisor', coach: 'Coach', coordinator: 'Coordinator', specialist_lead: 'Specialist lead', leader_of_leaders: 'Leader of leaders',
+};
+
 /** Countries side by side: one column per country, the same measures down the rows. */
 function CountryTable({ countries, reference }: { countries: CountryMetrics[]; reference?: string }) {
   const rows: Array<[string, (c: CountryMetrics) => React.ReactNode]> = [
@@ -33,6 +37,11 @@ function CountryTable({ countries, reference }: { countries: CountryMetrics[]; r
     ['Single-report managers', (c) => c.single_report_managers],
     ['People cost (base salary)', (c) => formatMoney(c.total_cost)],
     ['Structural health', (c) => <span className="inline-flex items-center gap-2">{c.health_score}<StatusPill status={scoreStatus(c.health_score)} /></span>],
+    ['Median span by manager type', (c) => {
+      const types = Object.values(c.manager_types?.by_type ?? {});
+      return types.length ? <span className="text-xs font-normal">{types.map((t) => <span key={t.label} className="block">{t.label} {t.median_span} <span className="text-faint">({t.managers})</span></span>)}</span> : <span className="text-faint">–</span>;
+    }],
+    ['Managers without a confirmed type', (c) => c.manager_types ? <>{c.manager_types.managers_without_confirmed_type}{c.manager_types.managers_suggested_type ? <span className="block text-xs font-normal text-faint">{c.manager_types.managers_suggested_type} suggested</span> : null}</> : '–'],
   ];
   return (
     <div className="card overflow-x-auto p-0">
@@ -106,6 +115,13 @@ export default function Metrics() {
     } finally {
       setRecalculating(false);
     }
+  };
+
+  const setType = async (id: string, type: ManagerTypeKey | null) => {
+    setMetrics((await structureApi.setManagerType(id, type)).metrics);
+  };
+  const confirmSuggested = async () => {
+    setMetrics((await structureApi.confirmSuggestedTypes()).metrics);
   };
 
   const assessments = useMemo<ManagerSpanAssessment[]>(
@@ -227,6 +243,11 @@ export default function Metrics() {
               {f === 'all' ? `All managers (${assessments.length})` : `${f[0].toUpperCase()}${f.slice(1)} (${assessments.filter((a) => a.status === f).length})`}
             </Chip>
           ))}
+          {!!metrics.span_of_control.manager_types?.managers_suggested_type && (
+            <button className="btn btn-quiet py-1 text-xs" onClick={confirmSuggested}>
+              Confirm {metrics.span_of_control.manager_types.managers_suggested_type} suggested type{metrics.span_of_control.manager_types.managers_suggested_type === 1 ? '' : 's'}
+            </button>
+          )}
           {countrySelect && <span className="ml-auto">{countrySelect}</span>}
           {depts.length > 1 && (
             <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className={`input w-auto py-1.5 text-sm ${countrySelect ? '' : 'ml-auto'}`} aria-label="Filter by department">
@@ -256,8 +277,15 @@ export default function Metrics() {
                     <p className="text-xs text-faint">{a.job_title}</p>
                   </td>
                   <td className="px-4 py-3 text-secondary">{a.department}</td>
-                  <td className="px-4 py-3 text-secondary" title={`Why: ${a.work_type_basis}`}>
-                    {a.work_type === 'operational' ? 'Frontline operational' : 'Other'}
+                  <td className="px-4 py-3 text-secondary" title={`Why: ${a.manager_type_basis || a.work_type_basis}`}>
+                    <select className="rounded border border-hairline bg-white px-1.5 py-0.5 text-xs text-ink" aria-label={`Manager type for ${a.manager}`}
+                      value={a.manager_type ?? ''} onChange={(e) => setType(a.manager_id, (e.target.value || null) as ManagerTypeKey | null)}>
+                      <option value="">No type</option>
+                      {(Object.keys(TYPE_LABELS) as ManagerTypeKey[]).map((k) => <option key={k} value={k}>{TYPE_LABELS[k]}</option>)}
+                    </select>
+                    {a.manager_type_status === 'suggested' && <span className="ml-1.5 text-xs font-semibold text-[color:var(--color-score-amber)]">suggested</span>}
+                    {a.manager_type_status === 'confirmed' && <span className="ml-1.5 text-xs text-faint">confirmed</span>}
+                    {!a.manager_type && <span className="block text-xs text-faint">{a.work_type === 'operational' ? 'Frontline operational' : 'Other'} (Work Type rule)</span>}
                     {/* The default is explained under the table; show the basis only where a tag set it */}
                     {!a.work_type_basis.startsWith('not tagged') && <span className="block text-xs text-faint">{a.work_type_basis}</span>}
                   </td>
@@ -278,7 +306,8 @@ export default function Metrics() {
           </button>
         )}
         <p className="mt-3 text-xs text-faint">
-          Tag frontline operational managers “Operational” in the Work Type column of your CSV to judge them against 10–20; untagged managers are judged against 5–10.
+          Each manager is compared with the span range for their type (ranges in Settings; starting points, not targets). A manager with no type keeps the Work Type rule:
+          “Operational” 10–20, others 5–10. Operational managers start as suggested Supervisors until you confirm.
         </p>
       </Section>
 

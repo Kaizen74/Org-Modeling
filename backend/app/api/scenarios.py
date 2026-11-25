@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.database import get_session
 from ..models.models import OrgAnalysis, Scenario
 from ..services.metrics_service import MetricsCalculator
+from ..services.structure_settings import calculator_inputs
 from ..services.metrics_store import ensure_metrics, load_grades, enrich_employees_with_grade_salary
 from ..services.ai_disposition_service import capacity_freed
 from ..services.implementation_service import build_plan
@@ -68,7 +69,9 @@ async def evaluate(analysis: OrgAnalysis, moves: List[Dict], db: AsyncSession) -
 
     baseline = enrich_employees_with_grade_salary(analysis.raw_data["employees"], grades)
     employees, log = apply_moves(baseline, moves, grade_salary)
-    scenario_metrics = MetricsCalculator(employees=employees, grade_order=grade_order).calculate_all_metrics()
+    # Judged with the same manager types, ranges and words as the current state
+    scenario_metrics = MetricsCalculator(employees=employees, grade_order=grade_order,
+                                         **await calculator_inputs(analysis, db)).calculate_all_metrics()
 
     base_head, scen_head = headline(baseline_metrics), headline(scenario_metrics)
     # Optional AI-role overlay: capacity freed, never a headcount change

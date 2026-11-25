@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { settingsApi } from '../services/api';
 import { PageHeader, Section, StatusPill, Callout, Loading } from '../components/ui';
+import StructureSettings from '../components/StructureSettings';
 
 export default function Settings() {
   const [apiKey, setApiKey] = useState('');
@@ -113,6 +114,7 @@ export default function Settings() {
             Personal names are never sent.
           </p>
         </Section>
+        <StructureSettings />
       </div>
     </>
   );

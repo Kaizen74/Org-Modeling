@@ -460,6 +460,18 @@ def _num(v):
     return int(v) if isinstance(v, float) and v.is_integer() else v
 
 
+def _types_sentence(types: Optional[Dict]) -> str:
+    """E.g. " Median span by type: Supervisor 12, Coach 7; 4 managers without a confirmed type." ("" without type data)."""
+    if not types:
+        return ""
+    parts = [f"{t['label']} {t['median_span']:g}" for t in (types.get("by_type") or {}).values()]
+    missing = types.get("managers_without_confirmed_type", 0)
+    tail = f"{missing} manager{'s' if missing != 1 else ''} without a confirmed type" if missing else ""
+    if not parts and not tail:
+        return ""
+    return " " + ("Median span by type: " + ", ".join(parts) + ("; " + tail if tail else "") if parts else tail[0].upper() + tail[1:]) + "."
+
+
 def _check_sentence(warnings: Optional[List[Dict]]) -> str:
     """The unit's warnings as one sentence appended to the spans finding ("" when there are none)."""
     shorts = [w["short"] for w in warnings or [] if w.get("short")]
@@ -539,6 +551,7 @@ def country_findings(country: str, row: Optional[Dict], role_cells: List[Dict], 
             {**base, "ref": "baseline.spans", "title": f"Managers within their span benchmark ({country})",
              "detail": f"{vs['below']} below, {vs['above']} above; {row['single_report_managers']} managers have one "
                        f"direct report. Median span {row['median_span']:g}. A manager's span counts reports in any country."
+                       + _types_sentence(row.get("manager_types"))
                        + _check_sentence(row.get("warnings")),
              "figure": f"{vs['within']} of {row['managers']} managers"},
             {**base, "ref": "baseline.health", "title": f"Structural health score ({country})",
