@@ -26,6 +26,8 @@ const TYPE_LABELS: Record<ManagerTypeKey, string> = {
   supervisor: 'Supervisor', coach: 'Coach', coordinator: 'Coordinator', specialist_lead: 'Specialist lead', leader_of_leaders: 'Leader of leaders',
 };
 
+const SPAN_ROWS = new Set(['Median span', 'Managers within their span benchmark', 'Median span by manager type']);
+
 /** Countries side by side: one column per country, the same measures down the rows. */
 function CountryTable({ countries, reference }: { countries: CountryMetrics[]; reference?: string }) {
   const rows: Array<[string, (c: CountryMetrics) => React.ReactNode]> = [
@@ -56,7 +58,12 @@ function CountryTable({ countries, reference }: { countries: CountryMetrics[]; r
           {rows.map(([label, cell]) => (
             <tr key={label} className="hairline-b">
               <td className="px-6 py-2.5 text-ink">{label}</td>
-              {countries.map((c) => <td key={c.country} className="tabular px-4 py-2.5 text-right font-semibold text-ink">{cell(c)}</td>)}
+              {countries.map((c) => (
+                <td key={c.country} className="tabular px-4 py-2.5 text-right font-semibold text-ink">
+                  {/* Spans built on broken reporting lines mislead: hidden for that unit, layers kept with the warning */}
+                  {c.reporting_lines?.incomplete && SPAN_ROWS.has(label) ? <span className="text-xs font-normal text-faint">hidden: reporting lines incomplete</span> : cell(c)}
+                </td>
+              ))}
             </tr>
           ))}
           <tr className="align-top">
@@ -215,6 +222,16 @@ export default function Metrics() {
 
       {/* Spans */}
       <Section eyebrow="01 · Spans" title="Every manager against the benchmark for their work">
+        {!countries.length && metrics.reporting_lines?.incomplete && (
+          <div className="mb-5" data-testid="broken-lines">
+            <Callout label="Reporting lines" tone="attention">
+              <p>{metrics.reporting_lines.text}</p>
+              <ul className="mt-1 space-y-0.5 text-xs">
+                {metrics.reporting_lines.people.slice(0, 12).map((p) => <li key={p.employee_id}>{p.name} · {p.job_title} — {p.why}</li>)}
+              </ul>
+            </Callout>
+          </div>
+        )}
         {managers > 0 && (
           <div className="card mb-4">
             <div className="flex h-3 w-full overflow-hidden rounded-full" role="img" aria-label={`${below} below, ${within} within, ${above} above benchmark`}>
@@ -319,6 +336,17 @@ export default function Metrics() {
           lede={`A person's ${unit.lower} is where they work. Differences are stated against the largest ${unit.lower}.`}
         >
           <CountryTable countries={countries} reference={metrics.country_reference} />
+          {countries.filter((c) => c.reporting_lines?.incomplete).map((c) => (
+            <div key={c.country} className="mt-4" data-testid="broken-lines">
+              <Callout label={`Reporting lines · ${c.country}`} tone="attention">
+                <p>{c.reporting_lines!.text}</p>
+                <p className="mt-2 text-xs">Fix these in the org file at source (names are shown here only, never exported):</p>
+                <ul className="mt-1 space-y-0.5 text-xs">
+                  {c.reporting_lines!.people.map((p) => <li key={p.employee_id}>{p.name} · {p.job_title} — {p.why}</li>)}
+                </ul>
+              </Callout>
+            </div>
+          ))}
           {countries.some((c) => c.warnings?.length) && (
             <div className="mt-4 space-y-2" data-testid="unit-warnings">
               {countries.filter((c) => c.warnings?.length).map((c) => (

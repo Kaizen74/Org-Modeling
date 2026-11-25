@@ -276,3 +276,74 @@ def test_manager_type_column_any_case_and_unknown_values():
     assert any("Manager type not recognised: Boss" in w for w in result["validation_errors"])
     a = {x["manager_id"]: x for x in MetricsCalculator(employees=result["employees"]).calculate_all_metrics()["span_of_control"]["manager_assessments"]}
     assert (a["E1"]["manager_type_basis"], a["E1"]["benchmark_range"]) == ("Manager type column", [4, 8])
+
+
+# ------------------------------------------------------------- 5. broken reporting lines
+
+def broken_belmar_ramp() -> str:
+    """The PRD's test 10: blank the Line Manager of Belmar's four Ramp Agents."""
+    import csv
+    rows = list(csv.DictReader(io.StringIO(ORG_TEXT)))
+    for r in rows:
+        if r["Country"] == "Belmar" and r["Job Title"] == "Ramp Agent":
+            r["Line Manager"] = r["Line Manager ID"] = ""
+    out = io.StringIO()
+    w = csv.DictWriter(out, fieldnames=list(rows[0]), lineterminator="\n")
+    w.writeheader()
+    w.writerows(rows)
+    return out.getvalue()
+
+
+SPAN_KEYS = {"median_span", "spans_within", "spans_below", "spans_above"}
+
+
+@pytest.mark.asyncio
+async def test_original_file_has_no_broken_lines(client: AsyncClient):
+    await upload(client)
+    m = (await client.get("/api/v1/metrics/latest")).json()["metrics"]
+    for r in m["country_analysis"]:
+        assert r["reporting_lines"]["incomplete"] is False and r["reporting_lines"]["supervisors_no_reports"] == 0
+    await link(client, "Belmar")
+    metrics = by_ref(await belmar_file(client))["baseline.layers"]["metrics"]
+    assert metrics["supervisors_no_reports"] == 0 and SPAN_KEYS <= set(metrics)
+
+
+@pytest.mark.asyncio
+async def test_blanked_ramp_agents_hide_belmars_spans(client: AsyncClient):
+    await upload(client, broken_belmar_ramp(), "broken.csv")
+    m = (await client.get("/api/v1/metrics/latest")).json()["metrics"]
+    belmar = next(r for r in m["country_analysis"] if r["country"] == "Belmar")["reporting_lines"]
+    assert belmar["incomplete"] and belmar["supervisors_no_reports"] == 1 and belmar["people_without_manager"] == 4
+    assert belmar["text"] == ("Reporting lines look incomplete in Belmar: 1 supervisory role has nobody reporting to it and "
+                              "4 people have no line manager although not the top of the organization. Spans and layers here are not reliable.")
+    # The people concerned are named on screen (Shift Supervisor and the four Ramp Agents)…
+    assert sorted(p["job_title"] for p in belmar["people"]) == ["Ramp Agent"] * 4 + ["Shift Supervisor"]
+    # …but the export carries counts only, and no span keys
+    await link(client, "Belmar")
+    ret = await belmar_file(client)
+    f = by_ref(ret)
+    for ref in BASELINE_REFS:
+        assert f[ref]["metrics"]["supervisors_no_reports"] >= 1 and not SPAN_KEYS & set(f[ref]["metrics"])
+    assert "reporting lines look incomplete (1 supervisory role has nobody reporting; 4 people have no line manager)" in f["baseline.spans"]["detail"]
+    assert not PRIVATE.search(json.dumps(ret))
+    # Arden and Caldera are untouched
+    others = {r["country"]: r["reporting_lines"]["incomplete"] for r in m["country_analysis"]}
+    assert others == {"Arden": False, "Belmar": True, "Caldera": False}
+    # The whole-organization file doesn't send spans it shouldn't trust either
+    whole = by_ref((await client.get("/api/v1/compass/return")).json())["baseline.layers"]["metrics"]
+    assert not SPAN_KEYS & set(whole) and whole["supervisors_no_reports"] == 1
+
+
+@pytest.mark.asyncio
+async def test_supervisory_words_and_confirmed_types_count(client: AsyncClient):
+    await upload(client)
+    # Adding "Manager" flags the two Cargo & Pharma Managers in Belmar, who have nobody reporting to them
+    await client.put("/api/v1/structure/settings", json={"supervisory_words": ["Supervisor", "Manager"]})
+    m = (await client.get("/api/v1/metrics/latest")).json()["metrics"]
+    belmar = next(r for r in m["country_analysis"] if r["country"] == "Belmar")["reporting_lines"]
+    assert belmar["supervisors_no_reports"] == 2 and belmar["incomplete"] is False  # 2 of 11: not more than a quarter
+    await client.post("/api/v1/structure/settings/reset")
+    # A confirmed type marks someone as supervising, whatever their title
+    await client.put("/api/v1/structure/manager-type", json={"employee_id": "E040", "manager_type": "coach"})  # a Load Control officer
+    m = (await client.get("/api/v1/metrics/latest")).json()["metrics"]
+    assert next(r for r in m["country_analysis"] if r["country"] == "Belmar")["reporting_lines"]["supervisors_no_reports"] == 1

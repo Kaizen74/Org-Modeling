@@ -9,6 +9,7 @@ reporting chain, total cost = sum of the fixture's Salary column.
 
 import networkx as nx
 from typing import Dict, List, Optional
+import re
 import statistics
 
 from .org_graph import normalize_employees, build_org_graph, display_name, reporting_layers
@@ -26,7 +27,7 @@ import math
 
 # Bump when the shape or meaning of calculated metrics changes, so cached
 # metrics from older uploads are recalculated instead of shown stale
-METRICS_VERSION = 8
+METRICS_VERSION = 9
 
 
 class MetricsCalculator:
@@ -78,6 +79,7 @@ class MetricsCalculator:
             "health_indicators": self._health_indicators(),
             "department_analysis": self._department_analysis(),
             **self._country_analysis(),
+            "reporting_lines": self._reporting_lines(list(self.graph.nodes()), "the organization"),
             "data_quality": {"issues": self.data_issues[:20]}
         }
 
@@ -425,6 +427,52 @@ class MetricsCalculator:
             })
         return sorted(result, key=lambda d: -d["headcount"])
 
+    def _is_supervisory(self, node: str) -> bool:
+        """A job title with a supervisory word (whole word or phrase, any case), or a confirmed manager type."""
+        if self._manager_type(node)["status"] == "confirmed":
+            return True
+        title = str(self.graph.nodes[node].get("job_title") or "")
+        return any(re.search(rf"(?<!\w){re.escape(w.strip())}(?!\w)", title, re.IGNORECASE)
+                   for w in self.supervisory_words if w.strip())
+
+    def _main_top(self) -> Optional[str]:
+        """The top of the organization: the person with no manager who has the most people below them."""
+        if getattr(self, "_top_cache", False) is False:
+            roots = [n for n in self.graph.nodes() if self.graph.in_degree(n) == 0]
+            self._top_cache = max(roots, key=lambda r: (len(nx.descendants(self.graph, r)), r)) if roots else None
+        return self._top_cache
+
+    def _reporting_lines(self, people: List[str], where: str) -> Dict:
+        """
+        Signs that reporting lines are broken among these people: supervisory
+        roles with nobody reporting to them, and people with no line manager
+        who aren't the top of the organization. When they are too many, spans
+        and layers here are not reliable: spans are hidden and left out of exports.
+        Names are listed for the screen only; exports use the counts.
+        """
+        top = self._main_top()
+        no_reports = [n for n in people if self.graph.out_degree(n) == 0 and self._is_supervisory(n)]
+        loose = [n for n in people if self.graph.in_degree(n) == 0 and n != top]
+        managers = sum(1 for n in people if self.graph.out_degree(n) > 0)
+        incomplete = len(no_reports) * 4 > managers + len(no_reports) or bool(loose)
+        text = ""
+        if incomplete:
+            parts = []
+            if no_reports:
+                parts.append(f"{len(no_reports)} supervisory role{'s have' if len(no_reports) != 1 else ' has'} nobody reporting to {'them' if len(no_reports) != 1 else 'it'}")
+            if loose:
+                parts.append(f"{len(loose)} {'people have' if len(loose) != 1 else 'person has'} no line manager although not the top of the organization")
+            text = f"Reporting lines look incomplete in {where}: {' and '.join(parts)}. Spans and layers here are not reliable."
+        person = lambda n, why: {"employee_id": n, "name": display_name(self.graph, n),  # noqa: E731
+                                 "job_title": self.graph.nodes[n].get("job_title", ""), "why": why}
+        return {
+            "supervisors_no_reports": len(no_reports),
+            "people_without_manager": len(loose),
+            "incomplete": incomplete,
+            "text": text,
+            "people": [person(n, "nobody reports to them") for n in no_reports] + [person(n, "no line manager") for n in loose],
+        }
+
     def _spans_by_type(self, managers: List[str]) -> Dict:
         """Median span per manager type (confirmed or suggested), and how many managers have no confirmed type."""
         groups: Dict[str, List[int]] = {}
@@ -502,6 +550,7 @@ class MetricsCalculator:
                 "health_score": health["health_score"],
                 "warnings": self._unit_warnings(people, managers),
                 "manager_types": self._spans_by_type(managers),
+                "reporting_lines": self._reporting_lines(people, country),
                 "health_components": health["components"],
             })
         rows.sort(key=lambda r: (r["country"] == self.COUNTRY_NOT_STATED, -r["headcount"], r["country"]))

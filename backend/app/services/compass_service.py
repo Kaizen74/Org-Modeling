@@ -373,14 +373,15 @@ def collect_findings(metrics: Dict, ai_analysis: Dict, comparison: Optional[Dict
                            "above": vs.get("Above benchmark", 0)},
                     single_report_managers=span.get("single_report_managers", 0),
                     health_score=health.get("health_score", 0), total_cost=cost.get("total_cost", 0),
-                    cost_sources=cost.get("sources"))}
+                    cost_sources=cost.get("sources"), reporting_lines=metrics.get("reporting_lines"))}
         findings += [
             {**base, "ref": "baseline.layers", "title": "Layers in the reporting chain",
              "detail": f"Counted from who reports to whom; the Level column declares {layers.get('declared_layers', 0)}.",
              "figure": f"{layers.get('total_layers', 0)} layers"},
             {**base, "ref": "baseline.spans", "title": "Managers within their span benchmark",
              "detail": f"{vs.get('Below benchmark', 0)} below, {vs.get('Above benchmark', 0)} above; "
-                       f"{span.get('single_report_managers', 0)} managers have one direct report. Median span {span.get('median_span', 0)}.",
+                       f"{span.get('single_report_managers', 0)} managers have one direct report. Median span {span.get('median_span', 0)}."
+                       + _check_sentence([], metrics.get("reporting_lines")),
              "figure": f"{vs.get('Within benchmark', 0)} of {managers} managers"},
             {**base, "ref": "baseline.health", "title": "Structural health score",
              "detail": "Weighted from span fit, layers for this size, manager ratio and single-report managers.",
@@ -472,19 +473,30 @@ def _types_sentence(types: Optional[Dict]) -> str:
     return " " + ("Median span by type: " + ", ".join(parts) + ("; " + tail if tail else "") if parts else tail[0].upper() + tail[1:]) + "."
 
 
-def _check_sentence(warnings: Optional[List[Dict]]) -> str:
+def _check_sentence(warnings: Optional[List[Dict]], reporting_lines: Optional[Dict] = None) -> str:
     """The unit's warnings as one sentence appended to the spans finding ("" when there are none)."""
     shorts = [w["short"] for w in warnings or [] if w.get("short")]
+    lines = reporting_lines or {}
+    if lines.get("incomplete"):
+        why = []
+        if lines.get("supervisors_no_reports"):
+            n = lines["supervisors_no_reports"]
+            why.append(f"{n} supervisory role{'s have' if n != 1 else ' has'} nobody reporting")
+        if lines.get("people_without_manager"):
+            n = lines["people_without_manager"]
+            why.append(f"{n} {'people have' if n != 1 else 'person has'} no line manager")
+        shorts.insert(0, f"reporting lines look incomplete ({'; '.join(why)}), so spans are not reliable and are left out of the figures")
     return f" Check: {'; '.join(shorts)}." if shorts else ""
 
 
 def structure_metrics(*, headcount: int, managers: int, layers: int, median_span, spans: Dict[str, int],
                       single_report_managers: int, health_score: int, total_cost, cost_sources: Optional[Dict] = None,
-                      extra: Optional[Dict] = None) -> Dict:
+                      reporting_lines: Optional[Dict] = None, extra: Optional[Dict] = None) -> Dict:
     """
     The numbers-only `metrics` object on structural_baseline findings. A key
     that could not be worked out is left out, never sent as 0: no managers
-    means no span to judge; no salary from either source means no cost.
+    means no span to judge; no salary from either source means no cost; reporting
+    lines that look incomplete mean spans can't be trusted, so they are left out.
     """
     m = {
         "headcount": headcount,
@@ -494,7 +506,9 @@ def structure_metrics(*, headcount: int, managers: int, layers: int, median_span
         "single_report_managers": single_report_managers,
         "health_score": health_score,
     }
-    if managers:
+    if reporting_lines is not None:
+        m["supervisors_no_reports"] = reporting_lines.get("supervisors_no_reports", 0)  # 0 = checked, none found
+    if managers and not (reporting_lines or {}).get("incomplete"):
         m.update(median_span=_num(median_span), spans_within=spans.get("within", 0),
                  spans_below=spans.get("below", 0), spans_above=spans.get("above", 0))
     known = (cost_sources or {}).get("file", headcount) + (cost_sources or {}).get("grade", 0)
@@ -542,7 +556,8 @@ def country_findings(country: str, row: Optional[Dict], role_cells: List[Dict], 
                 "metrics": structure_metrics(
                     headcount=row["headcount"], managers=row["managers"], layers=row["layers"],
                     median_span=row["median_span"], spans=vs, single_report_managers=row["single_report_managers"],
-                    health_score=row["health_score"], total_cost=row["total_cost"], cost_sources=row.get("cost_sources"))}
+                    health_score=row["health_score"], total_cost=row["total_cost"], cost_sources=row.get("cost_sources"),
+                    reporting_lines=row.get("reporting_lines"))}
         out += [
             {**base, "ref": "baseline.layers", "title": f"Layers in the reporting chain ({country})",
              "detail": f"Counted from who reports to whom, for the people whose Country is {country}, "
@@ -552,7 +567,7 @@ def country_findings(country: str, row: Optional[Dict], role_cells: List[Dict], 
              "detail": f"{vs['below']} below, {vs['above']} above; {row['single_report_managers']} managers have one "
                        f"direct report. Median span {row['median_span']:g}. A manager's span counts reports in any country."
                        + _types_sentence(row.get("manager_types"))
-                       + _check_sentence(row.get("warnings")),
+                       + _check_sentence(row.get("warnings"), row.get("reporting_lines")),
              "figure": f"{vs['within']} of {row['managers']} managers"},
             {**base, "ref": "baseline.health", "title": f"Structural health score ({country})",
              "detail": "Weighted from span fit, layers for this size, manager ratio and single-report managers, for this country's people.",

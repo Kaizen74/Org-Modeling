@@ -193,6 +193,7 @@ export interface OrgMetrics {
   country_analysis?: CountryMetrics[];
   country_reference?: string;
   unit_label?: string; // the unit column's own word (Country, Station, Asset…)
+  reporting_lines?: ReportingLines; // the whole organization
   department_analysis_by_country?: Record<string, DepartmentMetrics[]>;
   metrics_version?: number;
 }
@@ -214,6 +215,16 @@ export interface CountryMetrics {
   cost_sources?: { file: number; grade: number; none: number }; // where each person's salary came from
   warnings?: Array<{ key: string; text: string; short: string }>; // when this unit's numbers would mislead
   manager_types?: ManagerTypeSummary;
+  reporting_lines?: ReportingLines;
+}
+
+/** Signs that reporting lines are broken; names are for the screen only (exports carry counts). */
+export interface ReportingLines {
+  supervisors_no_reports: number;
+  people_without_manager: number;
+  incomplete: boolean;
+  text: string;
+  people: Array<{ employee_id: string; name: string; job_title: string; why: string }>;
 }
 
 // Key gap can be a string or an object with detailed info
