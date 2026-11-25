@@ -152,3 +152,53 @@ def test_unit_headers_any_case_first_in_order():
     assert any("Several unit columns found" in w and "'STATION' is used" in w for w in result["validation_errors"])
     plain = OrgCSVParser(io.BytesIO("Name,Job Title,Grade,Level,Line Manager\nAna,CEO,SVP,1,Top of Org\n".encode())).parse()
     assert plain["metadata"]["unit_label"] == "" and plain["employees"][0]["country"] == ""
+
+
+# ------------------------------------------------------------- 3. unit warnings
+
+WARN_CSV = ("Employee ID,Name,Job Title,Grade,Level,Line Manager,Country,Salary\n"
+            "E1,Ana Lee,CEO,G1,1,,Arden,300000\n"
+            "E2,Bo Lim,Manager,G2,2,Ana Lee,Arden,150000\n"
+            + "".join(f"E{10+i},P{i},Agent,G5,3,Bo Lim,Arden,50000\n" for i in range(9))
+            + "E3,Cy Ong,Lead,G3,2,Ana Lee,Dorne,\n"  # Dorne: 4 people, 2 with no salary and no grade table
+            + "E4,Di Koh,Agent,G9,3,Cy Ong,Dorne,\n"
+            + "E5,Ed Tan,Agent,G5,3,Cy Ong,Dorne,50000\n"
+            + "E6,Fa Lin,Agent,G5,3,Cy Ong,Dorne,50000\n")
+
+
+def test_unit_warnings_in_words():
+    from app.parsers.csv_parser import OrgCSVParser
+    from app.services.metrics_service import MetricsCalculator
+    employees = OrgCSVParser(io.BytesIO(WARN_CSV.encode())).parse()["employees"]
+    rows = {r["country"]: r for r in MetricsCalculator(employees=employees).calculate_all_metrics()["country_analysis"]}
+    dorne = {w["key"]: w for w in rows["Dorne"]["warnings"]}
+    assert dorne["small_unit"]["text"] == "Only 4 people: spans and layers are not meaningful at this size."
+    assert dorne["cost_incomplete"]["text"] == "2 of 4 people have no salary and no grade-table match: people cost is incomplete."
+    # Arden's CEO mostly manages Dorne's lead? No: she manages Arden's manager and Dorne's lead (1 of 2 elsewhere, not most)
+    assert "managers_elsewhere" not in {w["key"] for w in rows["Arden"]["warnings"]}
+
+
+def test_managers_mostly_managing_other_units_are_flagged():
+    from app.parsers.csv_parser import OrgCSVParser
+    from app.services.metrics_service import MetricsCalculator
+    csv = ("Employee ID,Name,Job Title,Grade,Level,Line Manager,Country,Salary\n"
+           "E1,Ana,CEO,G1,1,,Hub,1\n" + "".join(f"E{10+i},P{i},Agent,G5,2,Ana,Field,1\n" for i in range(12)))
+    rows = {r["country"]: r for r in MetricsCalculator(employees=OrgCSVParser(io.BytesIO(csv.encode())).parse()["employees"]).calculate_all_metrics()["country_analysis"]}
+    w = {x["key"]: x for x in rows["Hub"]["warnings"]}
+    assert w["managers_elsewhere"]["text"].startswith("1 of 1 managers here mostly manage people in other units")
+
+
+@pytest.mark.asyncio
+async def test_warnings_go_into_the_spans_detail_as_one_sentence(client: AsyncClient):
+    await upload(client, WARN_CSV)
+    dorne = copy.deepcopy(PACKETS["Belmar"])
+    dorne["engagement"].update(country="Dorne", key="MERIDIANDO")
+    await client.post("/api/v1/compass/import", json={"packet": dorne})
+    spans = by_ref((await client.get("/api/v1/compass/return", params={"link": "Dorne"})).json())["baseline.spans"]
+    assert spans["detail"].startswith("1 below, 0 above; 0 managers have one direct report. Median span 3. "
+                                      "A manager's span counts reports in any country. Check:")  # existing wording kept, sentence added
+    assert re.search(r"Check: only 4 people, so spans and layers are not meaningful; people cost is incomplete \(2 of 4 have no salary\)\.$", spans["detail"])
+    # The sample org file's units are all 26+ people with full salaries: no warnings, detail unchanged
+    await upload(client)
+    await link(client, "Belmar")
+    assert "Check:" not in by_ref(await belmar_file(client))["baseline.spans"]["detail"]

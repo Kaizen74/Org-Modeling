@@ -460,6 +460,12 @@ def _num(v):
     return int(v) if isinstance(v, float) and v.is_integer() else v
 
 
+def _check_sentence(warnings: Optional[List[Dict]]) -> str:
+    """The unit's warnings as one sentence appended to the spans finding ("" when there are none)."""
+    shorts = [w["short"] for w in warnings or [] if w.get("short")]
+    return f" Check: {'; '.join(shorts)}." if shorts else ""
+
+
 def structure_metrics(*, headcount: int, managers: int, layers: int, median_span, spans: Dict[str, int],
                       single_report_managers: int, health_score: int, total_cost, cost_sources: Optional[Dict] = None,
                       extra: Optional[Dict] = None) -> Dict:
@@ -532,7 +538,8 @@ def country_findings(country: str, row: Optional[Dict], role_cells: List[Dict], 
              "figure": f"{row['layers']} layers"},
             {**base, "ref": "baseline.spans", "title": f"Managers within their span benchmark ({country})",
              "detail": f"{vs['below']} below, {vs['above']} above; {row['single_report_managers']} managers have one "
-                       f"direct report. Median span {row['median_span']:g}. A manager's span counts reports in any country.",
+                       f"direct report. Median span {row['median_span']:g}. A manager's span counts reports in any country."
+                       + _check_sentence(row.get("warnings")),
              "figure": f"{vs['within']} of {row['managers']} managers"},
             {**base, "ref": "baseline.health", "title": f"Structural health score ({country})",
              "detail": "Weighted from span fit, layers for this size, manager ratio and single-report managers, for this country's people.",

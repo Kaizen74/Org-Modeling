@@ -189,6 +189,8 @@ export interface CountryMetrics {
   health_score: number;
   health_components: HealthComponent[];
   differences: string[]; // against the largest country, in words and a symbol
+  cost_sources?: { file: number; grade: number; none: number }; // where each person's salary came from
+  warnings?: Array<{ key: string; text: string; short: string }>; // when this unit's numbers would mislead
 }
 
 // Key gap can be a string or an object with detailed info

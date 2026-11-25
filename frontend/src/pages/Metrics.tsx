@@ -290,6 +290,15 @@ export default function Metrics() {
           lede={`A person's ${unit.lower} is where they work. Differences are stated against the largest ${unit.lower}.`}
         >
           <CountryTable countries={countries} reference={metrics.country_reference} />
+          {countries.some((c) => c.warnings?.length) && (
+            <div className="mt-4 space-y-2" data-testid="unit-warnings">
+              {countries.filter((c) => c.warnings?.length).map((c) => (
+                <Callout key={c.country} label={`Check ${c.country}`} tone="developing">
+                  <ul className="space-y-0.5">{c.warnings!.map((w) => <li key={w.key}>{w.text}</li>)}</ul>
+                </Callout>
+              ))}
+            </div>
+          )}
           <p className="mt-3 text-xs text-faint">
             Layers for a {unit.lower} are counted from the top of the whole organization down to its deepest person: decision distance starts at the top.
             A manager's span counts all their direct reports, wherever those people work, and the manager is listed under their own {unit.lower}.

@@ -446,6 +446,7 @@ class MetricsCalculator:
                 "total_cost": round(cost, 0),
                 "cost_sources": self._cost_sources(people),
                 "health_score": health["health_score"],
+                "warnings": self._unit_warnings(people, managers),
                 "health_components": health["components"],
             })
         rows.sort(key=lambda r: (r["country"] == self.COUNTRY_NOT_STATED, -r["headcount"], r["country"]))
@@ -461,6 +462,32 @@ class MetricsCalculator:
         }
 
     COUNTRY_NOT_STATED = "Not stated"
+    SMALL_UNIT = 10  # below this, spans and layers are not meaningful
+
+    def _unit_warnings(self, people: List[str], managers: List[str]) -> List[Dict]:
+        """
+        When a unit's numbers would mislead, in words: `text` for the screen and
+        `short` to join into one sentence in the exported spans finding.
+        """
+        out = []
+        n = len(people)
+        if n < self.SMALL_UNIT:
+            out.append({"key": "small_unit",
+                        "text": f"Only {n} {'person' if n == 1 else 'people'}: spans and layers are not meaningful at this size.",
+                        "short": f"only {n} {'person' if n == 1 else 'people'}, so spans and layers are not meaningful"})
+        missing = self._cost_sources(people)["none"]
+        if missing * 4 > n:
+            out.append({"key": "cost_incomplete",
+                        "text": f"{missing} of {n} people have no salary and no grade-table match: people cost is incomplete.",
+                        "short": f"people cost is incomplete ({missing} of {n} have no salary)"})
+        here = self._country_of(people[0]) if people else ""
+        outward = [m for m in managers
+                   if sum(1 for r in self.graph.successors(m) if self._country_of(r) != here) * 2 > self.graph.out_degree(m)]
+        if managers and len(outward) * 2 > len(managers):
+            out.append({"key": "managers_elsewhere",
+                        "text": f"{len(outward)} of {len(managers)} managers here mostly manage people in other units: spans here are inflated or deflated.",
+                        "short": f"{len(outward)} of {len(managers)} managers mostly manage people in other units, so spans are inflated or deflated"})
+        return out
 
     @staticmethod
     def _country_differences(r: Dict, ref: Dict) -> List[str]:
