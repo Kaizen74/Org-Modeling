@@ -197,7 +197,7 @@ export default function Metrics() {
       <PageHeader
         eyebrow="01 · Diagnose — structure"
         title={headline}
-        lede={`Managers tagged Operational in the Work Type column are judged against 10–20 direct reports; all other managers against 5–10. Average span ${span.average_span.toFixed(1)}, median ${span.median_span}.`}
+        lede={`Each manager is compared with the span range for their manager type (ranges in Settings). A manager with no type keeps the Work Type rule: Operational 10–20, others 5–10. Average span ${span.average_span.toFixed(1)}, median ${span.median_span}.`}
         actions={
           <>
             <button onClick={handleRecalculate} disabled={recalculating} className="btn btn-quiet">
@@ -304,7 +304,9 @@ export default function Metrics() {
                     {a.manager_type_status === 'confirmed' && <span className="ml-1.5 text-xs text-faint">confirmed</span>}
                     {!a.manager_type && <span className="block text-xs text-faint">{a.work_type === 'operational' ? 'Frontline operational' : 'Other'} (Work Type rule)</span>}
                     {/* The default is explained under the table; show the basis only where a tag set it */}
-                    {!a.work_type_basis.startsWith('not tagged') && <span className="block text-xs text-faint">{a.work_type_basis}</span>}
+                    {a.manager_type
+                      ? <span className="block text-xs text-faint">{a.manager_type_basis}</span>
+                      : !a.work_type_basis.startsWith('not tagged') && <span className="block text-xs text-faint">{a.work_type_basis}</span>}
                   </td>
                   <td className="tabular px-4 py-3 text-right font-semibold text-ink">{a.span}</td>
                   <td className="tabular px-4 py-3 text-right text-secondary">{a.benchmark_range[0]}–{a.benchmark_range[1]}</td>

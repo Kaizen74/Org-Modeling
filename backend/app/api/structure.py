@@ -4,6 +4,7 @@ words that mark a supervisory role (app-wide, Settings page), and manager
 types set on screen for the latest upload. Every change recalculates metrics.
 """
 
+import re
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,6 +17,7 @@ from ..models.models import OrgAnalysis
 from ..resources.benchmarks_reference import DEFAULT_SUPERVISORY_WORDS, MANAGER_TYPES
 from ..services.metrics_store import ensure_metrics
 from ..services import structure_settings as st
+from ..services import role_families as rf
 
 router = APIRouter(prefix="/api/v1/structure", tags=["structure"])
 
@@ -94,3 +96,138 @@ async def confirm_suggested_types(db: AsyncSession = Depends(get_session)):
     inputs.manager_types = {**(inputs.manager_types or {}), **suggested}
     await db.commit()
     return {"confirmed": len(suggested), "metrics": await ensure_metrics(analysis, db)}
+
+
+# ------------------------------------------------------------------ role families
+
+class FamilyIn(BaseModel):
+    name: str
+    titles: List[str]
+
+
+class FamilyUpdate(BaseModel):
+    name: Optional[str] = None
+    titles: Optional[List[str]] = None
+    relates_to: Optional[List[str]] = None  # Compass cluster refs the family serves
+
+
+class MergeIn(BaseModel):
+    with_ref: str
+
+
+class FamilyReasonIn(BaseModel):
+    unit: str
+    reason_class: Optional[str] = None  # None clears the reason for that unit
+    text: str = ""
+    compared_with: str = ""
+
+
+def _units(analysis: OrgAnalysis) -> List[str]:
+    return sorted({e.get("country") for e in analysis.raw_data["employees"] if e.get("country")})
+
+
+def _titles(analysis: OrgAnalysis) -> set:
+    return {str(e.get("job_title", "")).strip() for e in analysis.raw_data["employees"] if e.get("job_title")}
+
+
+async def _cluster_refs(analysis: OrgAnalysis, db: AsyncSession) -> List[Dict]:
+    from .compass import all_refs, linked  # the Compass link is optional
+    return [r for r in all_refs(await linked(analysis, db)) if re.fullmatch(r"CAP-\d+", r["ref"])]
+
+
+async def _families_view(analysis: OrgAnalysis, db: AsyncSession) -> Dict:
+    inputs = await st.load_inputs(analysis, db)
+    v = rf.view(analysis.raw_data["employees"], (inputs.families if inputs else None) or [],
+                (inputs.family_reasons if inputs else None) or {}, _units(analysis))
+    v["unit_label"] = (analysis.raw_data or {}).get("unit_label") or ("Country" if v["units"] else "")
+    v["cluster_refs"] = await _cluster_refs(analysis, db)
+    return v
+
+
+@router.get("/families")
+async def get_families(db: AsyncSession = Depends(get_session)):
+    analysis = await _latest(db)
+    return await _families_view(analysis, db)
+
+
+@router.post("/families")
+async def confirm_family(request: FamilyIn, db: AsyncSession = Depends(get_session)):
+    """Confirm a family (from a suggestion or your own grouping); it gets the next RF number, never reused."""
+    analysis = await _latest(db)
+    inputs = await st.load_inputs(analysis, db, create=True)
+    try:
+        families, seq = rf.confirm(inputs.families or [], inputs.family_seq or 0, request.name, request.titles, _titles(analysis))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    inputs.families, inputs.family_seq = families, seq
+    await db.commit()
+    return await _families_view(analysis, db)
+
+
+@router.put("/families/{ref}")
+async def update_family(ref: str, request: FamilyUpdate, db: AsyncSession = Depends(get_session)):
+    """Rename (the ID stays), change its titles, or link the Compass clusters it serves."""
+    analysis = await _latest(db)
+    inputs = await st.load_inputs(analysis, db, create=True)
+    valid = {r["ref"] for r in await _cluster_refs(analysis, db)}
+    try:
+        inputs.families = rf.update(inputs.families or [], ref, _titles(analysis), name=request.name,
+                                    titles=request.titles, relates_to=request.relates_to, valid_refs=valid)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    await db.commit()
+    return await _families_view(analysis, db)
+
+
+@router.post("/families/{ref}/merge")
+async def merge_families(ref: str, request: MergeIn, db: AsyncSession = Depends(get_session)):
+    """Merge two families: the older ID stays; the other is retired and never reused."""
+    analysis = await _latest(db)
+    inputs = await st.load_inputs(analysis, db, create=True)
+    try:
+        families, reasons, kept = rf.merge(inputs.families or [], inputs.family_reasons or {}, ref, request.with_ref)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    inputs.families, inputs.family_reasons = families, reasons
+    await db.commit()
+    return {"kept": kept, **await _families_view(analysis, db)}
+
+
+@router.post("/families/{ref}/retire")
+async def retire_family(ref: str, db: AsyncSession = Depends(get_session)):
+    analysis = await _latest(db)
+    inputs = await st.load_inputs(analysis, db, create=True)
+    try:
+        inputs.families, inputs.family_reasons = rf.retire(inputs.families or [], inputs.family_reasons or {}, ref)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    await db.commit()
+    return await _families_view(analysis, db)
+
+
+@router.put("/families/{ref}/reason")
+async def set_family_reason(ref: str, request: FamilyReasonIn, db: AsyncSession = Depends(get_session)):
+    """Why a family is, or isn't, in one unit: Required, Chosen, Inherited or Not known yet, with a sentence."""
+    analysis = await _latest(db)
+    units = _units(analysis)
+    if request.unit not in units:
+        raise HTTPException(status_code=400, detail=f"'{request.unit}' is not a unit in the uploaded org file.")
+    if request.reason_class is not None and request.reason_class not in rf.REASON_CLASSES:
+        raise HTTPException(status_code=400, detail="Reason must be Required, Chosen, Inherited or Not known yet.")
+    compared = request.compared_with.strip()
+    if compared and (compared == request.unit or compared not in units):
+        raise HTTPException(status_code=400, detail="'Compared with' must be another unit in the org file.")
+    inputs = await st.load_inputs(analysis, db, create=True)
+    if not any(f["ref"] == ref for f in rf.active(inputs.families or [])):
+        raise HTTPException(status_code=404, detail=f"No family {ref}")
+    reasons = {k: dict(v) for k, v in (inputs.family_reasons or {}).items()}
+    per_unit = reasons.setdefault(ref, {})
+    if request.reason_class is None:
+        per_unit.pop(request.unit, None)
+    else:
+        per_unit[request.unit] = {"reason_class": request.reason_class, "text": request.text.strip(), "compared_with": compared}
+    inputs.family_reasons = reasons
+    await db.commit()
+    return await _families_view(analysis, db)

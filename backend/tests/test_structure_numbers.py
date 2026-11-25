@@ -347,3 +347,98 @@ async def test_supervisory_words_and_confirmed_types_count(client: AsyncClient):
     await client.put("/api/v1/structure/manager-type", json={"employee_id": "E040", "manager_type": "coach"})  # a Load Control officer
     m = (await client.get("/api/v1/metrics/latest")).json()["metrics"]
     assert next(r for r in m["country_analysis"] if r["country"] == "Belmar")["reporting_lines"]["supervisors_no_reports"] == 1
+
+
+# ------------------------------------------------------------- 6. role families
+
+FAMILIES = [  # the PRD's test 7, in confirmation order
+    ("Load control", lambda t: t.startswith("Load Control")),
+    ("Ramp handling", lambda t: t in ("Ramp Agent", "Shift Supervisor")),
+    ("Pricing and revenue management", lambda t: "Pricing" in t),
+    ("Analytics and AI", lambda t: "Analytics" in t),
+    ("Disruption control", lambda t: "Duty Controller" in t),
+    ("Finance", lambda t: t.startswith("Finance ")),
+]
+
+
+async def confirm_prd_families(client):
+    titles = [t["title"] for t in (await client.get("/api/v1/structure/families")).json()["titles"]]
+    for name, rule in FAMILIES:
+        r = await client.post("/api/v1/structure/families", json={"name": name, "titles": [t for t in titles if rule(t)]})
+        assert r.status_code == 200, r.text
+    return r.json()
+
+
+@pytest.mark.asyncio
+async def test_role_families_in_belmars_file_match_the_sample(client: AsyncClient):
+    await upload(client)
+    view = await confirm_prd_families(client)
+    assert [f["ref"] for f in view["families"]] == [f"RF-0{i}" for i in range(1, 7)]
+    await client.put("/api/v1/structure/families/RF-03/reason", json={
+        "unit": "Belmar", "reason_class": "chosen", "compared_with": "Arden",
+        "text": "Created in 2023 when Belmar won its two largest renewal contracts."})
+    await link(client, "Belmar")
+    ours = {f["ref"]: f for f in (await belmar_file(client))["findings"] if f["kind"] == "role_family"}
+    sample = {f["ref"]: f for f in SAMPLE["findings"] if f["kind"] == "role_family"}
+    assert [ours[r]["metrics"]["headcount"] for r in sorted(ours)] == [2, 5, 1, 0, 0, 2]
+    assert ours == sample  # field for field
+
+
+@pytest.mark.asyncio
+async def test_roles_across_units(client: AsyncClient):
+    await upload(client)
+    view = await confirm_prd_families(client)
+    fam = {f["ref"]: f for f in view["families"]}
+    assert (fam["RF-03"]["presence"], fam["RF-03"]["only_in"]) == ("only", "Belmar")
+    assert fam["RF-04"]["presence"] == "some" and fam["RF-04"]["by_unit"] == {"Arden": 1, "Belmar": 0, "Caldera": 1}
+    assert fam["RF-05"]["presence"] == "some"
+    assert {fam[r]["presence"] for r in ("RF-01", "RF-02", "RF-06")} == {"every"}
+    assert view["unassigned"] == 26 - 8  # every other title still waits for a family
+    suggested = {s["name"] for s in (await client.get("/api/v1/structure/families")).json()["suggestions"]}
+    assert "Finance" not in suggested and "Cargo" in suggested  # confirmed titles leave the suggestions
+
+
+@pytest.mark.asyncio
+async def test_family_ids_rename_merge_retire_never_reused(client: AsyncClient):
+    await upload(client)
+    await confirm_prd_families(client)
+    # Rename keeps the ID
+    v = (await client.put("/api/v1/structure/families/RF-05", json={"name": "Disruption and duty control"})).json()
+    assert next(f for f in v["families"] if f["ref"] == "RF-05")["name"] == "Disruption and duty control"
+    # A title belongs to one family: moving it takes it from the other
+    v = (await client.put("/api/v1/structure/families/RF-01", json={"titles": ["Load Control / Weight & Balance Officer", "Shift Supervisor"]})).json()
+    fam = {f["ref"]: f for f in v["families"]}
+    assert "Shift Supervisor" not in fam["RF-02"]["titles"] and "Shift Supervisor" in fam["RF-01"]["titles"]
+    # Merge keeps the older ID, whichever way round
+    await client.put("/api/v1/structure/families/RF-05/reason", json={"unit": "Arden", "reason_class": "required", "text": "Hub licence."})
+    v = (await client.post("/api/v1/structure/families/RF-05/merge", json={"with_ref": "RF-04"})).json()
+    assert v["kept"] == "RF-04" and {"ref": "RF-05", "name": "Disruption and duty control", "merged_into": "RF-04"} in v["retired"]
+    kept = next(f for f in v["families"] if f["ref"] == "RF-04")
+    assert kept["reasons"]["Arden"]["text"] == "Hub licence." and kept["by_unit"]["Caldera"] == 3
+    # Retired numbers are never reused
+    v = (await client.post("/api/v1/structure/families/RF-06/retire")).json()
+    v = (await client.post("/api/v1/structure/families", json={"name": "Technology", "titles": ["Head of Technology"]})).json()
+    assert [f["ref"] for f in v["families"]][-1] == "RF-07"
+    # Plain refusals
+    assert (await client.post("/api/v1/structure/families", json={"name": "Load control", "titles": ["Ramp Agent"]})).status_code == 400
+    assert (await client.post("/api/v1/structure/families", json={"name": "Wizards", "titles": ["Chief Wizard"]})).status_code == 400
+    assert (await client.put("/api/v1/structure/families/RF-05", json={"name": "x"})).status_code == 404
+    assert (await client.put("/api/v1/structure/families/RF-01/reason", json={"unit": "Narnia", "reason_class": "chosen"})).status_code == 400
+    # Linking to Compass clusters: only clusters from linked packets
+    assert (await client.put("/api/v1/structure/families/RF-01", json={"relates_to": ["CAP-01"]})).status_code == 400
+    await link(client, "Belmar")
+    v = (await client.put("/api/v1/structure/families/RF-01", json={"relates_to": ["CAP-01"]})).json()
+    assert next(f for f in v["families"] if f["ref"] == "RF-01")["relates_to"] == ["CAP-01"]
+    assert by_ref(await belmar_file(client))["RF-01"]["relates_to"] == ["CAP-01"]
+
+
+@pytest.mark.asyncio
+async def test_new_project_clears_types_and_families(client: AsyncClient):
+    await upload(client)
+    await confirm_prd_families(client)
+    await client.put("/api/v1/structure/manager-type", json={"employee_id": "E034", "manager_type": "coach"})
+    await client.delete("/api/v1/org-data/clear-all")
+    await upload(client)
+    assert (await client.get("/api/v1/structure/families")).json()["families"] == []
+    m = (await client.get("/api/v1/metrics/latest")).json()["metrics"]
+    assert next(a for a in m["span_of_control"]["manager_assessments"] if a["manager_id"] == "E034")["manager_type"] == ""

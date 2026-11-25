@@ -20,6 +20,7 @@ import type {
   DispositionPayload,
   ImplementationPlan,
   StructureSettings,
+  RoleFamiliesView,
   ManagerTypeKey,
   CompassState,
   CompassPreview,
@@ -385,4 +386,17 @@ export const structureApi = {
     (await api.put('/structure/manager-type', { employee_id: employeeId, manager_type: managerType })).data,
   confirmSuggestedTypes: async (): Promise<{ confirmed: number; metrics: OrgMetrics }> =>
     (await api.post('/structure/manager-types/confirm-suggested')).data,
+};
+
+// Role families: group every job title once for the whole org file; RF-nn never reused
+export const familiesApi = {
+  get: async (): Promise<RoleFamiliesView> => (await api.get('/structure/families')).data,
+  confirm: async (name: string, titles: string[]): Promise<RoleFamiliesView> => (await api.post('/structure/families', { name, titles })).data,
+  update: async (ref: string, change: { name?: string; titles?: string[]; relates_to?: string[] }): Promise<RoleFamiliesView> =>
+    (await api.put(`/structure/families/${ref}`, change)).data,
+  merge: async (ref: string, withRef: string): Promise<RoleFamiliesView> => (await api.post(`/structure/families/${ref}/merge`, { with_ref: withRef })).data,
+  retire: async (ref: string): Promise<RoleFamiliesView> => (await api.post(`/structure/families/${ref}/retire`)).data,
+  /** reasonClass null clears the reason for that unit. */
+  setReason: async (ref: string, unit: string, reasonClass: ReasonClass | null, text: string, comparedWith: string): Promise<RoleFamiliesView> =>
+    (await api.put(`/structure/families/${ref}/reason`, { unit, reason_class: reasonClass, text, compared_with: comparedWith })).data,
 };

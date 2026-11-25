@@ -11,7 +11,7 @@ An Organizational Design Analyzer for an OD practitioner: upload an org-structur
 - [x] 3. Unit warnings (small unit, cost incomplete, managers in other units)
 - [x] 4. Manager types with editable span ranges
 - [x] 5. Broken reporting lines
-- [ ] 6. Role families (screen, RF IDs, across-units view, export)
+- [x] 6. Role families (screen, RF IDs, across-units view, export)
 - [ ] 7. Mock journey, checks, docs
 
 ## This session (2026-10-22) — approved plan, in order

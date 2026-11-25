@@ -19,6 +19,8 @@ from ..models.database import get_session
 from ..models.models import Engagement, OrgAnalysis
 from ..services import compass_service as cs
 from ..services import compass_roles as roles
+from ..services import role_families as rf
+from ..services.structure_settings import load_inputs
 from ..services.metrics_store import ensure_metrics
 from ..services.privacy import name_map, without_names
 from .comparison import _context as comparison_context, _payload as comparison_payload
@@ -163,7 +165,10 @@ async def link_findings(analysis: OrgAnalysis, country: str, db: AsyncSession) -
         cells.append({"ref": r["ref"], "title": r["title"], "holders": cell["holders"], "reason": cell["reason"],
                       "compass_status": cell["compass_status"], "status_confirmed": cell["status_confirmed"]})
     clusters = {r["ref"]: r["cluster_ref"] for r in view["roles"]}
-    findings = cs.country_findings(country, row, cells, clusters, link.grades or {}, link.relates or {})
+    inputs = await load_inputs(analysis, db)
+    families = rf.unit_findings(country, analysis.raw_data["employees"], (inputs.families if inputs else None) or [],
+                                (inputs.family_reasons if inputs else None) or {}, row["headcount"] if row else 0)
+    findings = cs.country_findings(country, row, cells, clusters, link.grades or {}, link.relates or {}, families)
     return {"link": {"country": country, "key": link.key, "label": cs.link_label(country)},
             "findings": _scrubbed(analysis, findings), "left_out_not_matched": left_out}
 

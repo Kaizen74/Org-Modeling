@@ -1048,3 +1048,32 @@ export interface CompassPreview {
   strategy?: { action: 'set' | 'ask' | 'same' | 'different' | 'none'; note: string; incoming: string; current: string };
   context?: { structure_findings: number; clusters: number; ids: number };
 }
+
+// ---------- Role families (RF-nn), defined once for the whole org file ----------
+
+export interface FamilyReason { reason_class: ReasonClass; text: string; compared_with: string }
+
+export interface RoleFamily {
+  ref: string;
+  name: string;
+  titles: string[];
+  relates_to: string[];
+  headcount: number;
+  by_unit: Record<string, number>;
+  presence: 'every' | 'some' | 'only' | 'none' | '';
+  only_in: string | null;
+  reasons: Record<string, FamilyReason>;
+}
+
+export interface RoleFamiliesView {
+  units: string[];
+  unit_label: string;
+  families: RoleFamily[];
+  retired: Array<{ ref: string; name: string; merged_into: string | null }>;
+  titles: Array<{ title: string; headcount: number; by_unit: Record<string, number>; family: string | null }>;
+  suggestions: Array<{ name: string; titles: string[] }>;
+  unassigned: number;
+  reason_classes: ReasonClass[];
+  cluster_refs: Array<{ ref: string; label: string }>;
+  kept?: string;
+}

@@ -535,7 +535,7 @@ def cost_note(sources: Optional[Dict]) -> str:
 
 
 def country_findings(country: str, row: Optional[Dict], role_cells: List[Dict], cluster_ref: Dict[str, str],
-                     grades: Dict, relates: Dict) -> List[Dict]:
+                     grades: Dict, relates: Dict, family_findings: Optional[List[Dict]] = None) -> List[Dict]:
     """
     Findings for one country's file: the structural baseline computed on that
     country's people (topic role_presence), and one role_reason finding per
@@ -596,6 +596,9 @@ def country_findings(country: str, row: Optional[Dict], role_cells: List[Dict], 
         if reason.get("grade") in GRADES:
             f["grade_from_reason"] = reason["grade"]
         out.append(f)
+
+    # Role families: one finding per family for this unit, including families with nobody here
+    out += family_findings or []
 
     for f in out:
         mine = grades.get(f["ref"]) if grades.get(f["ref"]) in GRADES else f.pop("grade_from_reason", None)

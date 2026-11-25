@@ -12,6 +12,7 @@ import Scenarios from './pages/Scenarios'
 import Compare from './pages/Compare'
 import Implementation from './pages/Implementation'
 import CompassRoles from './pages/CompassRoles'
+import RoleFamilies from './pages/RoleFamilies'
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
         <Route path="/compare" element={<Compare />} />
         <Route path="/implementation" element={<Implementation />} />
         <Route path="/compass-roles" element={<CompassRoles />} />
+        <Route path="/role-families" element={<RoleFamilies />} />
       </Routes>
     </Layout>
   )
