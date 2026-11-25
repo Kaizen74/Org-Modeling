@@ -56,6 +56,8 @@ async def ensure_metrics(analysis: OrgAnalysis, db: AsyncSession, force: bool = 
     employees = enrich_employees_with_grade_salary(employees, grades)
 
     metrics = MetricsCalculator(employees=employees, grade_order=grade_order).calculate_all_metrics()
+    # The unit column's word for screens ("Station" → "By station"); exports keep the field name `country`
+    metrics["unit_label"] = (analysis.raw_data or {}).get("unit_label") or ("Country" if metrics.get("country_analysis") else "")
     analysis.metrics = metrics
     await db.commit()
     return metrics

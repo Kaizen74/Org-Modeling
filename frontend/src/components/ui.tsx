@@ -274,3 +274,14 @@ export function Disclosure({
 
 export const formatMoney = (value: number) =>
   value >= 1_000_000 ? `$${(value / 1_000_000).toFixed(2)}M` : value >= 1_000 ? `$${Math.round(value / 1_000)}k` : `$${Math.round(value)}`;
+
+/** The comparison unit's word in its forms: "Station" → station, stations, By station. Defaults to country. */
+export function unitWords(label?: string | null) {
+  const title = (label || 'Country').trim();
+  const lower = title.toLowerCase();
+  const plural = lower.endsWith('y') && !/[aeiou]y$/.test(lower) ? `${lower.slice(0, -1)}ies` : `${lower}s`;
+  return { title, lower, plural, Plural: plural[0].toUpperCase() + plural.slice(1) };
+}
+
+/** People cost in this app is the Salary column (or the grade table): say so wherever it is shown. */
+export const BASE_SALARY_NOTE = 'Base salary only. Overtime, benefits and employer contributions are not included.';

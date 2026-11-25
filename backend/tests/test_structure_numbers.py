@@ -117,3 +117,38 @@ async def test_values_that_cannot_be_worked_out_are_left_out(client: AsyncClient
     # Nobody has a salary from the file and there is no grade table: cost is left out too
     assert "total_cost" not in m
     assert "No salary is known" in by_ref(ret)["baseline.spans"]["source_note"]
+
+
+# ------------------------------------------------------------- 2. unit column
+
+@pytest.mark.asyncio
+async def test_station_header_reads_as_the_unit(client: AsyncClient):
+    countries = (await upload(client))
+    by_country = {r["country"]: r for r in (await client.get("/api/v1/metrics/latest")).json()["metrics"]["country_analysis"]}
+    assert countries["metadata"]["unit_label"] == "Country"
+
+    station = ORG_TEXT.replace("Line Manager ID,Department,Country,", "Line Manager ID,Department,Station,", 1)
+    assert station != ORG_TEXT
+    up = await upload(client, station, "stations.csv")
+    assert up["metadata"]["unit_label"] == "Station" and up["metadata"]["countries"] == ["Arden", "Belmar", "Caldera"]
+    m = (await client.get("/api/v1/metrics/latest")).json()["metrics"]
+    assert m["unit_label"] == "Station"
+    by_station = {r["country"]: r for r in m["country_analysis"]}
+    strip = lambda r: {k: v for k, v in r.items() if k != "health_components"}  # noqa: E731
+    assert {k: strip(v) for k, v in by_station.items()} == {k: strip(v) for k, v in by_country.items()}
+    await link(client, "Belmar")  # matching a packet to a unit stays by name
+    ret = await belmar_file(client)
+    assert ret["country"] == "Belmar" and by_ref(ret)["baseline.layers"]["metrics"]["layers"] == 5
+
+
+def test_unit_headers_any_case_first_in_order():
+    from app.parsers.csv_parser import OrgCSVParser
+    csv = ("Name,Job Title,Grade,Level,Line Manager,Employee ID,business UNIT,STATION\n"
+           "Ana Lee,CEO,SVP,1,Top of Org,E1,Group,Hub A\n"
+           "Bo Lim,Lead,TL,2,Ana Lee,E2,Ops,Hub B\n")
+    result = OrgCSVParser(io.BytesIO(csv.encode())).parse()
+    assert result["metadata"]["unit_label"] == "Station"  # Station comes before Business unit in the order
+    assert [e["country"] for e in result["employees"]] == ["Hub A", "Hub B"]
+    assert any("Several unit columns found" in w and "'STATION' is used" in w for w in result["validation_errors"])
+    plain = OrgCSVParser(io.BytesIO("Name,Job Title,Grade,Level,Line Manager\nAna,CEO,SVP,1,Top of Org\n".encode())).parse()
+    assert plain["metadata"]["unit_label"] == "" and plain["employees"][0]["country"] == ""

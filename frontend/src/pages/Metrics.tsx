@@ -16,6 +16,8 @@ import {
   StatusPill,
   scoreStatus,
   formatMoney,
+  unitWords,
+  BASE_SALARY_NOTE,
 } from '../components/ui';
 
 type SpanFilter = 'all' | 'below' | 'within' | 'above';
@@ -29,7 +31,7 @@ function CountryTable({ countries, reference }: { countries: CountryMetrics[]; r
     ['Median span', (c) => c.median_span || '–'],
     ['Managers within their span benchmark', (c) => `${c.spans_vs_benchmark.within} of ${c.managers}`],
     ['Single-report managers', (c) => c.single_report_managers],
-    ['People cost', (c) => formatMoney(c.total_cost)],
+    ['People cost (base salary)', (c) => formatMoney(c.total_cost)],
     ['Structural health', (c) => <span className="inline-flex items-center gap-2">{c.health_score}<StatusPill status={scoreStatus(c.health_score)} /></span>],
   ];
   return (
@@ -132,6 +134,7 @@ export default function Metrics() {
   const within = vs['Within benchmark'];
   const above = vs['Above benchmark'];
   const countries = metrics.country_analysis ?? [];
+  const unit = unitWords(metrics.unit_label);
   const depts = (countryFilter && metrics.department_analysis_by_country?.[countryFilter]) || metrics.department_analysis || [];
   const layers = metrics.layer_analysis;
   const layerRows = Object.entries(layers.by_level)
@@ -149,8 +152,8 @@ export default function Metrics() {
   const layersComponent = metrics.health_indicators.components?.find((c) => c.key === 'layers');
   const n = (k: number) => String(k + (countries.length ? 1 : 0)).padStart(2, '0');
   const countrySelect = countries.length > 0 && (
-    <select value={countryFilter} onChange={(e) => { setCountryFilter(e.target.value); setDeptFilter(''); }} className="input w-auto py-1.5 text-sm" aria-label="Filter by country">
-      <option value="">All countries</option>
+    <select value={countryFilter} onChange={(e) => { setCountryFilter(e.target.value); setDeptFilter(''); }} className="input w-auto py-1.5 text-sm" aria-label={`Filter by ${unit.lower}`}>
+      <option value="">All {unit.plural}</option>
       {countries.map((c) => <option key={c.country} value={c.country}>{c.country}</option>)}
     </select>
   );
@@ -191,7 +194,7 @@ export default function Metrics() {
           value={layers.total_layers}
           sub={layers.declared_layers && layers.declared_layers !== layers.total_layers ? `Level column says ${layers.declared_layers}` : 'in the reporting chain'}
         />
-        <StatTile label="Cost per person" value={formatMoney(metrics.cost_analysis.average_cost_per_employee)} sub={`${formatMoney(metrics.cost_analysis.total_cost)} in total`} />
+        <StatTile label="Cost per person" value={formatMoney(metrics.cost_analysis.average_cost_per_employee)} sub={<span title={BASE_SALARY_NOTE}>{formatMoney(metrics.cost_analysis.total_cost)} in total · base salary only</span>} />
       </div>
 
       {/* Spans */}
@@ -282,16 +285,16 @@ export default function Metrics() {
       {/* Countries */}
       {countries.length > 0 && (
         <Section
-          eyebrow="02 · By country"
-          title="The same lenses, country by country"
-          lede="A person's country is where they work. Differences are stated against the largest country."
+          eyebrow={`02 · By ${unit.lower}`}
+          title={`The same lenses, ${unit.lower} by ${unit.lower}`}
+          lede={`A person's ${unit.lower} is where they work. Differences are stated against the largest ${unit.lower}.`}
         >
           <CountryTable countries={countries} reference={metrics.country_reference} />
           <p className="mt-3 text-xs text-faint">
-            Layers for a country are counted from the top of the whole organization down to its deepest person: decision distance starts at the top.
-            A manager's span counts all their direct reports, wherever those people work, and the manager is listed under their own country.
+            Layers for a {unit.lower} are counted from the top of the whole organization down to its deepest person: decision distance starts at the top.
+            A manager's span counts all their direct reports, wherever those people work, and the manager is listed under their own {unit.lower}.
           </p>
-          <p className="mt-1 text-xs text-faint">Salaries are read as one currency; convert before uploading if countries are paid in different currencies.</p>
+          <p className="mt-1 text-xs text-faint">People cost: {BASE_SALARY_NOTE} Salaries are read as one currency; convert before uploading if {unit.plural} are paid in different currencies.</p>
         </Section>
       )}
 
@@ -300,7 +303,7 @@ export default function Metrics() {
         <Section
           eyebrow={`${n(2)} · Departments`}
           title={countryFilter ? `Departments in ${countryFilter}` : 'The same lenses, department by department'}
-          lede={countryFilter ? 'People who work in this country only; shares are of this country.' : 'Sorted by size. Bars start at zero.'}
+          lede={countryFilter ? `People who work in this ${unit.lower} only; shares are of this ${unit.lower}.` : 'Sorted by size. Bars start at zero.'}
           aside={countrySelect || undefined}
         >
           <div className="card overflow-x-auto p-0">
@@ -392,6 +395,7 @@ export default function Metrics() {
 
       {/* Cost */}
       <Section eyebrow={`${n(4)} · Cost`} title={`${formatMoney(metrics.cost_analysis.total_cost)} annual people cost`}>
+        <p className="-mt-3 mb-5 text-sm text-faint">{BASE_SALARY_NOTE}</p>
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="card">
             <p className="label">Cost by layer</p>

@@ -170,6 +170,7 @@ export interface OrgMetrics {
   // Present when the org file has a Country column (empty otherwise)
   country_analysis?: CountryMetrics[];
   country_reference?: string;
+  unit_label?: string; // the unit column's own word (Country, Station, Asset…)
   department_analysis_by_country?: Record<string, DepartmentMetrics[]>;
   metrics_version?: number;
 }

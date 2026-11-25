@@ -83,7 +83,9 @@ async def upload_csv(
             employee_count=result["metadata"].get("total_employees", 0),
             raw_data={
                 "employees": result["employees"],
-                "hierarchy": parser.get_org_hierarchy()
+                "hierarchy": parser.get_org_hierarchy(),
+                # The unit column's own word (Country, Station, Asset…); "" without one
+                "unit_label": result["metadata"].get("unit_label", ""),
             },
             metrics=None  # Will be calculated separately
         )

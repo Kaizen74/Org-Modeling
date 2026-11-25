@@ -22,8 +22,9 @@ class OrgCSVParser:
 
     REQUIRED_COLUMNS = ["Name", "Job Title", "Grade", "Level", "Line Manager"]
     OPTIONAL_COLUMNS = ["Department", "Employee ID", "Line Manager ID", "Salary", "Work Activities", "Job Description", "Work Type", "Country"]
-    # Other headers accepted for an optional column
-    COLUMN_ALIASES = {"Country/Region": "Country"}
+    # The comparison unit: the first of these headers present (any letter case) is read
+    # as the unit. Exports keep the field name `country`; screens use the header's word.
+    UNIT_HEADERS = ["Country", "Country/Region", "Station", "Asset", "Business unit", "Unit"]
     # A person whose Country cell is blank is shown in their own group, never dropped
     COUNTRY_NOT_STATED = "Not stated"
 
@@ -85,7 +86,7 @@ class OrgCSVParser:
         self.graph = build_org_graph(employees)
 
         # Detect structural issues
-        structural_errors = (resolution_issues + self._detect_issues())[:10]
+        structural_errors = (getattr(self, "unit_notes", []) + resolution_issues + self._detect_issues())[:10]
 
         # Calculate metadata
         metadata = self._calculate_metadata(employees)
@@ -150,10 +151,29 @@ class OrgCSVParser:
             errors.append(f"Missing required columns: {', '.join(missing)}")
         return errors
 
+    def _pick_unit_column(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Read the first unit header present as the Country column, and remember its word."""
+        self.unit_label = ""
+        self.unit_notes: List[str] = []
+        by_lower = {str(c).strip().lower(): c for c in df.columns}
+        found = [(h, by_lower[h.lower()]) for h in self.UNIT_HEADERS if h.lower() in by_lower]
+        if not found:
+            return df
+        header, column = found[0]
+        # "Country/Region" reads as "Country" on screen; others keep their own word
+        self.unit_label = "Country" if header == "Country/Region" else header
+        if len(found) > 1:
+            self.unit_notes.append(
+                f"Several unit columns found ({', '.join(str(c) for _, c in found)}); "
+                f"'{column}' is used as the unit. Remove or rename the others to use a different one.")
+        others = [c for _, c in found[1:]]
+        df = df.drop(columns=others)
+        return df.rename(columns={column: "Country"})
+
     def _clean_data(self) -> pd.DataFrame:
         """Clean and normalize the data."""
         df = self.df.copy()
-        df = df.rename(columns={a: c for a, c in self.COLUMN_ALIASES.items() if a in df.columns and c not in df.columns})
+        df = self._pick_unit_column(df)
 
         # Strip whitespace from string columns
         for col in df.select_dtypes(include=["object"]).columns:
@@ -310,6 +330,7 @@ class OrgCSVParser:
             "organizational_layers": max_level,
             "total_salary_cost": round(total_salary, 2),
             "countries": sorted({emp["country"] for emp in employees if emp.get("country")}),
+            "unit_label": getattr(self, "unit_label", ""),
         }
 
     def get_employees_by_manager(self) -> Dict[str, List[str]]:
