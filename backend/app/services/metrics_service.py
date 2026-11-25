@@ -24,7 +24,7 @@ import math
 
 # Bump when the shape or meaning of calculated metrics changes, so cached
 # metrics from older uploads are recalculated instead of shown stale
-METRICS_VERSION = 6
+METRICS_VERSION = 7
 
 
 class MetricsCalculator:
@@ -230,7 +230,8 @@ class MetricsCalculator:
             "total_cost": round(total_cost, 0),
             "average_cost_per_employee": round(total_cost / total_emp, 0) if total_emp > 0 else 0,
             "by_level": by_level,
-            "by_grade": by_grade
+            "by_grade": by_grade,
+            "sources": self._cost_sources(list(self.graph.nodes())),
         }
 
     def _grade_gap_analysis(self) -> Dict:
@@ -389,6 +390,16 @@ class MetricsCalculator:
             })
         return sorted(result, key=lambda d: -d["headcount"])
 
+    def _cost_sources(self, nodes: List[str]) -> Dict[str, int]:
+        """How many people's salary came from the Salary column, the grade table, or neither."""
+        out = {"file": 0, "grade": 0, "none": 0}
+        for n in nodes:
+            src = self.graph.nodes[n].get("salary_source")
+            if src is None:  # not filled through the grade table: the Salary column is all there is
+                src = "file" if self.graph.nodes[n].get("salary") else ""
+            out[src or "none"] += 1
+        return out
+
     def _country_of(self, node: str) -> str:
         return str(self.graph.nodes[node].get("country") or "")
 
@@ -433,6 +444,7 @@ class MetricsCalculator:
                 "spans_vs_benchmark": vs,
                 "single_report_managers": singles,
                 "total_cost": round(cost, 0),
+                "cost_sources": self._cost_sources(people),
                 "health_score": health["health_score"],
                 "health_components": health["components"],
             })

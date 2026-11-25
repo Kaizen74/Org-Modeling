@@ -28,7 +28,7 @@ EVIDENCE_TO_GRADE = {"OBSERVABLE": "confirmed", "PERCEPTUAL": "indicated", "MODE
 HYPOTHESIS_STATUSES = ["open", "supported", "refuted"]
 FINDING_KINDS = ["structural_baseline", "role_reason", "work_activity", "hypothesis", "option_score"]
 # Optional fields a finding carries when they apply (country files)
-OPTIONAL_FINDING_FIELDS = ("topic", "reason_class", "compared_with")
+OPTIONAL_FINDING_FIELDS = ("topic", "reason_class", "compared_with", "metrics")
 
 
 def suggested_grade(evidence_class: Optional[str]) -> Optional[str]:
@@ -362,8 +362,18 @@ def collect_findings(metrics: Dict, ai_analysis: Dict, comparison: Optional[Dict
     managers = sum(vs.values())
     people = metrics.get("total_employees", 0)
     if people:
+        cost = metrics.get("cost_analysis") or {}
+        note = cost_note(cost.get("sources"))
         base = {"kind": "structural_baseline", "evidence_class": "OBSERVABLE", "suggested_grade": "confirmed",
-                "source_note": f"Computed from the uploaded org file ({people} people)"}
+                "source_note": f"Computed from the uploaded org file ({people} people)" + (f". {note}" if note else ""),
+                "metrics": structure_metrics(
+                    headcount=people, managers=(metrics.get("manager_stats") or {}).get("total_managers", managers),
+                    layers=layers.get("total_layers", 0), median_span=span.get("median_span", 0),
+                    spans={"within": vs.get("Within benchmark", 0), "below": vs.get("Below benchmark", 0),
+                           "above": vs.get("Above benchmark", 0)},
+                    single_report_managers=span.get("single_report_managers", 0),
+                    health_score=health.get("health_score", 0), total_cost=cost.get("total_cost", 0),
+                    cost_sources=cost.get("sources"))}
         findings += [
             {**base, "ref": "baseline.layers", "title": "Layers in the reporting chain",
              "detail": f"Counted from who reports to whom; the Level column declares {layers.get('declared_layers', 0)}.",
@@ -445,6 +455,53 @@ def build_return(engagement_key: Optional[str], findings: List[Dict], country: s
 ROLE_REASON_SOURCE = "Reason recorded by the designer; head-count from the uploaded org file."
 
 
+def _num(v):
+    """A whole number as an int (2.0 -> 2); other numbers as they are."""
+    return int(v) if isinstance(v, float) and v.is_integer() else v
+
+
+def structure_metrics(*, headcount: int, managers: int, layers: int, median_span, spans: Dict[str, int],
+                      single_report_managers: int, health_score: int, total_cost, cost_sources: Optional[Dict] = None,
+                      extra: Optional[Dict] = None) -> Dict:
+    """
+    The numbers-only `metrics` object on structural_baseline findings. A key
+    that could not be worked out is left out, never sent as 0: no managers
+    means no span to judge; no salary from either source means no cost.
+    """
+    m = {
+        "headcount": headcount,
+        "managers": managers,
+        "manager_ratio_pct": round(managers / headcount * 100, 1) if headcount else None,
+        "layers": layers,
+        "single_report_managers": single_report_managers,
+        "health_score": health_score,
+    }
+    if managers:
+        m.update(median_span=_num(median_span), spans_within=spans.get("within", 0),
+                 spans_below=spans.get("below", 0), spans_above=spans.get("above", 0))
+    known = (cost_sources or {}).get("file", headcount) + (cost_sources or {}).get("grade", 0)
+    if known:
+        m["total_cost"] = _num(round(float(total_cost)))
+    m.update(extra or {})
+    return {k: v for k, v in m.items() if v is not None and not (isinstance(v, (int, float)) and v < 0)}
+
+
+def cost_note(sources: Optional[Dict]) -> str:
+    """How people cost was made, e.g. 'People cost is the Salary column for 24 people and the grade table for 2.'"""
+    from .compass_roles import people
+    if not sources:
+        return ""
+    parts = []
+    if sources.get("file"):
+        parts.append(f"the Salary column for {people(sources['file'])}")
+    if sources.get("grade"):
+        parts.append(f"the grade table for {people(sources['grade']) if not parts else sources['grade']}")
+    note = ("People cost is " + " and ".join(parts) + ".") if parts else "No salary is known from the Salary column or the grade table."
+    if parts and sources.get("none"):
+        note += f" {people(sources['none'])} {'has' if sources['none'] == 1 else 'have'} neither, so the cost is incomplete."
+    return note
+
+
 def country_findings(country: str, row: Optional[Dict], role_cells: List[Dict], cluster_ref: Dict[str, str],
                      grades: Dict, relates: Dict) -> List[Dict]:
     """
@@ -459,9 +516,15 @@ def country_findings(country: str, row: Optional[Dict], role_cells: List[Dict], 
     out: List[Dict] = []
     if row:
         vs = row["spans_vs_benchmark"]
+        note = cost_note(row.get("cost_sources"))
         base = {"kind": "structural_baseline", "topic": "role_presence", "evidence_class": "OBSERVABLE",
                 "suggested_grade": "confirmed",
-                "source_note": f"Computed from the uploaded org file ({row['headcount']} people in {country})"}
+                "source_note": f"Computed from the uploaded org file ({row['headcount']} people in {country})" + (f". {note}" if note else ""),
+                # The same numbers on each of the three findings, so each is self-contained
+                "metrics": structure_metrics(
+                    headcount=row["headcount"], managers=row["managers"], layers=row["layers"],
+                    median_span=row["median_span"], spans=vs, single_report_managers=row["single_report_managers"],
+                    health_score=row["health_score"], total_cost=row["total_cost"], cost_sources=row.get("cost_sources"))}
         out += [
             {**base, "ref": "baseline.layers", "title": f"Layers in the reporting chain ({country})",
              "detail": f"Counted from who reports to whom, for the people whose Country is {country}, "
@@ -509,6 +572,22 @@ def country_findings(country: str, row: Optional[Dict], role_cells: List[Dict], 
     return out
 
 
+def figures_line(m: Dict) -> str:
+    """One line of a unit's figures for the readable text; parts that weren't worked out are left out."""
+    parts = [f"Head-count {m['headcount']}"]
+    if "managers" in m:
+        parts.append(f"managers {m['managers']}" + (f" ({m['manager_ratio_pct']:g}%)" if "manager_ratio_pct" in m else ""))
+    if "layers" in m:
+        parts.append(f"layers {m['layers']}")
+    if "median_span" in m:
+        parts.append(f"median span {m['median_span']:g}")
+    if "spans_within" in m:
+        parts.append(f"{m['spans_within']} of {m['managers']} managers within benchmark")
+    if "total_cost" in m:
+        parts.append(f"people cost {m['total_cost']:,.0f} (base salary)")
+    return " · ".join(parts)
+
+
 def return_as_text(ret: Dict) -> str:
     """The same content as the return file, for reading or uploading as a document."""
     kind_titles = {"structural_baseline": "Structural baseline", "role_reason": "Compass roles: why they exist or are missing",
@@ -518,6 +597,9 @@ def return_as_text(ret: Dict) -> str:
     where = f" ({ret['country']})" if ret.get("country") else ""
     lines = [f"Org Modeling findings for {key or 'this organization'}{where}",
              f"Format {ret['format']} {ret['format_version']}, generated {ret['generated_at']}", ""]
+    figures = next((f["metrics"] for f in ret["findings"] if f["kind"] == "structural_baseline" and f.get("metrics")), None)
+    if figures:
+        lines += [figures_line(figures), ""]
     for kind in FINDING_KINDS:
         items = [f for f in ret["findings"] if f["kind"] == kind]
         if not items:

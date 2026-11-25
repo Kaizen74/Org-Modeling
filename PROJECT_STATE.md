@@ -5,8 +5,14 @@
 An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-*2026-11-13.* Owner's countries PRD built (approved with "go" on the four suggested answers): Country column and by-country view; country filters on the department table and org chart; one Compass link per (upload, country) with migration; Compass roles screen (title matches, holders, Compass status, reasons, flags); one findings file per country. Sample files from the Capability Compass repository are test fixtures. `./run_checks.sh`: 123 backend tests, mock journey 110 backend + 25 browser checks, all green.
-Not done (by agreement or out of scope): AI-suggested title matches; per-country AI analysis; comparing processes between countries; a button to unlink a country's packet (re-import replaces it; a new project clears all).
+*2026-11-25.* Building the owner's "structure numbers" PRD (approved with "go as suggested": frontline supervisory words + loose people for broken lines; family reasons per family per unit; no AI suggestions; no-manager units omit median_span and spans_*). Increments:
+- [x] 1. Numbers-only `metrics` on country and whole-organization baseline findings; cost source in source_note; figures line in readable text
+- [ ] 2. Base-salary note; unit column (Station, Asset, Business unit, Unit)
+- [ ] 3. Unit warnings (small unit, cost incomplete, managers in other units)
+- [ ] 4. Manager types with editable span ranges
+- [ ] 5. Broken reporting lines
+- [ ] 6. Role families (screen, RF IDs, across-units view, export)
+- [ ] 7. Mock journey, checks, docs
 
 ## This session (2026-10-22) — approved plan, in order
 Phase 1 — Accuracy fixes

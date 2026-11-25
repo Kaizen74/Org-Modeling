@@ -180,7 +180,9 @@ async def test_grades_links_and_the_return_file(client: AsyncClient, sample_csv_
         ("compass-return", "1.0", "org-modeling", "MERIDIAN")
     assert {f["kind"] for f in ret["findings"]} == {"structural_baseline", "hypothesis", "option_score"}
     for f in ret["findings"]:
-        assert set(f) == {"ref", "kind", "title", "detail", "grade", "figure", "relates_to", "source_note"}
+        base = {"ref", "kind", "title", "detail", "grade", "figure", "relates_to", "source_note"}
+        # structural_baseline findings also carry the numbers-only `metrics` object; nothing else is added
+        assert set(f) == (base | {"metrics"} if f["kind"] == "structural_baseline" else base)
         assert f["grade"] in cs.GRADES
     h1 = next(f for f in ret["findings"] if f["ref"] == "H1")
     assert h1["grade"] == "indicated" and h1["relates_to"] == ["CAP-04.People", "VS-01", "RL-014"]

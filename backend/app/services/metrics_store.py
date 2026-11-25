@@ -20,15 +20,22 @@ def is_current(metrics: Dict) -> bool:
 
 
 def enrich_employees_with_grade_salary(employees: List[Dict], grades: List[GradeSalary]) -> List[Dict]:
-    """Fill a missing or zero salary from the grade table's median for that grade."""
+    """
+    Fill a missing or zero salary from the grade table's median for that grade,
+    and record where each salary came from (`salary_source`: "file", "grade" or
+    "" when neither has one), so people cost can say how it was made.
+    """
     grade_salary_map = {g.grade: g.median_salary for g in grades}
     enriched = []
     for emp in employees:
         emp_copy = emp.copy()
-        if not emp_copy.get("salary"):
-            grade = emp_copy.get("grade", "")
-            if grade in grade_salary_map:
-                emp_copy["salary"] = grade_salary_map[grade]
+        if emp_copy.get("salary"):
+            emp_copy["salary_source"] = "file"
+        elif grade_salary_map.get(emp_copy.get("grade", "")):
+            emp_copy["salary"] = grade_salary_map[emp_copy["grade"]]
+            emp_copy["salary_source"] = "grade"
+        else:
+            emp_copy["salary_source"] = ""
         enriched.append(emp_copy)
     return enriched
 
