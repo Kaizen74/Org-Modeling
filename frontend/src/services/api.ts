@@ -394,6 +394,9 @@ export const familiesApi = {
   confirm: async (name: string, titles: string[]): Promise<RoleFamiliesView> => (await api.post('/structure/families', { name, titles })).data,
   update: async (ref: string, change: { name?: string; titles?: string[]; relates_to?: string[] }): Promise<RoleFamiliesView> =>
     (await api.put(`/structure/families/${ref}`, change)).data,
+  /** Move titles in one step: to a family ref, 'new' (with a name), or null to take them out of every family. */
+  move: async (titles: string[], to: string | null, name = ''): Promise<RoleFamiliesView> =>
+    (await api.post('/structure/families/move', { titles, to, name })).data,
   merge: async (ref: string, withRef: string): Promise<RoleFamiliesView> => (await api.post(`/structure/families/${ref}/merge`, { with_ref: withRef })).data,
   retire: async (ref: string): Promise<RoleFamiliesView> => (await api.post(`/structure/families/${ref}/retire`)).data,
   /** reasonClass null clears the reason for that unit. */
