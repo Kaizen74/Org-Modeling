@@ -442,3 +442,20 @@ async def test_new_project_clears_types_and_families(client: AsyncClient):
     assert (await client.get("/api/v1/structure/families")).json()["families"] == []
     m = (await client.get("/api/v1/metrics/latest")).json()["metrics"]
     assert next(a for a in m["span_of_control"]["manager_assessments"] if a["manager_id"] == "E034")["manager_type"] == ""
+
+
+def test_suggestions_group_by_the_work_not_the_grade():
+    """Real HRIS titles: abbreviations and grade words are set aside, so titles group by the work they name."""
+    from app.services.role_families import suggest
+    titles = ["Assistant Manager, Airline Relations", "Executive, Airline Relations", "Senior Executive, Airline Relations",
+              "Asst Mgr, Hub Operations Planning", "AVP Building & Engineering Services", "AVP, Import Operations & DG",
+              "AVP, ULD", "AVP, eCommerce Solutions", "AVP, Airline Relations, CNS & T5 Operations",
+              "Executive - Building & Sustainability", "Manager, Building Services & Sustainability",
+              "Officer, Building Services", "Supervisor, Building Services", "Officer II, Cargo Acceptance"]
+    groups = {g["name"]: g["titles"] for g in suggest(titles)}
+    assert "AVP" not in groups and "Asst mgr" not in groups  # grade words no longer make a family
+    assert sorted(groups["Airline relations"]) == sorted(["Assistant Manager, Airline Relations", "Executive, Airline Relations",
+                                                         "Senior Executive, Airline Relations", "AVP, Airline Relations, CNS & T5 Operations"])
+    assert "Hub operations planning" in groups
+    assert len(next(t for n, t in groups.items() if n.startswith("Building"))) == 5
+    assert "Cargo acceptance" in groups and "ULD" in groups

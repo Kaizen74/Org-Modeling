@@ -28,6 +28,9 @@ GENERIC_WORDS = {
     "associate", "chief", "global", "regional", "general", "group", "deputy", "principal", "staff", "team",
     "coordinator", "administrator", "admin", "user", "super", "certified", "of", "the", "and", "for", "to",
     "in", "on", "a", "an",
+    # Common abbreviations and grade markers in HRIS titles ("Asst Mgr", "AVP", "Snr Exec", "Officer II")
+    "asst", "ast", "mgr", "mngr", "mgt", "avp", "snr", "sr", "jr", "exec", "dy", "dep", "assoc", "hod", "gm",
+    "agm", "dgm", "acting", "interim", "trainee", "intern", "i", "ii", "iii", "iv",
 }
 _SEGMENT_SPLIT = re.compile(r"\s*(?:/|,|—|–|\(|\)|-(?=\s)|\s-\s)\s*")
 
