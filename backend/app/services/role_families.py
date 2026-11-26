@@ -119,6 +119,8 @@ def view(employees: List[Dict], families: List[Dict], reasons: Dict, units: List
         counts = headcounts(employees, f.get("titles", []))
         by_unit = {u: counts.get(u, {}).get("headcount", 0) for u in units} if units else {}
         rows.append({**{k: f.get(k) for k in ("ref", "name", "titles", "relates_to", "confirmed_at")},
+                     # A family with no titles would read "absent" everywhere: flagged, and left out of exports
+                     "empty": not f.get("titles"),
                      "headcount": sum(c["headcount"] for c in counts.values()),
                      "by_unit": by_unit, **presence(by_unit, units),
                      "reasons": (reasons or {}).get(f["ref"], {})})
@@ -196,6 +198,31 @@ def update(families: List[Dict], ref: str, file_titles: set, *, name: Optional[s
     return families
 
 
+def move(families: List[Dict], seq: int, titles: List[str], to: Optional[str], file_titles: set, name: str = ""):
+    """
+    Move job titles in one step: into a family (`to` = its ref), into a new
+    family (`to` = "new", with a name), or out of every family (`to` = None).
+    A title belongs to one family, so it leaves wherever it was.
+    Returns (families, seq, ref the titles went to or None).
+    """
+    titles = _clean_titles(titles, file_titles)
+    if not titles:
+        raise ValueError("Choose at least one job title to move.")
+    if to == "new":
+        families, seq = confirm(families, seq, name, titles, file_titles)
+        return families, seq, families[-1]["ref"]
+    families = [dict(f) for f in families or []]
+    if to is None:
+        _take_titles(families, titles)
+        return families, seq, None
+    target = next((f for f in active(families) if f["ref"] == to), None)
+    if not target:
+        raise LookupError(f"No family {to}")
+    _take_titles(families, titles, keep_ref=to)
+    target["titles"] = list(dict.fromkeys(target.get("titles", []) + titles))
+    return families, seq, to
+
+
 def merge(families: List[Dict], reasons: Dict, a: str, b: str):
     """Merge two families: the older ID (lower number) stays, the other is retired and never reused."""
     families = [dict(f) for f in families or []]
@@ -228,6 +255,8 @@ def unit_findings(unit: str, employees: List[Dict], families: List[Dict], reason
     """One role_family finding per family for a unit's file, including families with nobody there (0 = absent)."""
     out = []
     for f in sorted(active(families), key=lambda x: ref_number(x["ref"])):
+        if not f.get("titles"):
+            continue  # no titles yet: nothing to count, so nothing to say
         counts = headcounts(employees, f.get("titles", [])).get(unit, {"headcount": 0, "job_titles": 0})
         r = ((reasons or {}).get(f["ref"]) or {}).get(unit) or {}
         finding = {

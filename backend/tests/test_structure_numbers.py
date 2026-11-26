@@ -459,3 +459,33 @@ def test_suggestions_group_by_the_work_not_the_grade():
     assert "Hub operations planning" in groups
     assert len(next(t for n, t in groups.items() if n.startswith("Building"))) == 5
     assert "Cargo acceptance" in groups and "ULD" in groups
+
+
+@pytest.mark.asyncio
+async def test_moving_titles_in_bulk(client: AsyncClient):
+    await upload(client)
+    await confirm_prd_families(client)
+    move = lambda body: client.post("/api/v1/structure/families/move", json=body)  # noqa: E731
+    # Several titles into an existing family in one step; they leave wherever they were
+    v = (await move({"titles": ["Shift Supervisor", "Head of Catering"], "to": "RF-01"})).json()
+    fam = {f["ref"]: f for f in v["families"]}
+    assert v["moved_to"] == "RF-01" and {"Shift Supervisor", "Head of Catering"} <= set(fam["RF-01"]["titles"])
+    assert "Shift Supervisor" not in fam["RF-02"]["titles"]
+    # Into a new family: it gets the next RF number
+    v = (await move({"titles": ["Head of Catering", "Executive Chef — Culinary Design"], "to": "new", "name": "Catering"})).json()
+    assert v["moved_to"] == "RF-07" and "Head of Catering" not in {f["ref"]: f for f in v["families"]}["RF-01"]["titles"]
+    # Out of every family
+    v = (await move({"titles": ["Shift Supervisor"], "to": None})).json()
+    assert not any("Shift Supervisor" in f["titles"] for f in v["families"])
+    assert next(t for t in v["titles"] if t["title"] == "Shift Supervisor")["family"] is None
+    # A family emptied by moves is flagged and left out of the unit files
+    v = (await move({"titles": ["Load Control / Weight & Balance Officer"], "to": None})).json()
+    assert {f["ref"]: f for f in v["families"]}["RF-01"]["empty"] is True
+    await link(client, "Belmar")
+    assert "RF-01" not in by_ref(await belmar_file(client))
+    # Plain refusals; nothing changes
+    assert (await move({"titles": ["Chief Wizard"], "to": "RF-02"})).status_code == 400
+    assert (await move({"titles": [], "to": "RF-02"})).status_code == 400
+    assert (await move({"titles": ["Ramp Agent"], "to": "RF-99"})).status_code == 404
+    assert (await move({"titles": ["Ramp Agent"], "to": "new", "name": ""})).status_code == 400
+    assert "Ramp Agent" in {f["ref"]: f for f in (await client.get("/api/v1/structure/families")).json()["families"]}["RF-02"]["titles"]

@@ -111,6 +111,12 @@ class FamilyUpdate(BaseModel):
     relates_to: Optional[List[str]] = None  # Compass cluster refs the family serves
 
 
+class MoveIn(BaseModel):
+    titles: List[str]
+    to: Optional[str] = None  # a family ref, "new" (with name), or None to take the titles out of every family
+    name: str = ""
+
+
 class MergeIn(BaseModel):
     with_ref: str
 
@@ -179,6 +185,23 @@ async def update_family(ref: str, request: FamilyUpdate, db: AsyncSession = Depe
         raise HTTPException(status_code=400, detail=str(e))
     await db.commit()
     return await _families_view(analysis, db)
+
+
+@router.post("/families/move")
+async def move_titles(request: MoveIn, db: AsyncSession = Depends(get_session)):
+    """Move job titles in one step (drag and drop or Move to): into a family, a new family, or out of all."""
+    analysis = await _latest(db)
+    inputs = await st.load_inputs(analysis, db, create=True)
+    try:
+        families, seq, ref = rf.move(inputs.families or [], inputs.family_seq or 0, request.titles, request.to,
+                                     _titles(analysis), request.name)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    inputs.families, inputs.family_seq = families, seq
+    await db.commit()
+    return {"moved_to": ref, **await _families_view(analysis, db)}
 
 
 @router.post("/families/{ref}/merge")
