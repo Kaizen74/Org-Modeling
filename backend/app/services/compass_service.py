@@ -75,11 +75,37 @@ def known_refs(packet: Dict) -> List[Dict]:
     return out
 
 
+def _not_a_packet(data: Dict) -> Optional[str]:
+    """
+    Recognise the Compass files people most often pick by mistake and say
+    which file to use instead: the workspace save (Export) and a findings file.
+    """
+    if data.get("format") == RETURN_FORMAT:
+        return ("This is a findings file (compass-return) written by "
+                + (f"'{data.get('source_app')}'" if data.get("source_app") else "an app")
+                + ", not a hand-off packet. Findings files go into the Capability Compass, under Current State. "
+                  "To bring the Compass's work here, use its hand-off packet (Hand-off → Download the full packet).")
+    looks_like_workspace = not data.get("format") and isinstance(data.get("charter"), dict) and \
+        isinstance(data.get("clusters"), list) and any(k in data for k in ("schema", "workspaceId", "orgName", "versions"))
+    if not looks_like_workspace:
+        return None
+    name = data.get("workspaceName") or data.get("orgName") or "this workspace"
+    key = str((data.get("charter") or {}).get("engagementKey") or "").strip()
+    file_name = f"{key.lower()}_compass_handoff.json" if key else "<key>_compass_handoff.json"
+    return (f"This is a Capability Compass workspace file ({name}), the save you get from Export, not the hand-off packet. "
+            f"In the Compass, open that workspace, go to Hand-off and click \u201cDownload the full packet (.json)\u201d; "
+            f"then import the file it saves ({file_name}). The packet can be downloaded before every cell is scored; "
+            "this app then shows a \u201cnot ready\u201d warning but still imports it.")
+
+
 def validate_packet(packet) -> Tuple[List[str], List[str]]:
     """(errors that stop the import, warnings that don't) in plain language."""
     if not isinstance(packet, dict):
         return ["This is not a Capability Compass hand-off file (it is not a JSON object)."], []
     errors, warnings = [], []
+    wrong_file = _not_a_packet(packet)
+    if wrong_file:
+        return [wrong_file], warnings
     if packet.get("format") != HANDOFF_FORMAT:
         found = packet.get("format")
         errors.append(

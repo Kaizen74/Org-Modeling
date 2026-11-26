@@ -1061,6 +1061,7 @@ export interface RoleFamily {
   headcount: number;
   by_unit: Record<string, number>;
   presence: 'every' | 'some' | 'only' | 'none' | '';
+  empty?: boolean; // no titles: flagged, and left out of the Compass files
   only_in: string | null;
   reasons: Record<string, FamilyReason>;
 }
@@ -1076,4 +1077,5 @@ export interface RoleFamiliesView {
   reason_classes: ReasonClass[];
   cluster_refs: Array<{ ref: string; label: string }>;
   kept?: string;
+  moved_to?: string | null;
 }

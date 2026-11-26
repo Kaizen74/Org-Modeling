@@ -40,17 +40,47 @@ function Suggestion({ name: initial, titles, onConfirm }: { name: string; titles
   );
 }
 
-function FamilyCard({ family, view, run }: { family: RoleFamily; view: RoleFamiliesView; run: (fn: () => Promise<RoleFamiliesView>) => void }) {
+const DRAG_TYPE = 'application/x-job-titles';
+
+/** Titles carried by a drag: the whole selection when the dragged title is part of it. */
+function dragTitles(e: React.DragEvent, title: string, selected: Set<string>) {
+  const titles = selected.has(title) ? [...selected] : [title];
+  e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(titles));
+  e.dataTransfer.setData('text/plain', titles.join('\n'));
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function droppedTitles(e: React.DragEvent): string[] {
+  try { return JSON.parse(e.dataTransfer.getData(DRAG_TYPE) || '[]'); } catch { return []; }
+}
+
+/** A drop target that highlights while titles are dragged over it. */
+function useDrop(onDrop: (titles: string[]) => void) {
+  const [over, setOver] = useState(false);
+  return {
+    over,
+    props: {
+      onDragOver: (e: React.DragEvent) => { if (e.dataTransfer.types.includes(DRAG_TYPE)) { e.preventDefault(); setOver(true); } },
+      onDragLeave: () => setOver(false),
+      onDrop: (e: React.DragEvent) => { e.preventDefault(); setOver(false); const t = droppedTitles(e); if (t.length) onDrop(t); },
+    },
+  };
+}
+
+function FamilyCard({ family, view, run, selected, onMove }: {
+  family: RoleFamily; view: RoleFamiliesView; run: (fn: () => Promise<RoleFamiliesView>) => void;
+  selected: Set<string>; onMove: (titles: string[], to: string | null) => void;
+}) {
   const [name, setName] = useState(family.name);
   const others = view.families.filter((f) => f.ref !== family.ref);
-  const addable = view.titles.filter((t) => t.family !== family.ref);
+  const drop = useDrop((titles) => onMove(titles, family.ref));
   return (
-    <li className="px-5 py-3" data-family={family.ref}>
+    <li {...drop.props} className={clsx('px-5 py-3 transition-colors', drop.over && 'bg-primary-50 outline outline-2 outline-primary-600')} data-family={family.ref}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="tabular w-14 text-sm font-semibold text-primary-700">{family.ref}</span>
-        <input className="input w-60 py-1 text-sm" aria-label={`Name of ${family.ref}`} value={name} onChange={(e) => setName(e.target.value)}
+        <input className="input w-44 py-1 text-sm" aria-label={`Name of ${family.ref}`} value={name} onChange={(e) => setName(e.target.value)}
           onBlur={() => name.trim() && name !== family.name && run(() => familiesApi.update(family.ref, { name }))} />
-        <span className="text-xs text-faint">{family.headcount} {family.headcount === 1 ? 'person' : 'people'}</span>
+        <span className="text-xs text-faint">{family.headcount} {family.headcount === 1 ? 'person' : 'people'} · {family.titles.length} title{family.titles.length === 1 ? '' : 's'}</span>
         <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
           {others.length > 0 && (
             <select className="rounded border border-hairline bg-white px-1.5 py-0.5" aria-label={`Merge ${family.ref} with`} value=""
@@ -65,16 +95,15 @@ function FamilyCard({ family, view, run }: { family: RoleFamily; view: RoleFamil
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-16 text-xs">
         {family.titles.map((t) => (
-          <button key={t} title="Take this title out of the family" className="rounded-full border border-hairline px-2 py-0.5 text-ink hover:border-primary-600"
-            onClick={() => run(() => familiesApi.update(family.ref, { titles: family.titles.filter((x) => x !== t) }))}>
-            {t} <span aria-hidden className="text-faint">×</span>
-          </button>
+          <span key={t} draggable onDragStart={(e) => dragTitles(e, t, selected)} data-chip={t}
+            className={clsx('inline-flex cursor-grab items-center gap-1 rounded-full border px-2 py-0.5 text-ink active:cursor-grabbing',
+              selected.has(t) ? 'border-primary-600 bg-primary-50' : 'border-hairline')}>
+            <span aria-hidden className="text-faint">⠿</span>{t}
+            <button title="Take this title out of the family" aria-label={`Take ${t} out of ${family.ref}`} className="text-faint hover:text-primary-700"
+              onClick={() => onMove([t], null)}>×</button>
+          </span>
         ))}
-        <select className="max-w-[220px] rounded border border-hairline bg-white px-1.5 py-0.5 text-secondary" aria-label={`Add a job title to ${family.ref}`} value=""
-          onChange={(e) => e.target.value && run(() => familiesApi.update(family.ref, { titles: [...family.titles, e.target.value] }))}>
-          <option value="">+ Add a title…</option>
-          {addable.map((t) => <option key={t.title} value={t.title}>{t.title}{t.family ? ` (now in ${t.family})` : ''}</option>)}
-        </select>
+        {family.empty && <span className="font-semibold text-[color:var(--color-score-amber)]">No titles: drag some in, or retire it. Left out of the Compass files until it has titles.</span>}
         {view.cluster_refs.length > 0 && (
           <>
             {family.relates_to.map((r) => (
@@ -90,6 +119,95 @@ function FamilyCard({ family, view, run }: { family: RoleFamily; view: RoleFamil
         )}
       </div>
     </li>
+  );
+}
+
+/** Drop titles here (or choose "New family…" in Move to) to start a family; it asks for a name first. */
+function NewFamilyZone({ pending, setPending, onCreate }: {
+  pending: string[]; setPending: (t: string[]) => void; onCreate: (name: string, titles: string[]) => void;
+}) {
+  const [name, setName] = useState('');
+  const drop = useDrop((titles) => setPending([...new Set([...pending, ...titles])]));
+  return (
+    <div {...drop.props} data-testid="new-family-zone"
+      className={clsx('card mb-4 border-dashed py-4 transition-colors', drop.over && 'bg-primary-50 outline outline-2 outline-primary-600')}>
+      {pending.length === 0 ? (
+        <p className="text-sm text-faint"><b className="text-ink">New family:</b> drop job titles here to start one.</p>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm text-secondary">New family with {pending.length} title{pending.length === 1 ? '' : 's'}: {pending.join('; ')}</p>
+          <div className="flex flex-wrap gap-2">
+            <input className="input w-64 py-1 text-sm" aria-label="New family name" placeholder="Name the family, e.g. Airline relations"
+              value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            <button className="btn btn-primary py-1 text-sm" disabled={!name.trim()} onClick={() => { onCreate(name, pending); setName(''); }}>Create family</button>
+            <button className="btn btn-quiet py-1 text-sm" onClick={() => setPending([])}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Every job title: search, filter, select several, drag, or move with the bar below. Dropping here takes titles out of their family. */
+function TitlesPane({ view, selected, setSelected, onMove, onNew }: {
+  view: RoleFamiliesView; selected: Set<string>; setSelected: (s: Set<string>) => void;
+  onMove: (titles: string[], to: string | null) => void; onNew: (titles: string[]) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [scope, setScope] = useState<'unassigned' | 'all'>('unassigned');
+  const [to, setTo] = useState('');
+  const drop = useDrop((titles) => onMove(titles, null));
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = view.titles.filter((t) => (scope === 'all' || !t.family) && words.every((w) => t.title.toLowerCase().includes(w)));
+  const allShown = shown.length > 0 && shown.every((t) => selected.has(t.title));
+  const toggle = (title: string) => { const n = new Set(selected); if (n.has(title)) n.delete(title); else n.add(title); setSelected(n); };
+  const move = () => {
+    const titles = [...selected];
+    if (to === '__new') onNew(titles);
+    else onMove(titles, to === '__out' ? null : to);
+    setTo('');
+  };
+  return (
+    <div {...drop.props} className={clsx('card flex flex-col p-0 transition-colors lg:h-full lg:min-h-0', drop.over && 'outline outline-2 outline-primary-600')} aria-label="Job titles" role="region">
+      <div className="hairline-b space-y-2 px-4 py-3">
+        <input className="input py-1.5 text-sm" placeholder="Find job titles, e.g. airline" aria-label="Find job titles" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <button className={clsx('rounded-full border px-2.5 py-0.5', scope === 'unassigned' ? 'border-primary-600 bg-primary-50 text-ink' : 'border-hairline text-secondary')}
+            onClick={() => setScope('unassigned')}>Not in a family ({view.unassigned})</button>
+          <button className={clsx('rounded-full border px-2.5 py-0.5', scope === 'all' ? 'border-primary-600 bg-primary-50 text-ink' : 'border-hairline text-secondary')}
+            onClick={() => setScope('all')}>All titles ({view.titles.length})</button>
+          <label className="ml-auto flex items-center gap-1.5 text-secondary">
+            <input type="checkbox" className="accent-[#C41E3A]" checked={allShown} disabled={!shown.length}
+              onChange={() => { const n = new Set(selected); shown.forEach((t) => (allShown ? n.delete(t.title) : n.add(t.title))); setSelected(n); }} />
+            Select all shown ({shown.length})
+          </label>
+        </div>
+      </div>
+      <ul className="max-h-[52vh] min-h-0 flex-1 divide-y divide-hairline overflow-y-auto text-sm lg:max-h-none">
+        {shown.map((t) => (
+          <li key={t.title} draggable onDragStart={(e) => dragTitles(e, t.title, selected)} data-title={t.title}
+            className={clsx('flex cursor-grab items-center gap-2 px-4 py-1.5 active:cursor-grabbing', selected.has(t.title) && 'bg-primary-50')}>
+            <input type="checkbox" className="accent-[#C41E3A]" checked={selected.has(t.title)} onChange={() => toggle(t.title)} aria-label={`Select ${t.title}`} />
+            <span aria-hidden className="text-faint">⠿</span>
+            <span className="min-w-0 flex-1 truncate text-ink" title={t.title}>{t.title}</span>
+            <span className="tabular text-xs text-faint">{t.headcount}</span>
+            {t.family && <span className="tabular text-xs font-semibold text-primary-700">{t.family}</span>}
+          </li>
+        ))}
+        {!shown.length && <li className="px-4 py-3 text-xs text-faint">No titles match.</li>}
+      </ul>
+      <div className="hairline-t flex flex-wrap items-center gap-2 px-4 py-3 text-sm" role="group" aria-label="Move selected titles">
+        <span className="text-secondary">{selected.size} selected</span>
+        <select className="input w-auto py-1 text-sm" aria-label="Move selected titles to" value={to} onChange={(e) => setTo(e.target.value)} disabled={!selected.size}>
+          <option value="">Move to…</option>
+          <option value="__new">A new family…</option>
+          {view.families.map((f) => <option key={f.ref} value={f.ref}>{f.ref} {f.name}</option>)}
+          <option value="__out">Out of every family</option>
+        </select>
+        <button className="btn btn-secondary py-1 text-sm" disabled={!selected.size || !to} onClick={move}>Move</button>
+        {selected.size > 0 && <button className="text-xs text-faint hover:text-ink" onClick={() => setSelected(new Set())}>Clear</button>}
+      </div>
+    </div>
   );
 }
 
@@ -139,11 +257,18 @@ export default function RoleFamilies() {
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ ref: string; unit: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [pending, setPending] = useState<string[]>([]);
+  // Suggestions start open while there are no families, then stay as the designer leaves them
+  const [showSuggestions, setShowSuggestions] = useState<boolean | null>(null);
   useEffect(() => { familiesApi.get().then(setView).catch(() => setError('Upload an org file first.')).finally(() => setLoading(false)); }, []);
   const run = async (fn: () => Promise<RoleFamiliesView>) => {
     setNotice(null);
     try { setView(await fn()); } catch (e) { setNotice(detailOf(e, 'Could not save.')); }
   };
+
+  const moveTitles = (titles: string[], to: string | null) =>
+    run(async () => { const v = await familiesApi.move(titles, to); setSelected(new Set()); return v; });
 
   if (loading) return <Loading label="Grouping job titles" />;
   if (error || !view) {
@@ -151,6 +276,7 @@ export default function RoleFamilies() {
       <EmptyState title="No organization loaded yet" body={error} action={<Link to="/upload" className="btn btn-primary">Upload org data →</Link>} /></>);
   }
   const unit = unitWords(view.unit_label);
+  if (showSuggestions === null) setShowSuggestions(view.families.length === 0);
   const editFamily = editing ? view.families.find((f) => f.ref === editing.ref) : undefined;
   const presenceWord = (f: RoleFamily) =>
     f.presence === 'every' ? `In every ${unit.lower}` : f.presence === 'only' ? `Only in ${f.only_in}` : f.presence === 'some' ? 'In some' : f.presence === 'none' ? 'Nobody' : '';
@@ -164,22 +290,30 @@ export default function RoleFamilies() {
       />
       {notice && <div className="mb-6"><Callout label="Not saved" tone="attention">{notice}</Callout></div>}
 
-      <Section eyebrow="01 · Families" title={view.families.length ? `${view.families.length} famil${view.families.length === 1 ? 'y' : 'ies'} confirmed` : 'No families confirmed yet'}
-        lede={`${view.unassigned} job title${view.unassigned === 1 ? '' : 's'} not in a family yet. Rename a family by editing its name; renaming keeps its ID. Merging keeps the older ID.`}>
-        {view.families.length > 0 && (
-          <ul className="card mb-6 divide-y divide-hairline p-0">
-            {view.families.map((f) => <FamilyCard key={`${f.ref}-${f.name}`} family={f} view={view} run={run} />)}
-          </ul>
-        )}
+      <Section eyebrow="01 · Group job titles" title={view.families.length ? `${view.families.length} famil${view.families.length === 1 ? 'y' : 'ies'} confirmed` : 'No families confirmed yet'}
+        lede={`${view.unassigned} job title${view.unassigned === 1 ? '' : 's'} not in a family yet. Drag titles onto a family, or tick several and use Move to; a selected title drags with the rest of the selection. Renaming keeps a family's ID; merging keeps the older ID.`}>
+        {/* Both columns stay on screen and scroll on their own, so a drag never has to leave the view */}
+        <div className="grid gap-6 lg:h-[76vh] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]" data-testid="grouping-workbench">
+          <TitlesPane view={view} selected={selected} setSelected={setSelected} onMove={moveTitles} onNew={(t) => setPending([...new Set([...pending, ...t])])} />
+          <div className="lg:min-h-0 lg:overflow-y-auto lg:pr-1" data-testid="families-column">
+            <NewFamilyZone pending={pending} setPending={setPending}
+              onCreate={(name, titles) => run(async () => { const v = await familiesApi.move(titles, 'new', name); setPending([]); setSelected(new Set()); return v; })} />
+            {view.families.length > 0 ? (
+              <ul className="card divide-y divide-hairline p-0" aria-label="Families">
+                {view.families.map((f) => <FamilyCard key={`${f.ref}-${f.name}`} family={f} view={view} run={run} selected={selected} onMove={moveTitles} />)}
+              </ul>
+            ) : <p className="text-sm text-faint">Confirm a suggestion below, or drop titles on New family.</p>}
+          </div>
+        </div>
         {view.suggestions.length > 0 && (
-          <>
-            <p className="eyebrow mb-2">Suggested from shared key words</p>
+          <details className="mt-8" open={!!showSuggestions} onToggle={(e) => setShowSuggestions((e.target as HTMLDetailsElement).open)}>
+            <summary className="eyebrow mb-2 cursor-pointer">Suggested from shared key words ({view.suggestions.length})</summary>
             <ul className="card divide-y divide-hairline p-0" aria-label="Suggested families">
               {view.suggestions.map((s) => (
                 <Suggestion key={s.name + s.titles.join('|')} name={s.name} titles={s.titles} onConfirm={(name, titles) => run(() => familiesApi.confirm(name, titles))} />
               ))}
             </ul>
-          </>
+          </details>
         )}
         {view.retired.length > 0 && <p className="mt-3 text-xs text-faint">Retired, never reused: {view.retired.map((r) => `${r.ref} ${r.name}${r.merged_into ? ` (merged into ${r.merged_into})` : ''}`).join('; ')}.</p>}
       </Section>

@@ -442,3 +442,50 @@ async def test_new_project_clears_types_and_families(client: AsyncClient):
     assert (await client.get("/api/v1/structure/families")).json()["families"] == []
     m = (await client.get("/api/v1/metrics/latest")).json()["metrics"]
     assert next(a for a in m["span_of_control"]["manager_assessments"] if a["manager_id"] == "E034")["manager_type"] == ""
+
+
+def test_suggestions_group_by_the_work_not_the_grade():
+    """Real HRIS titles: abbreviations and grade words are set aside, so titles group by the work they name."""
+    from app.services.role_families import suggest
+    titles = ["Assistant Manager, Airline Relations", "Executive, Airline Relations", "Senior Executive, Airline Relations",
+              "Asst Mgr, Hub Operations Planning", "AVP Building & Engineering Services", "AVP, Import Operations & DG",
+              "AVP, ULD", "AVP, eCommerce Solutions", "AVP, Airline Relations, CNS & T5 Operations",
+              "Executive - Building & Sustainability", "Manager, Building Services & Sustainability",
+              "Officer, Building Services", "Supervisor, Building Services", "Officer II, Cargo Acceptance"]
+    groups = {g["name"]: g["titles"] for g in suggest(titles)}
+    assert "AVP" not in groups and "Asst mgr" not in groups  # grade words no longer make a family
+    assert sorted(groups["Airline relations"]) == sorted(["Assistant Manager, Airline Relations", "Executive, Airline Relations",
+                                                         "Senior Executive, Airline Relations", "AVP, Airline Relations, CNS & T5 Operations"])
+    assert "Hub operations planning" in groups
+    assert len(next(t for n, t in groups.items() if n.startswith("Building"))) == 5
+    assert "Cargo acceptance" in groups and "ULD" in groups
+
+
+@pytest.mark.asyncio
+async def test_moving_titles_in_bulk(client: AsyncClient):
+    await upload(client)
+    await confirm_prd_families(client)
+    move = lambda body: client.post("/api/v1/structure/families/move", json=body)  # noqa: E731
+    # Several titles into an existing family in one step; they leave wherever they were
+    v = (await move({"titles": ["Shift Supervisor", "Head of Catering"], "to": "RF-01"})).json()
+    fam = {f["ref"]: f for f in v["families"]}
+    assert v["moved_to"] == "RF-01" and {"Shift Supervisor", "Head of Catering"} <= set(fam["RF-01"]["titles"])
+    assert "Shift Supervisor" not in fam["RF-02"]["titles"]
+    # Into a new family: it gets the next RF number
+    v = (await move({"titles": ["Head of Catering", "Executive Chef — Culinary Design"], "to": "new", "name": "Catering"})).json()
+    assert v["moved_to"] == "RF-07" and "Head of Catering" not in {f["ref"]: f for f in v["families"]}["RF-01"]["titles"]
+    # Out of every family
+    v = (await move({"titles": ["Shift Supervisor"], "to": None})).json()
+    assert not any("Shift Supervisor" in f["titles"] for f in v["families"])
+    assert next(t for t in v["titles"] if t["title"] == "Shift Supervisor")["family"] is None
+    # A family emptied by moves is flagged and left out of the unit files
+    v = (await move({"titles": ["Load Control / Weight & Balance Officer"], "to": None})).json()
+    assert {f["ref"]: f for f in v["families"]}["RF-01"]["empty"] is True
+    await link(client, "Belmar")
+    assert "RF-01" not in by_ref(await belmar_file(client))
+    # Plain refusals; nothing changes
+    assert (await move({"titles": ["Chief Wizard"], "to": "RF-02"})).status_code == 400
+    assert (await move({"titles": [], "to": "RF-02"})).status_code == 400
+    assert (await move({"titles": ["Ramp Agent"], "to": "RF-99"})).status_code == 404
+    assert (await move({"titles": ["Ramp Agent"], "to": "new", "name": ""})).status_code == 400
+    assert "Ramp Agent" in {f["ref"]: f for f in (await client.get("/api/v1/structure/families")).json()["families"]}["RF-02"]["titles"]

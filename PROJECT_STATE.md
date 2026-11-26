@@ -5,8 +5,7 @@
 An Organizational Design Analyzer for an OD practitioner: upload an org-structure CSV, diagnose the current state (spans, layers, costs, health, work activities), ideate and compare potential structures (7-archetype framework, scenarios) against the business strategy, and surface implementation implications — in a web app (FastAPI backend + React frontend) styled after the owner's OrgDesign Playbook.
 
 ## Current status
-*2026-11-25.* Owner's "structure numbers" PRD built (approved "go as suggested"): numbers-only `metrics` on baseline findings (country and whole organization), cost source note, figures line; unit column (Station, Asset, Business unit, Unit); base-salary note; unit warnings; manager types with editable ranges; broken reporting lines; role families (RF-nn) with roles across units and role_family findings. `./run_checks.sh`: 143 backend tests, mock journey 131 backend + 30 browser checks, all green.
-Not done (by agreement or out of scope): AI suggestions for types or families (section 5: nothing sent to an AI); estimating on-costs, non-manpower cost or revenue; the whole-organization file carries no role_family findings (families are per unit).
+*2026-11-26.* Follow-up to the owner's real SATS files: the import now recognises a Compass workspace save and says to use Hand-off → Download the full packet; the Role families screen is a grouping workbench (search, multi-select, drag and drop, New family drop zone, Move-to bar, atomic moves); suggestions set aside HRIS abbreviations and grade words. `./run_checks.sh`: 146 backend tests, mock journey 135 backend + 32 browser checks, all green.
 
 ## This session (2026-10-22) — approved plan, in order
 Phase 1 — Accuracy fixes
