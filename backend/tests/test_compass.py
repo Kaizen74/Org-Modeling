@@ -232,3 +232,19 @@ async def test_work_activity_findings_are_graded_and_exported(client: AsyncClien
     assert work["work.duplication.stakeholder-reporting"]["grade"] == "indicated"
     assert work["work.missing.peak-planning"]["grade"] == "hypothesis"
     assert work["work.handoff.ramp-to-baggage"]["grade"] == "confirmed"  # its own evidence class wins
+
+
+def test_workspace_and_findings_files_are_recognised_with_directions():
+    """People pick the Compass workspace save (Export) or a findings file by mistake: say which file to use."""
+    workspace = {"schema": 1, "orgName": "SATS Ltd - Gateway Services", "workspaceName": "SIN - SG Hub (home station)",
+                 "workspaceId": "ws_1", "clusters": [], "charter": {"engagementKey": "SATSGW"}, "versions": []}
+    errors, _ = cs.validate_packet(workspace)
+    assert len(errors) == 1
+    assert errors[0].startswith("This is a Capability Compass workspace file (SIN - SG Hub (home station))")
+    assert "Hand-off" in errors[0] and "Download the full packet (.json)" in errors[0] and "satsgw_compass_handoff.json" in errors[0]
+    no_key = cs.validate_packet({**workspace, "charter": {}, "workspaceName": None})[0][0]
+    assert "(SATS Ltd - Gateway Services)" in no_key and "<key>_compass_handoff.json" in no_key
+    findings = cs.validate_packet({"format": "compass-return", "format_version": "1.0", "source_app": "process-map-studio", "findings": []})[0][0]
+    assert "findings file (compass-return) written by 'process-map-studio'" in findings and "Current State" in findings
+    # Anything else still gets the general message
+    assert "format is 'xyz'" in cs.validate_packet({"format": "xyz"})[0][0]
