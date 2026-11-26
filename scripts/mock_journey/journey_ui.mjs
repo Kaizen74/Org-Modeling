@@ -376,8 +376,10 @@ await step('role families: confirm six from suggestions, why RF-03 is only in Be
     await row.getByRole('button', { name: 'Confirm family' }).click();
     await page.locator('[data-family]', { has: page.locator(`input[value="${name}"]`) }).waitFor();
   }
-  await page.getByLabel('Add a job title to RF-02').selectOption('Shift Supervisor');
-  await page.locator('[data-family="RF-02"]', { hasText: 'Shift Supervisor' }).waitFor();
+  // Drag and drop: Shift Supervisor from the titles pane onto Ramp handling
+  await page.getByTestId('grouping-workbench').evaluate((e) => e.scrollIntoView({ block: 'start' }));
+  await page.locator('[data-title="Shift Supervisor"]').dragTo(page.locator('[data-family="RF-02"]'));
+  await page.locator('[data-family="RF-02"] [data-chip="Shift Supervisor"]').waitFor();
   const across = (ref) => page.locator(`[data-across="${ref}"]`);
   await across('RF-03').filter({ hasText: 'Only in Belmar' }).waitFor();
   for (const ref of ['RF-04', 'RF-05']) await across(ref).filter({ hasText: 'In some' }).waitFor();
@@ -410,6 +412,42 @@ await step('role families: Belmar export matches the Compass sample field for fi
   const m = ret.findings.find((f) => f.ref === 'baseline.layers').metrics;
   if (m.total_cost !== 2263000 || m.median_span !== 2 || m.spans_within !== 1) throw new Error(`metrics wrong: ${JSON.stringify(m)}`);
   if (/\b[A-Z]{2} Person \d{3}\b|\bE\d{3}\b/.test(JSON.stringify(ret))) throw new Error('name or Employee ID in the file');
+});
+
+await step('role families workbench: select and Move to, drag between families, drag back out', async () => {
+  await go('/role-families');
+  const pane = page.getByRole('region', { name: 'Job titles' });
+  await pane.getByLabel('Find job titles').fill('catering');
+  await pane.getByLabel(/Select all shown \(1\)/).check();
+  await pane.getByLabel('Find job titles').fill('chef');
+  await pane.getByLabel('Select Executive Chef — Culinary Design').check();
+  await pane.getByLabel('Find job titles').fill('');
+  await page.getByLabel('Move selected titles to').selectOption('__new');
+  await page.getByRole('button', { name: 'Move', exact: true }).click();
+  await page.getByLabel('New family name').fill('Catering');
+  await page.getByRole('button', { name: 'Create family' }).click();
+  await page.locator('[data-family="RF-07"]', { hasText: 'Head of Catering' }).waitFor();
+  // A chip dragged to another family moves; dragged back to the titles pane it leaves every family.
+  // The workbench fits the screen with both columns scrolling on their own, as a person sees it.
+  await page.getByTestId('grouping-workbench').evaluate((e) => e.scrollIntoView({ block: 'start' }));
+  await page.locator('[data-family="RF-07"] [data-chip="Executive Chef — Culinary Design"]').dragTo(page.locator('[data-family="RF-06"]'));
+  await page.locator('[data-family="RF-06"] [data-chip="Executive Chef — Culinary Design"]').waitFor();
+  await page.locator('[data-family="RF-06"] [data-chip="Executive Chef — Culinary Design"]').dragTo(pane);
+  await page.locator('[data-family="RF-06"] [data-chip="Executive Chef — Culinary Design"]').waitFor({ state: 'detached' });
+  const fams = await (await page.request.get(base + '/api/v1/structure/families')).json();
+  const byRef = Object.fromEntries(fams.families.map((f) => [f.ref, f]));
+  if (byRef['RF-07'].titles.join() !== 'Head of Catering') throw new Error(`RF-07 holds ${byRef['RF-07'].titles}`);
+  if (fams.titles.find((t) => t.title === 'Executive Chef — Culinary Design').family !== null) throw new Error('chef still in a family');
+  await shot('16-workbench');
+});
+
+await step('import: a Compass workspace file is recognised with directions', async () => {
+  const ws = join(mkdtempSync(join(tmpdir(), 'ws-')), 'meridian_workspace.json');
+  writeFileSync(ws, JSON.stringify({ schema: 1, orgName: 'Meridian Group', workspaceName: 'Belmar', workspaceId: 'ws_1',
+    clusters: [], versions: [], charter: { engagementKey: 'MERIDIANBE' } }));
+  await go('/upload');
+  await page.setInputFiles('[data-testid=compass-file]', ws);
+  await waitText(/This is a Capability Compass workspace file \(Belmar\)[\s\S]*Download the full packet \(\.json\)[\s\S]*meridianbe_compass_handoff\.json/);
 });
 
 await step('broken lines: blanked Ramp Agents hide Belmar spans and name the people', async () => {

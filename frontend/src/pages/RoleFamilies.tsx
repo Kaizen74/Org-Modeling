@@ -168,7 +168,7 @@ function TitlesPane({ view, selected, setSelected, onMove, onNew }: {
     setTo('');
   };
   return (
-    <div {...drop.props} className={clsx('card p-0 transition-colors lg:sticky lg:top-4', drop.over && 'outline outline-2 outline-primary-600')} aria-label="Job titles" role="region">
+    <div {...drop.props} className={clsx('card flex flex-col p-0 transition-colors lg:h-full lg:min-h-0', drop.over && 'outline outline-2 outline-primary-600')} aria-label="Job titles" role="region">
       <div className="hairline-b space-y-2 px-4 py-3">
         <input className="input py-1.5 text-sm" placeholder="Find job titles, e.g. airline" aria-label="Find job titles" value={query} onChange={(e) => setQuery(e.target.value)} />
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -183,7 +183,7 @@ function TitlesPane({ view, selected, setSelected, onMove, onNew }: {
           </label>
         </div>
       </div>
-      <ul className="max-h-[52vh] divide-y divide-hairline overflow-y-auto text-sm">
+      <ul className="max-h-[52vh] min-h-0 flex-1 divide-y divide-hairline overflow-y-auto text-sm lg:max-h-none">
         {shown.map((t) => (
           <li key={t.title} draggable onDragStart={(e) => dragTitles(e, t.title, selected)} data-title={t.title}
             className={clsx('flex cursor-grab items-center gap-2 px-4 py-1.5 active:cursor-grabbing', selected.has(t.title) && 'bg-primary-50')}>
@@ -259,6 +259,8 @@ export default function RoleFamilies() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<string[]>([]);
+  // Suggestions start open while there are no families, then stay as the designer leaves them
+  const [showSuggestions, setShowSuggestions] = useState<boolean | null>(null);
   useEffect(() => { familiesApi.get().then(setView).catch(() => setError('Upload an org file first.')).finally(() => setLoading(false)); }, []);
   const run = async (fn: () => Promise<RoleFamiliesView>) => {
     setNotice(null);
@@ -274,6 +276,7 @@ export default function RoleFamilies() {
       <EmptyState title="No organization loaded yet" body={error} action={<Link to="/upload" className="btn btn-primary">Upload org data →</Link>} /></>);
   }
   const unit = unitWords(view.unit_label);
+  if (showSuggestions === null) setShowSuggestions(view.families.length === 0);
   const editFamily = editing ? view.families.find((f) => f.ref === editing.ref) : undefined;
   const presenceWord = (f: RoleFamily) =>
     f.presence === 'every' ? `In every ${unit.lower}` : f.presence === 'only' ? `Only in ${f.only_in}` : f.presence === 'some' ? 'In some' : f.presence === 'none' ? 'Nobody' : '';
@@ -289,9 +292,10 @@ export default function RoleFamilies() {
 
       <Section eyebrow="01 · Group job titles" title={view.families.length ? `${view.families.length} famil${view.families.length === 1 ? 'y' : 'ies'} confirmed` : 'No families confirmed yet'}
         lede={`${view.unassigned} job title${view.unassigned === 1 ? '' : 's'} not in a family yet. Drag titles onto a family, or tick several and use Move to; a selected title drags with the rest of the selection. Renaming keeps a family's ID; merging keeps the older ID.`}>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        {/* Both columns stay on screen and scroll on their own, so a drag never has to leave the view */}
+        <div className="grid gap-6 lg:h-[76vh] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]" data-testid="grouping-workbench">
           <TitlesPane view={view} selected={selected} setSelected={setSelected} onMove={moveTitles} onNew={(t) => setPending([...new Set([...pending, ...t])])} />
-          <div>
+          <div className="lg:min-h-0 lg:overflow-y-auto lg:pr-1" data-testid="families-column">
             <NewFamilyZone pending={pending} setPending={setPending}
               onCreate={(name, titles) => run(async () => { const v = await familiesApi.move(titles, 'new', name); setPending([]); setSelected(new Set()); return v; })} />
             {view.families.length > 0 ? (
@@ -302,7 +306,7 @@ export default function RoleFamilies() {
           </div>
         </div>
         {view.suggestions.length > 0 && (
-          <details className="mt-8" open={!view.families.length}>
+          <details className="mt-8" open={!!showSuggestions} onToggle={(e) => setShowSuggestions((e.target as HTMLDetailsElement).open)}>
             <summary className="eyebrow mb-2 cursor-pointer">Suggested from shared key words ({view.suggestions.length})</summary>
             <ul className="card divide-y divide-hairline p-0" aria-label="Suggested families">
               {view.suggestions.map((s) => (

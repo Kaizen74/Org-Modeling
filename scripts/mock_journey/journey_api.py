@@ -408,6 +408,16 @@ def s_structure():
     check("privacy: no names or Employee IDs in Belmar's file", not private.search(json.dumps(ret) + c.get("/compass/return.txt", params={"link": "Belmar"}).text))
     v = ok(c.post("/structure/families/RF-05/merge", json={"with_ref": "RF-04"}))
     check("families: merge keeps the older ID", v["kept"] == "RF-04" and "RF-05" not in {f["ref"] for f in v["families"]})
+    v = ok(c.post("/structure/families/move", json={"titles": ["Head of Catering", "Executive Chef — Culinary Design"], "to": "new", "name": "Catering"}))
+    check("families: bulk move into a new family gets the next number", v["moved_to"] == "RF-07")
+    v = ok(c.post("/structure/families/move", json={"titles": ["Executive Chef — Culinary Design"], "to": "RF-06"}))
+    fam = {f["ref"]: f for f in v["families"]}
+    check("families: a moved title leaves its old family", "Executive Chef — Culinary Design" in fam["RF-06"]["titles"] and fam["RF-07"]["titles"] == ["Head of Catering"])
+    v = ok(c.post("/structure/families/move", json={"titles": ["Executive Chef — Culinary Design"], "to": None}))
+    check("families: moved out of every family", next(t for t in v["titles"] if t["title"] == "Executive Chef — Culinary Design")["family"] is None)
+    ws = {"schema": 1, "orgName": "Meridian", "workspaceName": "Belmar", "workspaceId": "w", "clusters": [], "versions": [], "charter": {"engagementKey": "MERIDIANBE"}}
+    msg = ok(c.post("/compass/preview", json={"packet": ws}))["errors"][0]
+    check("import: workspace file recognised with directions", msg.startswith("This is a Capability Compass workspace file (Belmar)") and "meridianbe_compass_handoff.json" in msg)
 
     # Station header, then the broken file (both replace the upload)
     org = open(os.path.join(COUNTRIES_DIR, "meridian_org_by_country.csv")).read()
